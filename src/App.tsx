@@ -7,7 +7,7 @@ import {
   LogOut, Search, Activity, Package, ChevronRight, TrendingDown, Upload, Info,
   UserPlus, Download, AlertCircle, FileSpreadsheet, Scale, FileText, Menu, Fingerprint, Smartphone, Bell, Volume2, Share, ExternalLink, Mail, Copy,
   Home as HomeIcon, WifiOff, Image as ImageIcon, LayoutDashboard, BarChart3, ChevronDown,
-  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar
+  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -41,6 +41,7 @@ import ConfirmDialog from './components/ConfirmDialog';
 import { MaintenanceTab } from './components/MaintenanceTab';
 import { VacationPlanning } from './components/VacationPlanning';
 import { OperationalTraining } from './components/OperationalTraining';
+import { LunchSchedule } from './components/LunchSchedule';
 
 
 const TRAINING_MODULES = [
@@ -437,13 +438,13 @@ const sanitizeShift = (sh: string | undefined): string => {
   const trimmed = sh.trim();
   const lower = trimmed.toLowerCase();
   
-  if (lower === 'comercial') return 'Diurno';
+  if (lower === 'comercial') return 'Comercial';
   if (lower === 'integral') return 'Diurno';
   if (lower === 'dia') return 'Diurno';
   if (lower === 'noite') return 'Noturno';
   
   if (lower.includes('comercial')) {
-    return trimmed.replace(/comercial/gi, 'Diurno');
+    return 'Comercial';
   }
   return trimmed;
 };
@@ -648,7 +649,7 @@ export const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'extrusion' | 'ribbon' | 'personnel' | 'evaluations' | 'maintenance'>('home');
-  const [personnelSubView, setPersonnelSubView] = useState<'board' | 'vacations' | 'training'>('board');
+  const [personnelSubView, setPersonnelSubView] = useState<'board' | 'vacations' | 'training' | 'lunch'>('board');
   const [isExtrusionMenuOpen, setIsExtrusionMenuOpen] = useState(false);
   const [isRibbonMenuOpen, setIsRibbonMenuOpen] = useState(false);
   const [extrusionSubTab, setExtrusionSubTab] = useState<'dashboard' | 'reports' | 'stock'>('reports');
@@ -1660,6 +1661,62 @@ export const App: React.FC = () => {
       migrationRef.current = true;
       const currentCollaborators = [...collaborators].filter(c => c && c.id); // snapshot of current state with valid IDs
       
+      // Ensure all INITIAL_EMPLOYEES exist in both employees and collaborators collections (Self-healing)
+      for (const initialEmp of INITIAL_EMPLOYEES) {
+        if (!initialEmp.name || initialEmp.name === 'VAGA DISPONÍVEL' || initialEmp.name === 'Em Contratação') continue;
+        const existsInEmployees = employees.some(e => e.id === initialEmp.id || (e.registration && e.registration === initialEmp.registration) || e.name === initialEmp.name);
+        const existsInCollaborators = currentCollaborators.some(c => (c.registration && c.registration === initialEmp.registration) || c.name === initialEmp.name);
+
+        if (!existsInEmployees) {
+          try {
+            console.log(`Self-healing: Seeding missing initial employee: ${initialEmp.name}`);
+            await setDoc(doc(db, 'employees', initialEmp.id), {
+              ...initialEmp,
+              userId: currentUser?.uid || 'system',
+              updatedAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error(`Erro ao auto-semear colaborador ${initialEmp.name}:`, err);
+          }
+        } else {
+          // If they exist but status is "vaga excluida", restore them to "Ativo" if they are part of Lintech or other main slots
+          const foundEmp = employees.find(e => e.id === initialEmp.id || (e.registration && e.registration === initialEmp.registration) || e.name === initialEmp.name);
+          const foundEmpStatusNorm = foundEmp && foundEmp.status ? foundEmp.status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "") : '';
+          if (foundEmp && foundEmpStatusNorm === 'vaga excluida' && (initialEmp.registration === "1702" || initialEmp.registration === "1840")) {
+            try {
+              console.log(`Self-healing: Restoring excluded employee to Ativo: ${initialEmp.name}`);
+              await setDoc(doc(db, 'employees', foundEmp.id), { status: 'Ativo' }, { merge: true });
+            } catch (err) {
+              console.error(`Erro ao restaurar status do colaborador ${initialEmp.name}:`, err);
+            }
+          }
+        }
+
+        if (!existsInCollaborators) {
+          try {
+            console.log(`Self-healing: Seeding missing initial collaborator: ${initialEmp.name}`);
+            const colId = `col_${initialEmp.registration || initialEmp.id}`;
+            const colRef = doc(db, 'collaborators', colId);
+            await setDoc(colRef, {
+              id: colId,
+              name: initialEmp.name,
+              registration: initialEmp.registration || '',
+              role: initialEmp.role || 'Operador 1',
+              updatedAt: new Date().toISOString()
+            });
+            currentCollaborators.push({
+              id: colId,
+              name: initialEmp.name,
+              registration: initialEmp.registration || '',
+              role: initialEmp.role || 'Operador 1',
+              updatedAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error(`Erro ao auto-semear cadastro central do colaborador ${initialEmp.name}:`, err);
+          }
+        }
+      }
+
       // Correção e restauração de dados para Alessandro Nunes da Silva (1872) e Alessandro de Brito Marques (1796)
       for (const col of currentCollaborators) {
         if (!col.id) continue;
@@ -1918,6 +1975,11 @@ export const App: React.FC = () => {
       });
       
       currentEmployees.forEach(e => {
+        const nameNorm = (e.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        const statusNorm = (e.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        if (nameNorm.includes('excluid') || statusNorm.includes('excluid')) {
+          return;
+        }
         if (e.name && e.name !== 'Em Contratação' && (e.role || '').toLowerCase().includes('operador')) {
           operatorNamesSet.add(upgradeName(e.name));
         }
@@ -13553,6 +13615,12 @@ Produção total:
               onClose={() => setPersonnelSubView('board')}
               canManage={canManagePersonnel}
             />
+          ) : personnelSubView === 'lunch' ? (
+            <LunchSchedule
+              employees={employees}
+              onClose={() => setPersonnelSubView('board')}
+              canManage={canManagePersonnel}
+            />
           ) : (
             <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex justify-center no-print">
@@ -13610,6 +13678,13 @@ Produção total:
                       >
                         <Award size={18} className="text-violet-500" />
                         Treinamento Operacional
+                      </button>
+                      <button 
+                        onClick={() => { setIsExtraMenuOpen(false); setPersonnelSubView('lunch'); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-t border-slate-50"
+                      >
+                        <Utensils size={18} className="text-amber-500" />
+                        Escala de Almoço
                       </button>
                       <button 
                         onClick={() => { setIsExtraMenuOpen(false); setIsTrainingModalOpen(true); }}

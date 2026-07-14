@@ -204,6 +204,41 @@
         "userId": { "type": "string" }
       },
       "required": ["id", "cause", "priority", "sector", "machine", "reporter", "status", "createdAt", "userId"]
+    },
+    "Vacation": {
+      "title": "Vacation Planning",
+      "description": "Represents a planned vacation for an employee.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "registration": { "type": "string" },
+        "sector": { "type": "string" },
+        "role": { "type": "string" },
+        "machine": { "type": "string" },
+        "shift": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "LunchSchedule": {
+      "title": "Lunch Schedule",
+      "description": "Represents the lunch scheduling allocation for a specific day, sector, machine, shift, and time slot.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "sector": { "type": "string" },
+        "machine": { "type": "string" },
+        "shift": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "employeeIds": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "dayOfWeek", "sector", "machine", "shift", "timeSlot", "employeeIds"]
     }
   },
   "firestore": {
@@ -219,6 +254,8 @@
     "fcm_tokens": { "schema": "FcmToken", "description": "Push notification tokens" },
     "stock_entries": { "schema": "StockEntry", "description": "Daily physical stock inventory entries" },
     "ribbon_cutting_entries": { "schema": "RibbonCuttingEntry", "description": "Daily ribbon cutting records" },
-    "maintenance_issues": { "schema": "MaintenanceIssue", "description": "Maintenance causes and issues by priority" }
+    "maintenance_issues": { "schema": "MaintenanceIssue", "description": "Maintenance causes and issues by priority" },
+    "vacations": { "schema": "Vacation", "description": "Vacation planning entries" },
+    "lunch_schedules": { "schema": "LunchSchedule", "description": "Weekly lunch scheduling data" }
   }
 }

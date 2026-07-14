@@ -228,9 +228,52 @@ export function OperationalTraining({
     }
   }, [sheets, selectedSheetId]);
 
-  // List of employees without training sheets
+  // List of employees without training sheets (filtered and sorted)
   const availableEmployees = useMemo(() => {
-    return employees.filter(emp => !sheets.some(s => s.employeeId === emp.id));
+    const uniqueMap = new Map<string, Employee>();
+    
+    employees.forEach(emp => {
+      if (!emp || !emp.name) return;
+      const statusNorm = (emp.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
+      const nameNorm = (emp.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
+      
+      // Status must be active, on leave, or in contracting
+      const isStatusValid = ['ativo', 'atestado', 'em contratacao'].includes(statusNorm);
+      if (!isStatusValid) return;
+
+      // Filter out placeholder names
+      if (nameNorm.includes('excluid')) return;
+      if (nameNorm === 'vaga disponivel' || nameNorm === 'disponivel') return;
+      if (nameNorm === 'vaga em contratacao' || nameNorm === 'em contratacao') return;
+      if (nameNorm.includes('vaga disponivel') || nameNorm.includes('vaga em contratacao') || nameNorm.includes('vaga excluida')) return;
+      
+      // Exclude those who already have a sheet
+      const hasSheet = sheets.some(s => s.employeeId === emp.id || (emp.registration && s.registration === emp.registration));
+      if (hasSheet) return;
+      
+      // Prevent duplicates in the selector
+      const key = emp.registration || emp.name.trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, emp);
+      }
+    });
+
+    const filtered = Array.from(uniqueMap.values());
+
+    // Sort by shift, then machine, then name
+    return filtered.sort((a, b) => {
+      const shiftA = a.shift || '';
+      const shiftB = b.shift || '';
+      if (shiftA !== shiftB) return shiftA.localeCompare(shiftB);
+
+      const machineA = a.machine || '';
+      const machineB = b.machine || '';
+      if (machineA !== machineB) return machineA.localeCompare(machineB);
+
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB);
+    });
   }, [employees, sheets]);
 
   // Handle new sheet creation
@@ -607,7 +650,9 @@ export function OperationalTraining({
                       >
                         <option value="">Selecione o Colaborador...</option>
                         {availableEmployees.map(emp => (
-                          <option key={emp.id} value={emp.id}>{emp.name} ({emp.role || 'Auxiliar'}) - Matrícula: {emp.registration || 'S/M'}</option>
+                          <option key={emp.id} value={emp.id}>
+                            [{emp.shift || 'Sem Turno'} - {emp.machine || 'Sem Máquina'}] {emp.name} ({emp.role || 'Auxiliar'}) - Matrícula: {emp.registration || 'S/M'}
+                          </option>
                         ))}
                       </select>
                       {availableEmployees.length === 0 && (

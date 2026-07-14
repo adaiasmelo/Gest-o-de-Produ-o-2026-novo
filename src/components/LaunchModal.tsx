@@ -188,6 +188,11 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
     // 2. Adicionar funcionários dos slots de máquina ativos (para retrocompatibilidade)
     if (employees && Array.isArray(employees)) {
       employees.forEach(emp => {
+        const empNameNorm = (emp.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        const empStatusNorm = (emp.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        if (empNameNorm.includes('excluid') || empStatusNorm.includes('excluid')) {
+          return;
+        }
         if (emp.name && emp.name !== 'Em Contratação' && (emp.role || '').toLowerCase().includes('operador')) {
           const nameClean = emp.name.trim();
           if (nameClean && !operatorMap.has(nameClean.toLowerCase())) {
@@ -216,6 +221,11 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
     if (formData.machine && employees && Array.isArray(employees)) {
       const selectedMachineNorm = formData.machine.toLowerCase().trim();
       employees.forEach(emp => {
+        const empNameNorm = (emp.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        const empStatusNorm = (emp.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        if (empNameNorm.includes('excluid') || empStatusNorm.includes('excluid')) {
+          return;
+        }
         if (emp.name && emp.machine) {
           const empM = emp.machine.toLowerCase().trim();
           const isMatch = empM === selectedMachineNorm || empM.includes(selectedMachineNorm) || selectedMachineNorm.includes(empM);

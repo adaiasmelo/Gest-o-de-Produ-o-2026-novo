@@ -45,20 +45,50 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
     if (records.length === 0) setView('form');
   }, [isOpen]);
 
-  // Group employees by sector and machine
+  const isValidEmployeeForSelection = (emp: Employee) => {
+    if (!emp || !emp.name) return false;
+    
+    const statusNorm = (emp.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
+    const nameNorm = (emp.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
+    
+    // Status must be active, on leave, or in contracting
+    const isStatusValid = ['ativo', 'atestado', 'em contratacao'].includes(statusNorm);
+    if (!isStatusValid) return false;
+
+    // Filter out placeholder names
+    if (nameNorm.includes('excluid')) return false;
+    if (nameNorm === 'vaga disponivel' || nameNorm === 'disponivel') return false;
+    if (nameNorm === 'vaga em contratacao' || nameNorm === 'em contratacao') return false;
+    if (nameNorm.includes('vaga disponivel') || nameNorm.includes('vaga em contratacao') || nameNorm.includes('vaga excluida')) return false;
+    
+    return true;
+  };
+
+  // Group employees by sector, shift, and machine
   const groupedEmployees = useMemo(() => {
-    const groups: Record<string, Record<string, Employee[]>> = {};
+    const groups: Record<string, Record<string, Record<string, Employee[]>>> = {};
     
     employees.forEach(emp => {
-      if (!emp.collaboratorId) return;
+      if (!isValidEmployeeForSelection(emp)) return;
       
       const sector = emp.sector || 'Outros';
+      const shift = emp.shift || 'Sem Turno';
       const machine = emp.machine || 'Geral';
       
       if (!groups[sector]) groups[sector] = {};
-      if (!groups[sector][machine]) groups[sector][machine] = [];
+      if (!groups[sector][shift]) groups[sector][shift] = {};
+      if (!groups[sector][shift][machine]) groups[sector][shift][machine] = [];
       
-      groups[sector][machine].push(emp);
+      // Avoid duplicates of the same person under Sector -> Shift -> Machine
+      const empKey = emp.collaboratorId || emp.registration || emp.id;
+      const alreadyAdded = groups[sector][shift][machine].some(e => {
+        const eKey = e.collaboratorId || e.registration || e.id;
+        return eKey === empKey || (e.registration && emp.registration && e.registration === emp.registration) || (e.name.trim().toLowerCase() === emp.name.trim().toLowerCase());
+      });
+      
+      if (!alreadyAdded) {
+        groups[sector][shift][machine].push(emp);
+      }
     });
     
     return groups;
@@ -75,12 +105,12 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
     setExpandedSectors(prev => ({ ...prev, [sector]: !prev[sector] }));
   };
 
-  const toggleTempSelection = (collaboratorId: string) => {
+  const toggleTempSelection = (empKey: string) => {
     const newSet = new Set(tempSelection);
-    if (newSet.has(collaboratorId)) {
-      newSet.delete(collaboratorId);
+    if (newSet.has(empKey)) {
+      newSet.delete(empKey);
     } else {
-      newSet.add(collaboratorId);
+      newSet.add(empKey);
     }
     setTempSelection(newSet);
   };
@@ -88,9 +118,19 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
   const handleInsertSelected = () => {
     const toAdd: Collaborator[] = [];
     tempSelection.forEach(id => {
-      const col = collaborators.find(c => c.id === id);
-      if (col && !participants.find(p => p.id === id)) {
-        toAdd.push(col);
+      const emp = employees.find(e => (e.collaboratorId === id || e.registration === id || e.id === id));
+      if (emp) {
+        const empKey = emp.collaboratorId || emp.registration || emp.id;
+        const col: Collaborator = {
+          id: empKey,
+          name: emp.name,
+          registration: emp.registration || '',
+          role: emp.role || 'Auxiliar',
+          updatedAt: new Date().toISOString()
+        };
+        if (!participants.some(p => p.id === col.id || p.registration === col.registration || p.name === col.name)) {
+          toAdd.push(col);
+        }
       }
     });
     
@@ -387,16 +427,21 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
 
                 {/* Grouped Selection Area */}
                 <div className="border border-slate-100 rounded-[2rem] overflow-hidden bg-white">
-                  <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-1">
-                    {Object.entries(groupedEmployees).map(([sector, machines]) => {
-                      const filteredMachines = Object.entries(machines).filter(([_, emps]) => emps.some(matchesSearch));
-                      if (filteredMachines.length === 0) return null;
+                  <div className="max-h-[350px] overflow-y-auto custom-scrollbar p-1">
+                    {Object.entries(groupedEmployees).map(([sector, shifts]) => {
+                      const typedShifts = shifts as Record<string, Record<string, Employee[]>>;
+                      const hasMatches = Object.values(typedShifts).some(machines => {
+                        const typedMachines = machines as Record<string, Employee[]>;
+                        return Object.values(typedMachines).some(emps => (emps as Employee[]).some(matchesSearch));
+                      });
+                      if (!hasMatches) return null;
 
                       const isExpanded = expandedSectors[sector] ?? true;
 
                       return (
-                        <div key={sector} className="mb-2 last:mb-0">
+                        <div key={sector} className="mb-4 last:mb-0 border-b border-slate-50 last:border-0 pb-4 last:pb-0">
                           <button 
+                            type="button"
                             onClick={() => toggleSector(sector)}
                             className="w-full flex items-center gap-3 px-6 py-4 hover:bg-slate-50 transition-colors text-left"
                           >
@@ -405,60 +450,91 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
                           </button>
                           
                           {isExpanded && (
-                            <div className="px-4 pb-4 space-y-4">
-                              {filteredMachines.map(([machine, emps]) => {
-                                const searchMatchingEmps = emps.filter(matchesSearch);
-                                const selectableEmps = searchMatchingEmps.filter(emp => emp.collaboratorId && !participants.some(p => p.id === emp.collaboratorId));
-                                const selectAllActive = selectableEmps.length > 0 && selectableEmps.every(emp => tempSelection.has(emp.collaboratorId!));
-
-                                const toggleMachineSelection = () => {
-                                  const newSet = new Set(tempSelection);
-                                  if (selectAllActive) {
-                                    selectableEmps.forEach(emp => {
-                                      newSet.delete(emp.collaboratorId!);
-                                    });
-                                  } else {
-                                    selectableEmps.forEach(emp => {
-                                      newSet.add(emp.collaboratorId!);
-                                    });
-                                  }
-                                  setTempSelection(newSet);
-                                };
+                            <div className="px-6 space-y-4">
+                              {Object.entries(typedShifts).map(([shift, machines]) => {
+                                const typedMachines = machines as Record<string, Employee[]>;
+                                const shiftHasMatches = Object.values(typedMachines).some(emps => (emps as Employee[]).some(matchesSearch));
+                                if (!shiftHasMatches) return null;
 
                                 return (
-                                  <div key={machine} className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
-                                    <div className="flex justify-between items-center mb-3 px-2">
-                                      <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{machine}</h5>
-                                      {selectableEmps.length > 0 && (
-                                        <button
-                                          type="button"
-                                          onClick={toggleMachineSelection}
-                                          className="text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider transition-colors px-2 py-0.5 bg-blue-50/50 hover:bg-blue-50 rounded-md"
-                                        >
-                                          {selectAllActive ? 'Deselecionar Todos' : 'Selecionar Todos'}
-                                        </button>
-                                      )}
+                                  <div key={shift} className="space-y-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{shift}</h4>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {searchMatchingEmps.map(emp => {
-                                        const isSelected = tempSelection.has(emp.collaboratorId!);
-                                        const isAlreadyIn = participants.find(p => p.id === emp.collaboratorId);
+
+                                    <div className="space-y-4 pl-3">
+                                      {Object.entries(typedMachines).map(([machine, emps]) => {
+                                        const typedEmps = emps as Employee[];
+                                        const searchMatchingEmps = typedEmps.filter(matchesSearch);
+                                        if (searchMatchingEmps.length === 0) return null;
+
+                                        const selectableEmps = searchMatchingEmps.filter(emp => {
+                                          const empKey = emp.collaboratorId || emp.registration || emp.id;
+                                          return !participants.some(p => p.id === empKey || p.registration === emp.registration || p.name === emp.name);
+                                        });
+
+                                        const selectAllActive = selectableEmps.length > 0 && selectableEmps.every(emp => {
+                                          const empKey = emp.collaboratorId || emp.registration || emp.id;
+                                          return tempSelection.has(empKey);
+                                        });
+
+                                        const toggleMachineSelection = () => {
+                                          const newSet = new Set(tempSelection);
+                                          if (selectAllActive) {
+                                            selectableEmps.forEach(emp => {
+                                              const empKey = emp.collaboratorId || emp.registration || emp.id;
+                                              newSet.delete(empKey);
+                                            });
+                                          } else {
+                                            selectableEmps.forEach(emp => {
+                                              const empKey = emp.collaboratorId || emp.registration || emp.id;
+                                              newSet.add(empKey);
+                                            });
+                                          }
+                                          setTempSelection(newSet);
+                                        };
 
                                         return (
-                                          <button 
-                                            key={emp.id}
-                                            onClick={() => !isAlreadyIn && toggleTempSelection(emp.collaboratorId!)}
-                                            disabled={!!isAlreadyIn}
-                                            className={`flex items-center justify-between p-3 rounded-xl transition-all border ${isAlreadyIn ? 'bg-white/50 border-slate-100 opacity-60' : isSelected ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white border-transparent hover:border-slate-200'}`}
-                                          >
-                                            <div className="flex items-center gap-3 text-left">
-                                              {isAlreadyIn ? <CheckSquare className="text-green-500 shrink-0" size={18} /> : isSelected ? <CheckSquare className="text-white shrink-0" size={18} /> : <Square className="text-slate-300 shrink-0" size={18} />}
-                                              <div>
-                                                <p className={`font-black uppercase text-[10px] leading-tight ${isSelected ? 'text-white' : 'text-slate-700'}`}>{emp.name}</p>
-                                                <p className={`text-[9px] font-bold uppercase font-mono ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>#{emp.registration}</p>
-                                              </div>
+                                          <div key={machine} className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
+                                            <div className="flex justify-between items-center mb-3 px-2">
+                                              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{machine}</h5>
+                                              {selectableEmps.length > 0 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={toggleMachineSelection}
+                                                  className="text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider transition-colors px-2 py-0.5 bg-blue-50/50 hover:bg-blue-50 rounded-md"
+                                                >
+                                                  {selectAllActive ? 'Deselecionar Todos' : 'Selecionar Todos'}
+                                                </button>
+                                              )}
                                             </div>
-                                          </button>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                              {searchMatchingEmps.map(emp => {
+                                                const empKey = emp.collaboratorId || emp.registration || emp.id;
+                                                const isSelected = tempSelection.has(empKey);
+                                                const isAlreadyIn = participants.some(p => p.id === empKey || p.registration === emp.registration || p.name === emp.name);
+
+                                                return (
+                                                  <button 
+                                                    key={emp.id}
+                                                    type="button"
+                                                    onClick={() => !isAlreadyIn && toggleTempSelection(empKey)}
+                                                    disabled={!!isAlreadyIn}
+                                                    className={`flex items-center justify-between p-3 rounded-xl transition-all border ${isAlreadyIn ? 'bg-white/50 border-slate-100 opacity-60' : isSelected ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white border-transparent hover:border-slate-200'}`}
+                                                  >
+                                                    <div className="flex items-center gap-3 text-left">
+                                                      {isAlreadyIn ? <CheckSquare className="text-green-500 shrink-0" size={18} /> : isSelected ? <CheckSquare className="text-white shrink-0" size={18} /> : <Square className="text-slate-300 shrink-0" size={18} />}
+                                                      <div>
+                                                        <p className={`font-black uppercase text-[10px] leading-tight ${isSelected ? 'text-white' : 'text-slate-700'}`}>{emp.name}</p>
+                                                        <p className={`text-[9px] font-bold uppercase font-mono ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>#{emp.registration}</p>
+                                                      </div>
+                                                    </div>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
                                         );
                                       })}
                                     </div>

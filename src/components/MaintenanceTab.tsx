@@ -678,11 +678,15 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
               ? `${displayTitle.toUpperCase()}\n\n${issue.cause}`
               : `${displayTitle.toUpperCase()}\n`;
 
+            const relatorDataStr = issue.status === 'Resolvido' && issue.resolvedAt
+              ? `${issue.reporter}\nAberto: ${dateStr}\nResolvido: ${new Date(issue.resolvedAt).toLocaleDateString('pt-BR')}`
+              : `${issue.reporter}\nAberto: ${dateStr}\n`;
+
             return [
               checkboxStr,
               issue.priority,
               formattedCauseText,
-              `${issue.reporter}\n${dateStr}`,
+              relatorDataStr,
               issue.status,
               notesOrSolution
             ];
@@ -714,43 +718,73 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
               fontSize: 8,
               valign: 'middle'
             },
-            didParseCell: (data) => {
-              if (data.section === 'body' && data.column.index === 1) {
-                const val = data.cell.raw;
-                if (val === 'Crítica') {
-                  data.cell.styles.textColor = [185, 28, 28]; // Red-700
-                } else if (val === 'Alta') {
-                  data.cell.styles.textColor = [194, 65, 12]; // Orange-700
-                } else if (val === 'Média') {
-                  data.cell.styles.textColor = [161, 98, 7]; // Yellow-700
-                } else if (val === 'Baixa') {
-                  data.cell.styles.textColor = [4, 120, 87]; // Emerald-700
-                }
-              }
-              if (data.section === 'body' && data.column.index === 4) {
-                const val = data.cell.raw;
-                if (val === 'Resolvido') {
-                  data.cell.styles.textColor = [4, 120, 87]; // Emerald-700
-                  data.cell.styles.fontStyle = 'bold';
-                } else if (val === 'Em Andamento') {
-                  data.cell.styles.textColor = [29, 78, 216]; // Blue-700
-                } else {
-                  data.cell.styles.textColor = [100, 116, 139]; // Slate-500
-                }
-              }
-            },
             willDrawCell: (data) => {
-              if (data.section === 'body' && data.column.index === 2) {
-                // Clear default text drawing so we can draw custom content in didDrawCell
-                data.cell.text = [];
+              if (data.section === 'body') {
+                // Clear default text drawing for all columns because we are doing custom drawing
+                if ([0, 1, 2, 3, 4, 5].includes(data.column.index)) {
+                  data.cell.text = [];
+                }
               }
             },
             didDrawCell: (data) => {
-              if (data.section === 'body' && data.column.index === 2) {
+              if (data.section === 'body') {
                 const cell = data.cell;
                 const doc = data.doc;
                 const issue = machineIssues[data.row.index];
-                if (issue) {
+                if (!issue) return;
+
+                const dateStr = new Date(issue.createdAt).toLocaleDateString('pt-BR');
+
+                if (data.column.index === 0) {
+                  // Column 0: Checkbox
+                  const size = 5;
+                  const boxX = cell.x + (cell.width - size) / 2;
+                  const boxY = cell.y + (cell.height - size) / 2;
+                  if (issue.status === 'Resolvido') {
+                    doc.setFillColor(16, 185, 129); // Emerald-500
+                    doc.setDrawColor(16, 185, 129);
+                    doc.roundedRect(boxX, boxY, size, size, 1, 1, 'FD');
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(4.5);
+                    doc.text('X', boxX + 1.4, boxY + 3.9);
+                  } else {
+                    doc.setDrawColor(148, 163, 184); // Slate-400
+                    doc.setFillColor(255, 255, 255);
+                    doc.roundedRect(boxX, boxY, size, size, 1, 1, 'FD');
+                  }
+                }
+                
+                else if (data.column.index === 1) {
+                  // Column 1: Priority Badge
+                  const priorityColorsMap: { [key: string]: { bg: number[], border: number[], text: number[], dot: number[] } } = {
+                    'Crítica': { bg: [254, 242, 242], border: [254, 226, 226], text: [185, 28, 28], dot: [239, 68, 68] },
+                    'Alta': { bg: [255, 247, 237], border: [254, 215, 170], text: [194, 65, 12], dot: [249, 115, 22] },
+                    'Média': { bg: [255, 251, 235], border: [254, 243, 199], text: [180, 83, 9], dot: [245, 158, 11] },
+                    'Baixa': { bg: [240, 253, 245], border: [204, 251, 241], text: [13, 148, 136], dot: [20, 184, 166] }
+                  };
+                  const colors = priorityColorsMap[issue.priority] || priorityColorsMap['Baixa'];
+                  const badgeW = cell.width - 4;
+                  const badgeH = 6;
+                  const badgeX = cell.x + 2;
+                  const badgeY = cell.y + (cell.height - badgeH) / 2;
+
+                  doc.setFillColor(colors.bg[0], colors.bg[1], colors.bg[2]);
+                  doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+                  doc.setLineWidth(0.15);
+                  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.2, 1.2, 'FD');
+
+                  doc.setFillColor(colors.dot[0], colors.dot[1], colors.dot[2]);
+                  doc.circle(badgeX + 2, badgeY + badgeH / 2, 0.6, 'F');
+
+                  doc.setFont('helvetica', 'bold');
+                  doc.setFontSize(6.5);
+                  doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+                  doc.text(issue.priority.toUpperCase(), badgeX + 4.2, badgeY + badgeH / 2 + 0.8);
+                }
+
+                else if (data.column.index === 2) {
+                  // Column 2: Causa / Descrição
                   const displayTitle = (issue.title || generateTitleFromCause(issue.cause)).toUpperCase();
                   const causeText = issue.cause;
                   const isSame = displayTitle.toLowerCase().trim() === causeText.toLowerCase().trim();
@@ -786,6 +820,84 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
                     // Wrap text
                     const wrappedCause = doc.splitTextToSize(causeText, availableWidth);
                     doc.text(wrappedCause, startX, textStartY);
+                  }
+                }
+
+                else if (data.column.index === 3) {
+                  // Column 3: Relator / Data
+                  const padX = 2;
+                  const startX = cell.x + padX;
+                  const startY = cell.y + 4;
+                  
+                  doc.setFont('helvetica', 'normal');
+                  doc.setFontSize(6.5);
+                  doc.setTextColor(100, 116, 139); // Slate-500
+                  
+                  doc.text("Por: ", startX, startY);
+                  doc.setFont('helvetica', 'bold');
+                  doc.setTextColor(71, 85, 105); // Slate-700
+                  doc.text(issue.reporter, startX + 5, startY);
+                  
+                  doc.setFont('helvetica', 'normal');
+                  doc.setTextColor(100, 116, 139);
+                  doc.text(`Aberto: ${dateStr}`, startX, startY + 3.5);
+                  
+                  if (issue.status === 'Resolvido' && issue.resolvedAt) {
+                    const resolvedDateStr = new Date(issue.resolvedAt).toLocaleDateString('pt-BR');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(16, 185, 129); // Emerald-500
+                    doc.text(`Resolvido: ${resolvedDateStr}`, startX, startY + 7);
+                  }
+                }
+
+                else if (data.column.index === 4) {
+                  // Column 4: Status Badge
+                  const statusColorsMap: { [key: string]: { bg: number[], border: number[], text: number[] } } = {
+                    'Pendente': { bg: [241, 245, 249], border: [226, 232, 240], text: [71, 85, 105] },
+                    'Em Andamento': { bg: [239, 246, 255], border: [191, 219, 254], text: [29, 78, 216] },
+                    'Resolvido': { bg: [236, 253, 245], border: [167, 243, 208], text: [4, 120, 87] }
+                  };
+                  const colors = statusColorsMap[issue.status] || statusColorsMap['Pendente'];
+                  const badgeW = cell.width - 4;
+                  const badgeH = 6;
+                  const badgeX = cell.x + 2;
+                  const badgeY = cell.y + (cell.height - badgeH) / 2;
+
+                  doc.setFillColor(colors.bg[0], colors.bg[1], colors.bg[2]);
+                  doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+                  doc.setLineWidth(0.15);
+                  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.2, 1.2, 'FD');
+
+                  doc.setFont('helvetica', 'bold');
+                  doc.setFontSize(6.5);
+                  doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+                  doc.text(issue.status.toUpperCase(), badgeX + (badgeW / 2), badgeY + (badgeH / 2) + 0.8, { align: 'center' });
+                }
+
+                else if (data.column.index === 5) {
+                  // Column 5: Solução / Obs
+                  if (issue.solution) {
+                    const pad = 2;
+                    const cardW = cell.width - (pad * 2);
+                    const cardH = cell.height - (pad * 2);
+                    const cardX = cell.x + pad;
+                    const cardY = cell.y + pad;
+
+                    doc.setFillColor(236, 253, 245); // Emerald-50
+                    doc.setDrawColor(167, 243, 208); // Emerald-200
+                    doc.setLineWidth(0.15);
+                    doc.roundedRect(cardX, cardY, cardW, cardH, 1, 1, 'FD');
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(6);
+                    doc.setTextColor(6, 95, 70); // Emerald-800
+                    doc.text("SOLUÇÃO / OBS:", cardX + 1.5, cardY + 2.5);
+
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6);
+                    doc.setTextColor(51, 65, 85); // Slate-700
+                    const wrappedText = doc.splitTextToSize(issue.solution, cardW - 3);
+                    doc.text(wrappedText, cardX + 1.5, cardY + 5);
                   }
                 }
               }
