@@ -17,10 +17,14 @@ const base64ToBuffer = (base64: string): Uint8Array => {
 };
 
 export const isBiometricAvailable = async (): Promise<boolean> => {
-  return (
-    window.PublicKeyCredential &&
-    (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())
-  );
+  try {
+    if (!window.PublicKeyCredential) return false;
+    const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    return isAvailable;
+  } catch (e) {
+    console.error("isBiometricAvailable error:", e);
+    return !!window.PublicKeyCredential;
+  }
 };
 
 export const registerBiometrics = async (user: SystemUser): Promise<string | null> => {
@@ -39,13 +43,16 @@ export const registerBiometrics = async (user: SystemUser): Promise<string | nul
         name: user.registration,
         displayName: user.name,
       },
-      pubKeyCredParams: [{ alg: -7, type: "public-key" }], // ES256
+      pubKeyCredParams: [
+        { alg: -7, type: "public-key" }, // ES256
+        { alg: -257, type: "public-key" } // RS256
+      ],
       authenticatorSelection: {
         authenticatorAttachment: "platform",
         userVerification: "required",
       },
-      timeout: 60000,
-      attestation: "direct",
+      timeout: 60000, // Standard timeout of 60 seconds
+      attestation: "none",
     };
 
     const credential = (await navigator.credentials.create({
@@ -58,7 +65,7 @@ export const registerBiometrics = async (user: SystemUser): Promise<string | nul
     return null;
   } catch (error) {
     console.error("Biometric registration error:", error);
-    return null;
+    throw error;
   }
 };
 
@@ -77,7 +84,7 @@ export const authenticateBiometrics = async (biometricId: string): Promise<boole
         },
       ],
       userVerification: "required",
-      timeout: 60000,
+      timeout: 60000, // Standard timeout of 60 seconds
     };
 
     const assertion = await navigator.credentials.get({
@@ -87,6 +94,6 @@ export const authenticateBiometrics = async (biometricId: string): Promise<boole
     return !!assertion;
   } catch (error) {
     console.error("Biometric authentication error:", error);
-    return false;
+    throw error;
   }
 };

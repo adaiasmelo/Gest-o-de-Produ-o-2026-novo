@@ -895,12 +895,25 @@ export const App: React.FC = () => {
   const [isStandalone, setIsStandalone] = useState(false);
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [biometricUser, setBiometricUser] = useState<SystemUser | null>(null);
+  
+  // States for interactive biometric scanner modal
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [biometricModalType, setBiometricModalType] = useState<'register' | 'login'>('login');
+  const [biometricModalUser, setBiometricModalUser] = useState<SystemUser | null>(null);
+  const [biometricScanStatus, setBiometricScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
+  const [biometricScanError, setBiometricScanError] = useState<string | null>(null);
+  const [isIframe, setIsIframe] = useState(false);
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'info', operator: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     notificationAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    try {
+      setIsIframe(window.self !== window.top);
+    } catch (e) {
+      setIsIframe(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -2192,34 +2205,117 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleOpenBiometricLoginModal = (user: SystemUser) => {
+    setBiometricModalUser(user);
+    setBiometricModalType('login');
+    setIsBiometricModalOpen(true);
+    setBiometricScanStatus('idle');
+    setBiometricScanError(null);
+    
+    // Automatically trigger the biometric scan on open!
+    setTimeout(() => {
+      triggerBiometricProcess('login', user);
+    }, 400);
+  };
+
+  const handleOpenBiometricRegisterModal = (user: SystemUser) => {
+    setBiometricModalUser(user);
+    setBiometricModalType('register');
+    setIsBiometricModalOpen(true);
+    setBiometricScanStatus('idle');
+    setBiometricScanError(null);
+    setShowBiometricPrompt(false);
+    
+    // Automatically trigger the biometric scan on open!
+    setTimeout(() => {
+      triggerBiometricProcess('register', user);
+    }, 400);
+  };
+
+  const getWebAuthnErrorMessage = (err: any): string => {
+    if (!err) return 'Erro desconhecido ao acessar leitor biométrico.';
+    const name = err.name;
+    const message = err.message || '';
+    
+    if (name === 'NotAllowedError') {
+      return 'O escaneamento foi cancelado pelo usuário ou o acesso à biometria foi negado pelo sistema operacional/navegador.';
+    }
+    if (name === 'SecurityError') {
+      return 'Erro de Segurança: Acesso biométrico bloqueado. Navegadores proíbem biometria (Touch ID / Face ID) dentro de iframes (painéis de visualização). Por favor, abra o aplicativo em uma ABA CHEIA do navegador para funcionar de verdade.';
+    }
+    if (name === 'InvalidStateError') {
+      return 'Chave inválida ou este dispositivo já possui este usuário biométrico registrado.';
+    }
+    if (name === 'NotSupportedError') {
+      return 'Este dispositivo ou navegador não possui suporte de hardware ou driver ativo para chaves biométricas.';
+    }
+    return `Falha física: ${message || name}. Certifique-se de que o leitor de digital/facial está ativado no aparelho.`;
+  };
+
+  const triggerBiometricProcess = async (type: 'register' | 'login', user: SystemUser) => {
+    setBiometricScanStatus('scanning');
+    setBiometricScanError(null);
+    
+    if (type === 'register') {
+      try {
+        const biometricId = await registerBiometrics(user);
+        if (biometricId) {
+          const updated = { ...user, biometricId };
+          await setDoc(doc(db, 'system_users', user.id), updated);
+          setLoggedUser(updated);
+          localStorage.setItem('manupackaging_user', JSON.stringify(updated));
+          setBiometricScanStatus('success');
+          setTimeout(() => {
+            setIsBiometricModalOpen(false);
+            setBiometricModalUser(null);
+          }, 1500);
+        } else {
+          setBiometricScanStatus('error');
+          setBiometricScanError('Nenhum dado biométrico foi gerado pelo dispositivo.');
+        }
+      } catch (err: any) {
+        console.error('WebAuthn register error:', err);
+        setBiometricScanStatus('error');
+        setBiometricScanError(getWebAuthnErrorMessage(err));
+      }
+    } else {
+      try {
+        if (!user.biometricId) {
+          setBiometricScanStatus('error');
+          setBiometricScanError('Nenhum cadastro biométrico de alta segurança encontrado para este usuário.');
+          return;
+        }
+        
+        const success = await authenticateBiometrics(user.biometricId);
+        if (success) {
+          setLoggedUser(user);
+          localStorage.setItem('manupackaging_user', JSON.stringify(user));
+          setBiometricScanStatus('success');
+          setTimeout(() => {
+            setIsBiometricModalOpen(false);
+            setBiometricModalUser(null);
+          }, 1500);
+        } else {
+          setBiometricScanStatus('error');
+          setBiometricScanError('A verificação biométrica não pôde ser completada.');
+        }
+      } catch (err: any) {
+        console.error('WebAuthn login error:', err);
+        setBiometricScanStatus('error');
+        setBiometricScanError(getWebAuthnErrorMessage(err));
+      }
+    }
+  };
+
   const handleBiometricLogin = async (userParam?: SystemUser) => {
     const user = userParam || systemUsers.find(u => u.registration === loginMatricula);
     if (!user || !user.biometricId) return;
-
-    const success = await authenticateBiometrics(user.biometricId);
-    if (success) {
-      setLoggedUser(user);
-      localStorage.setItem('manupackaging_user', JSON.stringify(user));
-    }
+    handleOpenBiometricLoginModal(user);
   };
 
   const handleRegisterBiometrics = async () => {
     if (!biometricUser) return;
-    
-    const biometricId = await registerBiometrics(biometricUser);
-    if (biometricId) {
-      try {
-        const updated = { ...biometricUser, biometricId };
-        await setDoc(doc(db, 'system_users', biometricUser.id), updated);
-        setLoggedUser(updated);
-        localStorage.setItem('manupackaging_user', JSON.stringify(updated));
-        alert('Biometria cadastrada com sucesso!');
-      } catch (err) {
-        console.error('Error saving biometric data:', err);
-      }
-    }
-    setShowBiometricPrompt(false);
-    setBiometricUser(null);
+    handleOpenBiometricRegisterModal(biometricUser);
   };
 
   const handleSaveSettings = async () => {
@@ -7295,7 +7391,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
               <div className="flex flex-col gap-3">
                 <button 
                   onClick={handleRegisterBiometrics}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-200"
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-200 cursor-pointer"
                 >
                   Sim, Cadastrar Agora
                 </button>
@@ -7304,12 +7400,157 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                     setShowBiometricPrompt(false);
                     setBiometricUser(null);
                   }}
-                  className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all"
+                  className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer"
                 >
                   Agora Não
                 </button>
               </div>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter italic">Você poderá configurar isso mais tarde no perfil.</p>
+            </div>
+          </div>
+        )}
+
+        {/* INTERACTIVE BIOMETRIC SCANNER MODAL (100% NATIVE WEBAUTHN) */}
+        {isBiometricModalOpen && biometricModalUser && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-slate-900 border border-slate-800 text-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl relative overflow-hidden flex flex-col items-center">
+              
+              {/* Close Button */}
+              {biometricScanStatus !== 'scanning' && biometricScanStatus !== 'success' && (
+                <button 
+                  onClick={() => setIsBiometricModalOpen(false)}
+                  className="absolute top-5 right-5 p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-full transition-all cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              )}
+
+              {/* Status Indicator & Title */}
+              <div className="text-center space-y-2 mt-4 w-full">
+                <p className="text-[10px] font-black tracking-widest text-blue-400 uppercase">
+                  {biometricModalType === 'register' ? 'Cadastro de Biometria Real' : 'Autenticação Biométrica Real'}
+                </p>
+                <h3 className="text-xl font-black uppercase tracking-tight text-white">
+                  {biometricScanStatus === 'idle' && 'Aguardando Leitor'}
+                  {biometricScanStatus === 'scanning' && 'Escaneando Digital / Rosto...'}
+                  {biometricScanStatus === 'success' && 'Leitura Concluída!'}
+                  {biometricScanStatus === 'error' && 'Erro no Escaneamento'}
+                </h3>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto font-medium">
+                  {biometricModalType === 'register' 
+                    ? `Associando identificação digital ao cadastro de ${biometricModalUser.name.split(' ')[0]}`
+                    : `Confirme sua identidade digital para entrar como ${biometricModalUser.name.split(' ')[0]}`
+                  }
+                </p>
+              </div>
+
+              {/* Iframe Warning Box */}
+              {isIframe && (
+                <div className="mt-5 w-full bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-2xl p-4 text-xs font-semibold leading-relaxed space-y-2 text-left">
+                  <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-400">
+                    <AlertCircle size={14} /> Ambiente com Restrição (IFrame)
+                  </p>
+                  <p>
+                    O navegador bloqueia o uso de biometria física (TouchID/FaceID) dentro de painéis de visualização embutidos. Para que funcione de verdade com o leitor do seu aparelho, clique no botão abaixo para abrir em uma nova aba cheia do navegador.
+                  </p>
+                  <a 
+                    href={window.location.href} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase text-[10px] tracking-widest mt-1 cursor-pointer transition-all shadow-md shadow-blue-900/30"
+                  >
+                    <ExternalLink size={12} /> Abrir em Nova Aba Real
+                  </a>
+                </div>
+              )}
+
+              {/* Central Scanner Graphic Component */}
+              <div className="my-8 relative flex items-center justify-center w-36 h-36">
+                {/* Pulsing Outer Rings */}
+                <div className={`absolute inset-0 rounded-full border border-blue-500/10 ${biometricScanStatus === 'scanning' ? 'animate-ping duration-1000' : ''}`} />
+                <div className={`absolute inset-3 rounded-full border border-blue-500/20 ${biometricScanStatus === 'scanning' ? 'animate-pulse' : ''}`} />
+                
+                {/* Background Ring */}
+                <div className="absolute inset-6 rounded-[2rem] bg-slate-950 border border-slate-800 flex items-center justify-center w-24 h-24 overflow-hidden">
+                  
+                  {/* Scanner Laser effect */}
+                  {biometricScanStatus === 'scanning' && (
+                    <div className="absolute left-0 right-0 h-1 bg-blue-500 shadow-lg shadow-blue-500/80 animate-pulse z-10 top-0" style={{
+                      animation: 'scan-move 1.5s infinite ease-in-out'
+                    }} />
+                  )}
+
+                  {/* Fingerprint / Face icon with dynamic colors */}
+                  <div className={`text-slate-400 transition-all duration-300 flex items-center justify-center ${
+                    biometricScanStatus === 'scanning' ? 'text-blue-400 scale-110' : 
+                    biometricScanStatus === 'success' ? 'text-emerald-400 scale-110' :
+                    biometricScanStatus === 'error' ? 'text-rose-400 scale-95' : 'text-slate-400 hover:text-blue-400 cursor-pointer'
+                  }`}>
+                    {biometricScanStatus === 'success' ? (
+                      <ShieldCheck size={48} className="text-emerald-400 animate-in zoom-in duration-300" />
+                    ) : biometricScanStatus === 'error' ? (
+                      <AlertCircle size={48} className="text-rose-400 animate-in shake duration-300" />
+                    ) : (
+                      <Fingerprint size={48} />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Info / Help messages */}
+              <div className="text-center w-full min-h-[50px] flex items-center justify-center px-4">
+                {biometricScanStatus === 'idle' && (
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider animate-pulse">Toque abaixo para acionar o sensor</p>
+                )}
+                {biometricScanStatus === 'scanning' && (
+                  <p className="text-xs font-bold text-blue-400 uppercase tracking-widest animate-pulse">Efetue a leitura digital ou facial...</p>
+                )}
+                {biometricScanStatus === 'success' && (
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-black uppercase tracking-wider justify-center">
+                    <ShieldCheck size={16} /> Identidade Confirmada com Sucesso
+                  </div>
+                )}
+                {biometricScanStatus === 'error' && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-bold text-rose-400 leading-relaxed max-w-xs mx-auto">
+                      {biometricScanError}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Interactive Control Buttons */}
+              <div className="mt-6 w-full space-y-3">
+                {(biometricScanStatus === 'idle' || biometricScanStatus === 'error') && (
+                  <button
+                    onClick={() => triggerBiometricProcess(biometricModalType, biometricModalUser)}
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25"
+                  >
+                    <Activity size={14} /> Ativar Leitor do Dispositivo
+                  </button>
+                )}
+
+                {biometricScanStatus === 'scanning' && (
+                  <div className="py-4 text-center text-slate-500 font-bold text-[10px] uppercase tracking-widest animate-pulse">
+                    Aguardando resposta do leitor...
+                  </div>
+                )}
+
+                {biometricScanStatus === 'success' && (
+                  <div className="py-4 text-center text-emerald-500 font-bold text-[10px] uppercase tracking-widest animate-pulse">
+                    Acesso autorizado! Redirecionando...
+                  </div>
+                )}
+
+                {biometricScanStatus !== 'scanning' && biometricScanStatus !== 'success' && (
+                  <button
+                    onClick={() => setIsBiometricModalOpen(false)}
+                    className="w-full py-3 bg-transparent hover:bg-slate-800/50 text-slate-500 hover:text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -7375,6 +7616,16 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
             title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
           >
             {isFullscreen ? <Minimize2 size={20} className="md:w-[22px] md:h-[22px]" /> : <Maximize2 size={20} className="md:w-[22px] md:h-[22px]" />}
+          </button>
+          <button 
+            onClick={() => {
+              setBiometricUser(loggedUser);
+              handleOpenBiometricRegisterModal(loggedUser);
+            }} 
+            className="p-3 md:p-3.5 text-blue-600 bg-blue-50 border border-blue-100 rounded-xl md:rounded-2xl transition-all shadow-sm active:scale-95 hover:bg-blue-100" 
+            title="Cadastrar / Atualizar Biometria"
+          >
+            <Fingerprint size={20} className="md:w-[22px] md:h-[22px]" />
           </button>
           <button onClick={handleLogout} className="p-3 md:p-3.5 text-red-600 bg-red-50 border border-red-100 rounded-xl md:rounded-2xl transition-all shadow-sm active:scale-95" title="Sair do Sistema"><LogOut size={20} className="md:w-[22px] md:h-[22px]" /></button>
         </div>
