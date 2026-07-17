@@ -25,12 +25,14 @@ import {
   HelpCircle,
   Edit2,
   Sparkles,
-  Loader2
+  Loader2,
+  Mail
 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { MaintenanceIssue, MaintenancePriority, MaintenanceStatus, SystemUser, Employee } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import {
   PieChart,
   Pie,
@@ -92,6 +94,8 @@ const generateTitleFromCause = (cause: string): string => {
 
 export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, loggedUser, employees }) => {
   const [issues, setIssues] = useState<MaintenanceIssue[]>([]);
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<MaintenanceIssue | null>(null);
@@ -99,6 +103,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
 
   // PDF Export Modal State
   const [isExportPdfModalOpen, setIsExportPdfModalOpen] = useState(false);
+  const [isOutlookShareModalOpen, setIsOutlookShareModalOpen] = useState(false);
   const [pdfStatusOption, setPdfStatusOption] = useState<'Todos' | 'Pendente' | 'Em Andamento' | 'Resolvido'>('Todos');
   const [pdfDateFilterType, setPdfDateFilterType] = useState<'Todos' | 'Dia' | 'Mês' | 'Ano'>('Todos');
   const [pdfSelectedDay, setPdfSelectedDay] = useState(new Date().toISOString().split('T')[0]);
@@ -157,35 +162,6 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
 
   // Resolution Notes State
   const [resolutionNotes, setResolutionNotes] = useState('');
-
-  // Stats Calculations
-  const stats = useMemo(() => {
-    const total = issues.length;
-    const pending = issues.filter(i => i.status === 'Pendente').length;
-    const inProgress = issues.filter(i => i.status === 'Em Andamento').length;
-    const resolved = issues.filter(i => i.status === 'Resolvido').length;
-
-    const pendingPct = total > 0 ? ((pending / total) * 100).toFixed(1) : '0';
-    const inProgressPct = total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0';
-    const resolvedPct = total > 0 ? ((resolved / total) * 100).toFixed(1) : '0';
-
-    const chartData = [
-      { name: 'Pendente', value: pending, percentage: pendingPct, color: '#f97316' }, // orange-500
-      { name: 'Em Andamento', value: inProgress, percentage: inProgressPct, color: '#3b82f6' }, // blue-500
-      { name: 'Resolvido', value: resolved, percentage: resolvedPct, color: '#10b981' } // emerald-500
-    ];
-
-    return {
-      total,
-      pending,
-      inProgress,
-      resolved,
-      pendingPct,
-      inProgressPct,
-      resolvedPct,
-      chartData
-    };
-  }, [issues]);
 
   // Auto-fill lists based on database
   const [sectors, setSectors] = useState<string[]>(['Extrusão', 'Reciclagem', 'Corte de Fita', 'Manutenção', 'Administração']);
@@ -272,9 +248,46 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
 
   // Filter & Sort Issues
   const filteredAndSortedIssues = useMemo(() => {
-    return issues
+    let list = [...issues];
+    
+    // If printing PDF, we apply the PDF export modal filters instead of screen status filter
+    if (isPrintingPdf) {
+      // 1. Status Filter for PDF
+      if (pdfStatusOption !== 'Todos') {
+        list = list.filter(i => i.status === pdfStatusOption);
+      }
+      
+      // 2. Date Filter for PDF
+      if (pdfDateFilterType === 'Dia' && pdfSelectedDay) {
+        list = list.filter(i => {
+          const localDate = new Date(i.createdAt);
+          const y = localDate.getFullYear();
+          const m = String(localDate.getMonth() + 1).padStart(2, '0');
+          const d = String(localDate.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}` === pdfSelectedDay;
+        });
+      } else if (pdfDateFilterType === 'Mês' && pdfSelectedMonth) {
+        list = list.filter(i => {
+          const localDate = new Date(i.createdAt);
+          const y = localDate.getFullYear();
+          const m = String(localDate.getMonth() + 1).padStart(2, '0');
+          return `${y}-${m}` === pdfSelectedMonth;
+        });
+      } else if (pdfDateFilterType === 'Ano' && pdfSelectedYear) {
+        list = list.filter(i => {
+          const localDate = new Date(i.createdAt);
+          return String(localDate.getFullYear()) === pdfSelectedYear;
+        });
+      }
+    } else {
+      // Standard screen status filter
+      if (statusFilter !== 'Todos') {
+        list = list.filter(i => i.status === statusFilter);
+      }
+    }
+
+    return list
       .filter(issue => {
-        const matchesStatus = statusFilter === 'Todos' || issue.status === statusFilter;
         const matchesPriority = priorityFilter === 'Todos' || issue.priority === priorityFilter;
         const matchesSector = sectorFilter === 'Todos' || issue.sector === sectorFilter;
         const matchesSearch = (issue.title || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -282,7 +295,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
                               issue.machine.toLowerCase().includes(search.toLowerCase()) ||
                               issue.reporter.toLowerCase().includes(search.toLowerCase());
         
-        return matchesStatus && matchesPriority && matchesSector && matchesSearch;
+        return matchesPriority && matchesSector && matchesSearch;
       })
       .sort((a, b) => {
         // First sort unresolved vs resolved (Pendente/Em Andamento first, Resolvido last)
@@ -300,7 +313,38 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
         // If same priority, sort by createdAt date descending (newest first)
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [issues, statusFilter, priorityFilter, sectorFilter, search]);
+  }, [issues, statusFilter, priorityFilter, sectorFilter, search, isPrintingPdf, pdfStatusOption, pdfDateFilterType, pdfSelectedDay, pdfSelectedMonth, pdfSelectedYear]);
+
+  // Stats Calculations
+  const stats = useMemo(() => {
+    // If printing PDF, show statistics for printed issues; otherwise, show statistics for all issues
+    const baseIssues = isPrintingPdf ? filteredAndSortedIssues : issues;
+    const total = baseIssues.length;
+    const pending = baseIssues.filter(i => i.status === 'Pendente').length;
+    const inProgress = baseIssues.filter(i => i.status === 'Em Andamento').length;
+    const resolved = baseIssues.filter(i => i.status === 'Resolvido').length;
+
+    const pendingPct = total > 0 ? ((pending / total) * 100).toFixed(1) : '0';
+    const inProgressPct = total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0';
+    const resolvedPct = total > 0 ? ((resolved / total) * 100).toFixed(1) : '0';
+
+    const chartData = [
+      { name: 'Pendente', value: pending, percentage: pendingPct, color: '#f97316' }, // orange-500
+      { name: 'Em Andamento', value: inProgress, percentage: inProgressPct, color: '#3b82f6' }, // blue-500
+      { name: 'Resolvido', value: resolved, percentage: resolvedPct, color: '#10b981' } // emerald-500
+    ];
+
+    return {
+      total,
+      pending,
+      inProgress,
+      resolved,
+      pendingPct,
+      inProgressPct,
+      resolvedPct,
+      chartData
+    };
+  }, [issues, isPrintingPdf, filteredAndSortedIssues]);
 
   // Group issues by Sector and Machine
   const groupedIssues = useMemo(() => {
@@ -442,494 +486,378 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
     }
   };
 
-  // PDF Export
-  const exportPDFWithSettings = () => {
-    // 1. Start with all issues from the db
-    let pdfIssues = [...issues];
-
-    // 2. Filter by Status (unless 'Todos' is selected)
-    if (pdfStatusOption !== 'Todos') {
-      pdfIssues = pdfIssues.filter(i => i.status === pdfStatusOption);
-    } // if 'Todos', it naturally includes both resolved ("solucionadas") and pending issues!
-
-    // 3. Filter by Date (Dia, Mês, Ano)
-    if (pdfDateFilterType === 'Dia' && pdfSelectedDay) {
-      pdfIssues = pdfIssues.filter(i => {
-        const localDate = new Date(i.createdAt);
-        const y = localDate.getFullYear();
-        const m = String(localDate.getMonth() + 1).padStart(2, '0');
-        const d = String(localDate.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}` === pdfSelectedDay;
-      });
-    } else if (pdfDateFilterType === 'Mês' && pdfSelectedMonth) {
-      pdfIssues = pdfIssues.filter(i => {
-        const localDate = new Date(i.createdAt);
-        const y = localDate.getFullYear();
-        const m = String(localDate.getMonth() + 1).padStart(2, '0');
-        return `${y}-${m}` === pdfSelectedMonth;
-      });
-    } else if (pdfDateFilterType === 'Ano' && pdfSelectedYear) {
-      pdfIssues = pdfIssues.filter(i => {
-        const localDate = new Date(i.createdAt);
-        return String(localDate.getFullYear()) === pdfSelectedYear;
-      });
-    }
-
-    // 4. Respect current filters from the screen if active
-    if (sectorFilter !== 'Todos') {
-      pdfIssues = pdfIssues.filter(i => i.sector === sectorFilter);
-    }
-    if (priorityFilter !== 'Todos') {
-      pdfIssues = pdfIssues.filter(i => i.priority === priorityFilter);
-    }
-    if (search) {
-      pdfIssues = pdfIssues.filter(i => 
-        i.cause.toLowerCase().includes(search.toLowerCase()) || 
-        i.machine.toLowerCase().includes(search.toLowerCase()) ||
-        i.reporter.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    // 5. Sort issues
-    pdfIssues.sort((a, b) => {
-      const aIsResolved = a.status === 'Resolvido' ? 1 : 0;
-      const bIsResolved = b.status === 'Resolvido' ? 1 : 0;
+  // Share maintenance issues formatted by machine via Outlook
+  const shareViaOutlook = async () => {
+    try {
+      // 1. Group active filtered issues by machine
+      const groupedByMachine: { [key: string]: MaintenanceIssue[] } = {};
       
-      if (aIsResolved !== bIsResolved) {
-        return aIsResolved - bIsResolved;
-      }
+      filteredAndSortedIssues.forEach(issue => {
+        const machineKey = (issue.machine || 'Geral / Não Especificada').trim().toUpperCase();
+        if (!groupedByMachine[machineKey]) {
+          groupedByMachine[machineKey] = [];
+        }
+        groupedByMachine[machineKey].push(issue);
+      });
 
-      const diff = (priorityValue[b.priority] || 0) - (priorityValue[a.priority] || 0);
-      if (diff !== 0) return diff;
+      const total = filteredAndSortedIssues.length;
+      const pending = filteredAndSortedIssues.filter(i => i.status === 'Pendente').length;
+      const inProgress = filteredAndSortedIssues.filter(i => i.status === 'Em Andamento').length;
+      const resolved = filteredAndSortedIssues.filter(i => i.status === 'Resolvido').length;
 
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-    // 6. Group issues by Sector and Machine
-    const pdfGrouped: { [sector: string]: { [machine: string]: MaintenanceIssue[] } } = {};
-    pdfIssues.forEach(issue => {
-      const sector = issue.sector || 'Geral';
-      const machine = issue.machine || 'Geral / Nenhuma';
+      // ----------------------------------------------------
+      // 1. BUILD BEAUTIFUL RICH HTML CONTENT FOR CLIPBOARD
+      // ----------------------------------------------------
+      let htmlText = `<div style="font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; line-height: 1.6; max-width: 650px;">`;
       
-      if (!pdfGrouped[sector]) {
-        pdfGrouped[sector] = {};
-      }
-      if (!pdfGrouped[sector][machine]) {
-        pdfGrouped[sector][machine] = [];
-      }
-      pdfGrouped[sector][machine].push(issue);
-    });
+      // Header Section
+      htmlText += `<div style="background-color: #0f172a; padding: 20px; border-radius: 12px; color: #ffffff; margin-bottom: 25px;">`;
+      htmlText += `<h2 style="margin: 0 0 5px 0; font-size: 16pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff;">RELATÓRIO DE CONTROLE DE MANUTENÇÃO</h2>`;
+      htmlText += `<p style="margin: 0; font-size: 9.5pt; color: #cbd5e1; font-weight: normal;">`;
+      htmlText += `<strong>GERADO EM:</strong> ${new Date().toLocaleDateString('pt-BR')} ÀS ${new Date().toLocaleTimeString('pt-BR')}`;
+      htmlText += `</p>`;
+      htmlText += `</div>`;
+      
+      // Summary Cards (using a small table structure for clean Outlook layout alignment)
+      htmlText += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-family: 'Segoe UI', Calibri, Arial, sans-serif;">`;
+      htmlText += `<tr>`;
+      htmlText += `<td style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; width: 25%; text-align: center;">`;
+      htmlText += `<div style="font-size: 9pt; color: #64748b; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">TOTAL</div>`;
+      htmlText += `<div style="font-size: 16pt; color: #0f172a; font-weight: bold;">${total}</div>`;
+      htmlText += `</td>`;
+      htmlText += `<td style="width: 2%;"></td>`;
+      htmlText += `<td style="background-color: #fffaf0; border: 1px solid #fbd38d; border-radius: 8px; padding: 12px; width: 24%; text-align: center;">`;
+      htmlText += `<div style="font-size: 9pt; color: #dd6b20; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">PENDENTES</div>`;
+      htmlText += `<div style="font-size: 16pt; color: #dd6b20; font-weight: bold;">${pending}</div>`;
+      htmlText += `</td>`;
+      htmlText += `<td style="width: 2%;"></td>`;
+      htmlText += `<td style="background-color: #ebf8ff; border: 1px solid #90cdf4; border-radius: 8px; padding: 12px; width: 24%; text-align: center;">`;
+      htmlText += `<div style="font-size: 9pt; color: #3182ce; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">ANDAMENTO</div>`;
+      htmlText += `<div style="font-size: 16pt; color: #3182ce; font-weight: bold;">${inProgress}</div>`;
+      htmlText += `</td>`;
+      htmlText += `<td style="width: 2%;"></td>`;
+      htmlText += `<td style="background-color: #f0fff4; border: 1px solid #9ae6b4; border-radius: 8px; padding: 12px; width: 23%; text-align: center;">`;
+      htmlText += `<div style="font-size: 9pt; color: #38a169; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">RESOLVIDOS</div>`;
+      htmlText += `<div style="font-size: 16pt; color: #38a169; font-weight: bold;">${resolved}</div>`;
+      htmlText += `</td>`;
+      htmlText += `</tr>`;
+      htmlText += `</table>`;
 
-    // 7. Generate PDF
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    
-    // Header
-    doc.setFillColor(30, 41, 59); // Slate-800
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MANUTENÇÃO - CONTROLE DE CAUSAS', 15, 18);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(226, 232, 240); // Slate-200
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 15, 26);
-    
-    let periodInfo = 'Todos os Períodos';
-    if (pdfDateFilterType === 'Dia') {
-      const [y, m, d] = pdfSelectedDay.split('-');
-      periodInfo = `Dia: ${d}/${m}/${y}`;
-    } else if (pdfDateFilterType === 'Mês') {
-      const [y, m] = pdfSelectedMonth.split('-');
-      periodInfo = `Mês: ${m}/${y}`;
-    } else if (pdfDateFilterType === 'Ano') {
-      periodInfo = `Ano: ${pdfSelectedYear}`;
-    }
+      // Group title
+      htmlText += `<h3 style="color: #0f172a; font-size: 12pt; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 20px; text-transform: uppercase; font-weight: bold;">`;
+      htmlText += `OCORRÊNCIAS AGRUPADAS POR MÁQUINA / EQUIPAMENTO`;
+      htmlText += `</h3>`;
 
-    doc.text(`Filtro Período: ${periodInfo} | Status PDF: ${pdfStatusOption} | Setor: ${sectorFilter}`, 15, 32);
-
-    let currentY = 48;
-
-    const pdfTotal = pdfIssues.length;
-    const pdfPending = pdfIssues.filter(i => i.status === 'Pendente').length;
-    const pdfInProgress = pdfIssues.filter(i => i.status === 'Em Andamento').length;
-    const pdfResolved = pdfIssues.filter(i => i.status === 'Resolvido').length;
-
-    const pdfPendingPct = pdfTotal > 0 ? ((pdfPending / pdfTotal) * 100).toFixed(1) : '0.0';
-    const pdfInProgressPct = pdfTotal > 0 ? ((pdfInProgress / pdfTotal) * 100).toFixed(1) : '0.0';
-    const pdfResolvedPct = pdfTotal > 0 ? ((pdfResolved / pdfTotal) * 100).toFixed(1) : '0.0';
-
-    // 8. Draw KPI Cards in PDF
-    const cardY = currentY;
-    const cardHeight = 18;
-    const cardWidth = 44;
-    const cardGap = 4.6;
-
-    // Card 1: Total (Slate/Gray styling)
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(10, cardY, cardWidth, cardHeight, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text('TOTAL SOLICITAÇÕES', 13, cardY + 5);
-    doc.setFontSize(14);
-    doc.setTextColor(30, 41, 59); // slate-800
-    doc.text(String(pdfTotal), 13, cardY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('100% das listadas', 13, cardY + 16);
-
-    // Card 2: Resolvidas (Green styling)
-    const card2X = 10 + cardWidth + cardGap;
-    doc.setFillColor(236, 253, 245); // emerald-50
-    doc.setDrawColor(167, 243, 208); // emerald-200
-    doc.roundedRect(card2X, cardY, cardWidth, cardHeight, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(4, 120, 87); // emerald-700
-    doc.text('RESOLVIDAS', card2X + 3, cardY + 5);
-    doc.setFontSize(14);
-    doc.setTextColor(6, 78, 59); // emerald-900
-    doc.text(String(pdfResolved), card2X + 3, cardY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(5, 150, 105); // emerald-600
-    doc.text(`${pdfResolvedPct}% do total`, card2X + 3, cardY + 16);
-
-    // Card 3: Pendentes (Orange/Yellow styling)
-    const card3X = card2X + cardWidth + cardGap;
-    doc.setFillColor(255, 247, 237); // orange-50
-    doc.setDrawColor(254, 215, 170); // orange-200
-    doc.roundedRect(card3X, cardY, cardWidth, cardHeight, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(194, 65, 12); // orange-700
-    doc.text('PENDENTES', card3X + 3, cardY + 5);
-    doc.setFontSize(14);
-    doc.setTextColor(124, 45, 18); // orange-900
-    doc.text(String(pdfPending), card3X + 3, cardY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(234, 88, 12); // orange-600
-    doc.text(`${pdfPendingPct}% do total`, card3X + 3, cardY + 16);
-
-    // Card 4: Em Andamento (Blue styling)
-    const card4X = card3X + cardWidth + cardGap;
-    doc.setFillColor(239, 246, 255); // blue-50
-    doc.setDrawColor(191, 219, 254); // blue-200
-    doc.roundedRect(card4X, cardY, cardWidth, cardHeight, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(29, 78, 216); // blue-700
-    doc.text('EM ANDAMENTO', card4X + 3, cardY + 5);
-    doc.setFontSize(14);
-    doc.setTextColor(30, 58, 138); // blue-900
-    doc.text(String(pdfInProgress), card4X + 3, cardY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(37, 99, 235); // blue-600
-    doc.text(`${pdfInProgressPct}% do total`, card4X + 3, cardY + 16);
-
-    currentY += cardHeight + 8;
-
-    const checkPageSpace = (neededHeight: number) => {
-      if (currentY + neededHeight > 275) {
-        doc.addPage();
-        currentY = 20; // reset Y to top of new page
-      }
-    };
-
-    if (Object.keys(pdfGrouped).length === 0) {
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(11);
-      doc.setTextColor(100, 116, 139);
-      doc.text('Nenhuma causa de manutenção encontrada para os filtros selecionados.', 15, currentY + 10);
-    } else {
-      Object.entries(pdfGrouped).forEach(([sector, machinesGroup]) => {
-        checkPageSpace(25);
+      Object.entries(groupedByMachine).forEach(([machine, issues]) => {
+        htmlText += `<div style="margin-bottom: 30px; border-left: 4px solid #3b82f6; padding-left: 15px;">`;
+        htmlText += `<h4 style="margin: 0 0 12px 0; color: #1e3a8a; font-size: 11pt; font-weight: bold; text-transform: uppercase; background-color: #eff6ff; padding: 6px 12px; border-radius: 6px; display: inline-block;">`;
+        htmlText += `MÁQUINA: ${machine}`;
+        htmlText += `</h4>`;
         
-        doc.setFillColor(30, 41, 59); // Slate-800
-        doc.rect(10, currentY, 190, 8, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.setTextColor(255, 255, 255);
-        doc.text(`SETOR: ${sector.toUpperCase()}`, 14, currentY + 6);
-        currentY += 12;
+        issues.forEach((issue, idx) => {
+          const titleUpper = (issue.title || '').toUpperCase();
+          const statusUpper = (issue.status || 'PENDENTE').toUpperCase();
+          const priorityUpper = (issue.priority || 'MÉDIA').toUpperCase();
+          const dateStr = new Date(issue.createdAt).toLocaleDateString('pt-BR');
+          
+          // Color mapping for status
+          let statusColor = '#475569'; // gray
+          if (issue.status === 'Pendente') statusColor = '#ea580c'; // orange
+          else if (issue.status === 'Em Andamento') statusColor = '#2563eb'; // blue
+          else if (issue.status === 'Resolvido') statusColor = '#16a34a'; // green
 
-        Object.entries(machinesGroup).forEach(([machine, machineIssues]) => {
-          checkPageSpace(20);
+          // Color mapping for priority
+          let priorityColor = '#475569';
+          if (issue.priority === 'Crítica') priorityColor = '#dc2626'; // red
+          else if (issue.priority === 'Alta') priorityColor = '#d97706'; // amber
+          else if (issue.priority === 'Média') priorityColor = '#2563eb'; // blue
 
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.setTextColor(51, 65, 85); // Slate-700
-          doc.text(`EQUIPAMENTO: ${machine.toUpperCase()}`, 12, currentY + 4);
-          currentY += 8;
+          htmlText += `<div style="margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0;">`;
+          htmlText += `<div style="font-weight: bold; color: #0f172a; font-size: 10.5pt; margin-bottom: 4px;">`;
+          htmlText += `&nbsp;&nbsp;${idx + 1}. TÍTULO: ${titleUpper}`;
+          htmlText += `</div>`;
+          
+          htmlText += `<div style="font-size: 9.5pt; color: #475569; margin-left: 15px; margin-bottom: 6px;">`;
+          htmlText += `<strong>STATUS:</strong> <span style="color: ${statusColor}; font-weight: bold;">${statusUpper}</span> | `;
+          htmlText += `<strong>PRIORIDADE:</strong> <span style="color: ${priorityColor}; font-weight: bold;">${priorityUpper}</span> | `;
+          htmlText += `<strong>SETOR:</strong> ${issue.sector || 'Não especificado'}`;
+          htmlText += `</div>`;
 
-          const tableRows = machineIssues.map((issue) => {
-            const dateStr = new Date(issue.createdAt).toLocaleDateString('pt-BR');
-            const checkboxStr = issue.status === 'Resolvido' ? '[ X ]' : '[   ]';
-            const notesOrSolution = issue.solution || '';
-            const displayTitle = issue.title || generateTitleFromCause(issue.cause);
-            const formattedCauseText = displayTitle && displayTitle.toLowerCase().trim() !== issue.cause.toLowerCase().trim()
-              ? `${displayTitle.toUpperCase()}\n\n${issue.cause}`
-              : `${displayTitle.toUpperCase()}\n`;
+          htmlText += `<div style="font-size: 9.5pt; color: #64748b; margin-left: 15px; margin-bottom: 8px;">`;
+          htmlText += `<strong>RELATADO POR:</strong> ${issue.reporter || 'Não especificado'} em ${dateStr}`;
+          htmlText += `</div>`;
 
-            const relatorDataStr = issue.status === 'Resolvido' && issue.resolvedAt
-              ? `${issue.reporter}\nAberto: ${dateStr}\nResolvido: ${new Date(issue.resolvedAt).toLocaleDateString('pt-BR')}`
-              : `${issue.reporter}\nAberto: ${dateStr}\n`;
+          htmlText += `<div style="font-size: 9.5pt; color: #334155; margin-left: 15px; background-color: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #f1f5f9; margin-top: 5px;">`;
+          htmlText += `<strong>DESCRIÇÃO:</strong><br/>`;
+          htmlText += `<span style="white-space: pre-line;">${issue.cause || 'Nenhuma descrição fornecida.'}</span>`;
+          htmlText += `</div>`;
 
-            return [
-              checkboxStr,
-              issue.priority,
-              formattedCauseText,
-              relatorDataStr,
-              issue.status,
-              notesOrSolution
-            ];
-          });
+          if (issue.status === 'Resolvido' && issue.solution) {
+            htmlText += `<div style="font-size: 9.5pt; color: #065f46; margin-left: 15px; background-color: #ecfdf5; padding: 10px; border-radius: 6px; border: 1px solid #d1fae5; margin-top: 8px;">`;
+            htmlText += `<strong>SOLUÇÃO / RESOLUÇÃO:</strong><br/>`;
+            htmlText += `<span style="white-space: pre-line;">${issue.solution}</span>`;
+            htmlText += `</div>`;
+          }
 
-          autoTable(doc, {
-            startY: currentY,
-            head: [['Conf.', 'Prioridade', 'Causa / Descrição', 'Relator / Data', 'Status', 'Solução / Obs.']],
-            body: tableRows,
-            theme: 'grid',
-            headStyles: {
-              fillColor: [71, 85, 105], // Slate-600
-              textColor: [255, 255, 255],
-              fontSize: 8,
-              fontStyle: 'bold',
-              halign: 'center'
-            },
-            columnStyles: {
-              0: { cellWidth: 15, halign: 'center', cellPadding: 2, fontSize: 10, fontStyle: 'bold' }, // Checkbox
-              1: { cellWidth: 25, fontStyle: 'bold', fontSize: 8, halign: 'center' }, // Priority
-              2: { cellWidth: 65, fontSize: 8 }, // Cause
-              3: { cellWidth: 28, fontSize: 7 }, // Reporter / Date
-              4: { cellWidth: 22, fontSize: 8, halign: 'center' }, // Status
-              5: { cellWidth: 35, fontSize: 7 }, // Solution / Obs
-            },
-            styles: {
-              overflow: 'linebreak',
-              cellPadding: 2.5,
-              fontSize: 8,
-              valign: 'middle'
-            },
-            willDrawCell: (data) => {
-              if (data.section === 'body') {
-                // Clear default text drawing for all columns because we are doing custom drawing
-                if ([0, 1, 2, 3, 4, 5].includes(data.column.index)) {
-                  data.cell.text = [];
-                }
-              }
-            },
-            didDrawCell: (data) => {
-              if (data.section === 'body') {
-                const cell = data.cell;
-                const doc = data.doc;
-                const issue = machineIssues[data.row.index];
-                if (!issue) return;
-
-                const dateStr = new Date(issue.createdAt).toLocaleDateString('pt-BR');
-
-                if (data.column.index === 0) {
-                  // Column 0: Checkbox
-                  const size = 5;
-                  const boxX = cell.x + (cell.width - size) / 2;
-                  const boxY = cell.y + (cell.height - size) / 2;
-                  if (issue.status === 'Resolvido') {
-                    doc.setFillColor(16, 185, 129); // Emerald-500
-                    doc.setDrawColor(16, 185, 129);
-                    doc.roundedRect(boxX, boxY, size, size, 1, 1, 'FD');
-                    doc.setTextColor(255, 255, 255);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(4.5);
-                    doc.text('X', boxX + 1.4, boxY + 3.9);
-                  } else {
-                    doc.setDrawColor(148, 163, 184); // Slate-400
-                    doc.setFillColor(255, 255, 255);
-                    doc.roundedRect(boxX, boxY, size, size, 1, 1, 'FD');
-                  }
-                }
-                
-                else if (data.column.index === 1) {
-                  // Column 1: Priority Badge
-                  const priorityColorsMap: { [key: string]: { bg: number[], border: number[], text: number[], dot: number[] } } = {
-                    'Crítica': { bg: [254, 242, 242], border: [254, 226, 226], text: [185, 28, 28], dot: [239, 68, 68] },
-                    'Alta': { bg: [255, 247, 237], border: [254, 215, 170], text: [194, 65, 12], dot: [249, 115, 22] },
-                    'Média': { bg: [255, 251, 235], border: [254, 243, 199], text: [180, 83, 9], dot: [245, 158, 11] },
-                    'Baixa': { bg: [240, 253, 245], border: [204, 251, 241], text: [13, 148, 136], dot: [20, 184, 166] }
-                  };
-                  const colors = priorityColorsMap[issue.priority] || priorityColorsMap['Baixa'];
-                  const badgeW = cell.width - 4;
-                  const badgeH = 6;
-                  const badgeX = cell.x + 2;
-                  const badgeY = cell.y + (cell.height - badgeH) / 2;
-
-                  doc.setFillColor(colors.bg[0], colors.bg[1], colors.bg[2]);
-                  doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
-                  doc.setLineWidth(0.15);
-                  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.2, 1.2, 'FD');
-
-                  doc.setFillColor(colors.dot[0], colors.dot[1], colors.dot[2]);
-                  doc.circle(badgeX + 2, badgeY + badgeH / 2, 0.6, 'F');
-
-                  doc.setFont('helvetica', 'bold');
-                  doc.setFontSize(6.5);
-                  doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
-                  doc.text(issue.priority.toUpperCase(), badgeX + 4.2, badgeY + badgeH / 2 + 0.8);
-                }
-
-                else if (data.column.index === 2) {
-                  // Column 2: Causa / Descrição
-                  const displayTitle = (issue.title || generateTitleFromCause(issue.cause)).toUpperCase();
-                  const causeText = issue.cause;
-                  const isSame = displayTitle.toLowerCase().trim() === causeText.toLowerCase().trim();
-
-                  const padX = 2.5;
-                  const startX = cell.x + padX;
-                  const availableWidth = cell.width - (padX * 2);
-
-                  // 1. Draw Title Background Banner (Highlighted)
-                  const bannerHeight = 5.5;
-                  const bannerWidth = cell.width - 4;
-                  const bannerX = cell.x + 2;
-                  const bannerY = cell.y + 2;
-
-                  doc.setFillColor(239, 246, 255); // soft light blue bg (blue-50)
-                  doc.setDrawColor(191, 219, 254); // blue-200 border
-                  doc.setLineWidth(0.15);
-                  doc.roundedRect(bannerX, bannerY, bannerWidth, bannerHeight, 1, 1, 'FD');
-
-                  // 2. Draw Title Text (Centered and Bold)
-                  doc.setFont('helvetica', 'bold');
-                  doc.setFontSize(7.5);
-                  doc.setTextColor(30, 58, 138); // deep blue-900
-                  doc.text(displayTitle, cell.x + (cell.width / 2), bannerY + (bannerHeight / 2) + 0.8, { align: 'center' });
-
-                  // 3. Draw Cause Text if it's different from the Title
-                  if (!isSame) {
-                    const textStartY = bannerY + bannerHeight + 2.5;
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(7);
-                    doc.setTextColor(71, 85, 105); // slate-600
-                    
-                    // Wrap text
-                    const wrappedCause = doc.splitTextToSize(causeText, availableWidth);
-                    doc.text(wrappedCause, startX, textStartY);
-                  }
-                }
-
-                else if (data.column.index === 3) {
-                  // Column 3: Relator / Data
-                  const padX = 2;
-                  const startX = cell.x + padX;
-                  const startY = cell.y + 4;
-                  
-                  doc.setFont('helvetica', 'normal');
-                  doc.setFontSize(6.5);
-                  doc.setTextColor(100, 116, 139); // Slate-500
-                  
-                  doc.text("Por: ", startX, startY);
-                  doc.setFont('helvetica', 'bold');
-                  doc.setTextColor(71, 85, 105); // Slate-700
-                  doc.text(issue.reporter, startX + 5, startY);
-                  
-                  doc.setFont('helvetica', 'normal');
-                  doc.setTextColor(100, 116, 139);
-                  doc.text(`Aberto: ${dateStr}`, startX, startY + 3.5);
-                  
-                  if (issue.status === 'Resolvido' && issue.resolvedAt) {
-                    const resolvedDateStr = new Date(issue.resolvedAt).toLocaleDateString('pt-BR');
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(16, 185, 129); // Emerald-500
-                    doc.text(`Resolvido: ${resolvedDateStr}`, startX, startY + 7);
-                  }
-                }
-
-                else if (data.column.index === 4) {
-                  // Column 4: Status Badge
-                  const statusColorsMap: { [key: string]: { bg: number[], border: number[], text: number[] } } = {
-                    'Pendente': { bg: [241, 245, 249], border: [226, 232, 240], text: [71, 85, 105] },
-                    'Em Andamento': { bg: [239, 246, 255], border: [191, 219, 254], text: [29, 78, 216] },
-                    'Resolvido': { bg: [236, 253, 245], border: [167, 243, 208], text: [4, 120, 87] }
-                  };
-                  const colors = statusColorsMap[issue.status] || statusColorsMap['Pendente'];
-                  const badgeW = cell.width - 4;
-                  const badgeH = 6;
-                  const badgeX = cell.x + 2;
-                  const badgeY = cell.y + (cell.height - badgeH) / 2;
-
-                  doc.setFillColor(colors.bg[0], colors.bg[1], colors.bg[2]);
-                  doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
-                  doc.setLineWidth(0.15);
-                  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.2, 1.2, 'FD');
-
-                  doc.setFont('helvetica', 'bold');
-                  doc.setFontSize(6.5);
-                  doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
-                  doc.text(issue.status.toUpperCase(), badgeX + (badgeW / 2), badgeY + (badgeH / 2) + 0.8, { align: 'center' });
-                }
-
-                else if (data.column.index === 5) {
-                  // Column 5: Solução / Obs
-                  if (issue.solution) {
-                    const pad = 2;
-                    const cardW = cell.width - (pad * 2);
-                    const cardH = cell.height - (pad * 2);
-                    const cardX = cell.x + pad;
-                    const cardY = cell.y + pad;
-
-                    doc.setFillColor(236, 253, 245); // Emerald-50
-                    doc.setDrawColor(167, 243, 208); // Emerald-200
-                    doc.setLineWidth(0.15);
-                    doc.roundedRect(cardX, cardY, cardW, cardH, 1, 1, 'FD');
-
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(6);
-                    doc.setTextColor(6, 95, 70); // Emerald-800
-                    doc.text("SOLUÇÃO / OBS:", cardX + 1.5, cardY + 2.5);
-
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(6);
-                    doc.setTextColor(51, 65, 85); // Slate-700
-                    const wrappedText = doc.splitTextToSize(issue.solution, cardW - 3);
-                    doc.text(wrappedText, cardX + 1.5, cardY + 5);
-                  }
-                }
-              }
-            },
-            margin: { left: 10, right: 10 },
-            pageBreak: 'auto',
-          });
-
-          currentY = (doc as any).lastAutoTable.finalY + 8;
+          htmlText += `</div>`;
         });
+        htmlText += `</div>`;
       });
-    }
 
-    // Footer/Legend for printed lists
-    const totalPages = doc.internal.pages.length - 1;
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(148, 163, 184); // Slate-400
-      doc.text(`Página ${i} de ${totalPages} - Use as caixas [  ] para marcar fisicamente os problemas resolvidos.`, 10, 287);
-    }
+      htmlText += `<p style="font-size: 8.5pt; color: #94a3b8; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center;">`;
+      htmlText += `Gerado automaticamente via Sistema de Gestão de Produção e Manutenção.`;
+      htmlText += `</p>`;
+      htmlText += `</div>`;
 
-    setPdfModal({
-      isOpen: true,
-      doc,
-      filename: `Relatorio_Manutencao_Prioridades_${new Date().toISOString().split('T')[0]}.pdf`,
-      title: 'Relatório Completo de Manutenção'
-    });
+      // ----------------------------------------------------
+      // 2. BUILD CLEAN PLAIN TEXT COPY BACKUP
+      // ----------------------------------------------------
+      let plainText = `RELATÓRIO DE CONTROLE DE MANUTENÇÃO\n`;
+      plainText += `GERADO EM: ${new Date().toLocaleDateString('pt-BR')} ÀS ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+      
+      plainText += `==================================================\n`;
+      plainText += `RESUMO GERAL DO ESTADO:\n`;
+      plainText += `==================================================\n`;
+      plainText += `TOTAL DE OCORRÊNCIAS: ${total}\n`;
+      plainText += `PENDENTES: ${pending}\n`;
+      plainText += `EM ANDAMENTO: ${inProgress}\n`;
+      plainText += `RESOLVIDOS: ${resolved}\n\n`;
+
+      plainText += `==================================================\n`;
+      plainText += `OCORRÊNCIAS AGRUPADAS POR MÁQUINA / EQUIPAMENTO:\n`;
+      plainText += `==================================================\n\n`;
+
+      Object.entries(groupedByMachine).forEach(([machine, issues]) => {
+        plainText += `[MÁQUINA: ${machine}]\n`;
+        plainText += `--------------------------------------------------\n`;
+        
+        issues.forEach((issue, idx) => {
+          const titleUpper = (issue.title || '').toUpperCase();
+          const statusUpper = (issue.status || 'PENDENTE').toUpperCase();
+          const priorityUpper = (issue.priority || 'MÉDIA').toUpperCase();
+          const dateStr = new Date(issue.createdAt).toLocaleDateString('pt-BR');
+          
+          plainText += `  ${idx + 1}. TÍTULO: ${titleUpper}\n`;
+          plainText += `     STATUS: ${statusUpper} | PRIORIDADE: ${priorityUpper}\n`;
+          plainText += `     Setor: ${issue.sector || 'Não especificado'}\n`;
+          plainText += `     Relatado por: ${issue.reporter || 'Não especificado'} em ${dateStr}\n`;
+          plainText += `     Descrição:\n     ${issue.cause || 'Nenhuma descrição fornecida.'}\n`;
+          if (issue.status === 'Resolvido' && issue.solution) {
+            plainText += `     Solução/Resolução:\n     ${issue.solution}\n`;
+          }
+          plainText += `\n`;
+        });
+        plainText += `\n`;
+      });
+
+      plainText += `--------------------------------------------------\n`;
+      plainText += `Gerado automaticamente via Sistema de Gestão de Produção e Manutenção.\n`;
+
+      // ----------------------------------------------------
+      // 3. WRITE BOTH FORMATS TO CLIPBOARD
+      // ----------------------------------------------------
+      if (navigator.clipboard && window.ClipboardItem) {
+        const htmlBlob = new Blob([htmlText], { type: 'text/html' });
+        const textBlob = new Blob([plainText], { type: 'text/plain' });
+        
+        const item = new ClipboardItem({
+          'text/html': htmlBlob,
+          'text/plain': textBlob
+        });
+        
+        await navigator.clipboard.write([item]);
+      } else {
+        // Simple plain text fallback
+        await navigator.clipboard.writeText(plainText);
+      }
+
+      // Open the Outlook Modal to show instructions
+      setIsOutlookShareModalOpen(true);
+
+    } catch (err) {
+      console.error("Erro ao copiar formatação:", err);
+      alert("Relatório gerado! O navegador bloqueou a cópia em HTML, mas abriremos o Outlook normalmente.");
+      
+      // Fallback: just open mailto
+      const subject = `RELATÓRIO DE MANUTENÇÃO - GESTÃO DE PRODUÇÃO`;
+      const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}`;
+      window.location.href = mailtoUrl;
+    }
+  };
+
+  // PDF Export directly using jsPDF and jspdf-autotable (No html2canvas or screenshotting)
+  const exportPDFWithSettings = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      setIsPrintingPdf(true);
+
+      // Wait briefly for React to apply PDF-specific filters in useMemo
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      const doc = new jsPDF('p', 'mm', 'a4');
+
+      // 1. Header Banner with Navy/Slate Background
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(0, 0, 210, 40, 'F');
+
+      // Header Text in UPPERCASE
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('RELATÓRIO DE CONTROLE DE MANUTENÇÃO', 15, 18);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(203, 213, 225); // slate-300
+      doc.text(`GERADO EM: ${new Date().toLocaleDateString('pt-BR')} ÀS ${new Date().toLocaleTimeString('pt-BR')}`, 15, 26);
+      doc.text(`STATUS SELECIONADO: ${pdfStatusOption.toUpperCase()} | PERÍODO DE ABERTURA: ${pdfDateFilterType.toUpperCase()}`, 15, 32);
+
+      // Decorative Accent Line
+      doc.setFillColor(59, 130, 246); // blue-500
+      doc.rect(0, 40, 210, 1.5, 'F');
+
+      let currentY = 52;
+
+      // Section Title in UPPERCASE
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('RESUMO DE ESTATÍSTICAS', 15, currentY);
+
+      // Calculate statistics for the printed set of issues
+      const totalIssues = filteredAndSortedIssues.length;
+      const pendingCount = filteredAndSortedIssues.filter(i => i.status === 'Pendente').length;
+      const inProgressCount = filteredAndSortedIssues.filter(i => i.status === 'Em Andamento').length;
+      const resolvedCount = filteredAndSortedIssues.filter(i => i.status === 'Resolvido').length;
+
+      currentY += 6;
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105); // slate-600
+
+      doc.text(`TOTAL DE OCORRÊNCIAS: ${totalIssues}`, 15, currentY);
+      doc.text(`PENDENTES: ${pendingCount}`, 65, currentY);
+      doc.text(`EM ANDAMENTO: ${inProgressCount}`, 110, currentY);
+      doc.text(`RESOLVIDOS: ${resolvedCount}`, 155, currentY);
+
+      currentY += 8;
+      // Draw a thin horizontal separator line
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.2);
+      doc.line(15, currentY, 195, currentY);
+
+      currentY += 8;
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('LISTA DETALHADA DE OCORRÊNCIAS', 15, currentY);
+      currentY += 5;
+
+      // Build table headers and body with UPPERCASE for headings, normal casing for descriptions
+      const headers = [
+        ['DATA / LOCAL', 'OCORRÊNCIA E CAUSA', 'PRIORIDADE / STATUS', 'DETALHES DE RESOLUÇÃO']
+      ];
+
+      const rows = filteredAndSortedIssues.map(issue => {
+        const formattedDate = new Date(issue.createdAt).toLocaleDateString('pt-BR');
+        const sectorUpper = (issue.sector || 'GERAL').toUpperCase();
+        const machineUpper = (issue.machine || 'GERAL / NENHUMA').toUpperCase();
+        
+        const col1 = `${formattedDate}\nSETOR: ${sectorUpper}\nMÁQ: ${machineUpper}`;
+        
+        const titleUpper = (issue.title || '').toUpperCase();
+        const causeNormal = issue.cause || '';
+        const col2 = `TÍTULO: ${titleUpper}\n\nDESCRIÇÃO:\n${causeNormal}`;
+        
+        const priorityUpper = (issue.priority || 'MÉDIA').toUpperCase();
+        const statusUpper = (issue.status || 'PENDENTE').toUpperCase();
+        const col3 = `PRIORIDADE: ${priorityUpper}\nSTATUS: ${statusUpper}`;
+        
+        const reporterNormal = issue.reporter || 'Não especificado';
+        const solutionNormal = issue.solution || 'Nenhuma nota de solução registrada.';
+        const col4 = `RELATADO POR: ${reporterNormal}\n\nSOLUÇÃO / RESOLUÇÃO:\n${solutionNormal}`;
+        
+        return [col1, col2, col3, col4];
+      });
+
+      autoTable(doc, {
+        startY: currentY,
+        head: headers,
+        body: rows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [15, 23, 42], // slate-900
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold',
+          halign: 'left',
+          valign: 'middle'
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [51, 65, 85], // slate-700
+          valign: 'top',
+          cellPadding: 4
+        },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 65 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 45 }
+        },
+        styles: {
+          overflow: 'linebreak',
+          font: 'Helvetica'
+        },
+        margin: { left: 15, right: 15 },
+        didDrawPage: (data) => {
+          // Add page footer with page numbers
+          const totalPages = doc.getNumberOfPages();
+          const currentPage = data.pageNumber;
+          doc.setFont('Helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184); // slate-400
+          
+          // Draw footer line
+          doc.setDrawColor(241, 245, 249); // slate-100
+          doc.line(15, 282, 195, 282);
+
+          doc.text(
+            `Página ${currentPage} de ${totalPages}`,
+            195,
+            288,
+            { align: 'right' }
+          );
+          doc.text(
+            `SISTEMA DE GESTÃO DE PRODUÇÃO E MANUTENÇÃO`,
+            15,
+            288
+          );
+        }
+      });
+
+      // Restore standard screen state
+      setIsPrintingPdf(false);
+
+      setPdfModal({
+        isOpen: true,
+        doc,
+        filename: `Relatorio_Manutencao_Estatistica_${new Date().toISOString().split('T')[0]}.pdf`,
+        title: 'Relatório de Manutenção'
+      });
+
+      setIsExportPdfModalOpen(false);
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err);
+      alert("Houve um erro ao gerar o PDF. Por favor, tente novamente.");
+      setIsPrintingPdf(false);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div id="maintenance-tab-content" className="space-y-8 animate-in fade-in duration-500 p-1">
       
       {/* Banner / Header */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl relative overflow-hidden border border-slate-700">
@@ -942,7 +870,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
               Gerenciamento de pendências, defeitos e problemas categorizados por prioridade de execução. Visualize, marque como resolvido e gere relatórios com checkboxes de controle.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 banner-actions-group">
             <button
               onClick={() => {
                 setEditingIssue(null);
@@ -965,6 +893,14 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
             >
               <Download size={16} />
               <span>Exportar PDF</span>
+            </button>
+            <button
+              onClick={shareViaOutlook}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-6 py-4 rounded-2xl flex items-center gap-2.5 transition-all border border-indigo-500 shadow-lg shadow-indigo-500/20"
+              title="Compartilhar lista filtrada de causas agrupada por máquina via Outlook"
+            >
+              <Mail size={16} />
+              <span>Enviar por Outlook</span>
             </button>
           </div>
         </div>
@@ -1102,7 +1038,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
       </div>
 
       {/* Filter panel */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+      <div id="maintenance-filters-card" className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
         <div className="flex items-center gap-2.5 pb-2 border-b border-slate-50">
           <Filter className="text-blue-500" size={18} />
           <h2 className="text-xs font-black uppercase tracking-wider text-slate-700">
@@ -1318,7 +1254,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
                               </div>
 
                               {/* Actions column on the right */}
-                              <div className="flex md:flex-col items-end gap-2.5 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100 justify-end">
+                              <div className="maintenance-card-actions flex md:flex-col items-end gap-2.5 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100 justify-end">
                                 
                                 {/* Status Dropdown Picker for direct transition (Pendente -> Em Andamento etc) */}
                                 {!isResolved && (
@@ -1727,10 +1663,98 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ setPdfModal, log
                 <button
                   type="button"
                   onClick={exportPDFWithSettings}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs font-black uppercase text-white transition-all shadow-md shadow-slate-950/10 flex items-center gap-1.5"
+                  disabled={isGeneratingPdf}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-black uppercase text-white transition-all shadow-md shadow-slate-950/10 flex items-center gap-1.5"
                 >
-                  <Download size={14} />
-                  <span>Gerar Relatório PDF</span>
+                  {isGeneratingPdf ? (
+                    <>
+                      <Loader2 className="animate-spin" size={14} />
+                      <span>Gerando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={14} />
+                      <span>Gerar Relatório PDF</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Outlook Share Instructions Modal */}
+      {isOutlookShareModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="p-6 bg-indigo-600 text-white flex justify-between items-center">
+              <div>
+                <h3 className="font-black uppercase tracking-wide text-sm md:text-base">Relatório Copiado!</h3>
+                <p className="text-indigo-100 text-[11px]">Pronto para colar diretamente no seu e-mail</p>
+              </div>
+              <button
+                onClick={() => setIsOutlookShareModalOpen(false)}
+                className="p-1.5 bg-indigo-700 hover:bg-indigo-800 rounded-lg text-white transition-all"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100 animate-pulse">
+                  <Mail size={32} />
+                </div>
+                <h4 className="font-black text-slate-800 text-sm uppercase tracking-wider">Formatação Profissional Ativada!</h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Para garantir que os <strong>títulos fiquem em negrito</strong>, as listas perfeitamente alinhadas e os status coloridos, copiamos um formato rico em HTML para a sua área de transferência.
+                </p>
+              </div>
+
+              {/* Step instructions */}
+              <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-3.5">
+                <div className="flex gap-3 items-start">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">1</span>
+                  <p className="text-xs text-slate-600">
+                    Clique no botão <strong>"Abrir Outlook"</strong> abaixo para abrir o seu cliente de e-mail com o assunto preenchido.
+                  </p>
+                </div>
+                <div className="flex gap-3 items-start">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">2</span>
+                  <p className="text-xs text-slate-600 font-bold text-slate-800">
+                    No corpo do e-mail no Outlook, pressione <kbd className="bg-white border border-slate-300 px-1.5 py-0.5 rounded shadow-xs text-[10px] font-mono">Ctrl + V</kbd> (ou <kbd className="bg-white border border-slate-300 px-1.5 py-0.5 rounded shadow-xs text-[10px] font-mono">Cmd + V</kbd>) para colar o relatório perfeitamente formatado.
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsOutlookShareModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOutlookShareModalOpen(false);
+                    const subject = `RELATÓRIO DE MANUTENÇÃO - GESTÃO DE PRODUÇÃO`;
+                    const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}`;
+                    window.location.href = mailtoUrl;
+                  }}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-black uppercase text-white transition-all shadow-md shadow-indigo-500/15 flex items-center gap-1.5"
+                >
+                  <Mail size={14} />
+                  <span>Abrir Outlook</span>
                 </button>
               </div>
             </div>

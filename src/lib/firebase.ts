@@ -29,7 +29,16 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'settings', 'global'));
     console.log('Firebase Connection: Sucesso!');
   } catch (error) {
-    console.error("Firebase Connection Error:", error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isOffline = errorMsg.toLowerCase().includes('offline') || 
+                      errorMsg.toLowerCase().includes('network') || 
+                      errorMsg.toLowerCase().includes('reach') ||
+                      errorMsg.toLowerCase().includes('unreachable');
+    if (isOffline) {
+      console.warn('Firebase Connection: Dispositivo offline ou conexão lenta. Operando no modo offline local (cache).');
+    } else {
+      console.error("Firebase Connection Error:", error);
+    }
   }
 }
 testConnection();
@@ -64,11 +73,11 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const isOffline = error instanceof Error && (
-    error.message.includes('the client is offline') || 
-    error.message.includes('network-error') ||
-    error.message.includes('Failed to get document because the client is offline')
-  );
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  const isOffline = errorMsg.toLowerCase().includes('offline') || 
+                    errorMsg.toLowerCase().includes('network') || 
+                    errorMsg.toLowerCase().includes('reach') ||
+                    errorMsg.toLowerCase().includes('unreachable');
 
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),

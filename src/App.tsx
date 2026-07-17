@@ -391,6 +391,77 @@ const upgradeParticipant = (p: { registration: string; name: string }) => {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#64748b', '#1e293b', '#64748b', '#475569', '#94a3b8'];
 
+interface BiComposedTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  formatWeight: (val: number) => string;
+}
+
+const BiComposedTooltip = ({ active, payload, label, formatWeight }: BiComposedTooltipProps) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white/95 backdrop-blur-md text-slate-850 p-4 rounded-2xl shadow-xl border border-slate-150 text-xs max-w-[280px] z-50">
+        <p className="font-extrabold border-b border-slate-100 pb-2 mb-2 text-slate-500 uppercase tracking-wider text-[10px]">
+          Data: {data.date ? data.date.split('-').reverse().join('/') : label}
+        </p>
+        <div className="space-y-1.5">
+          {payload.map((p: any, i: number) => (
+            <div key={i} className="flex justify-between gap-4 items-center">
+              <span className="font-semibold text-slate-600 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color || p.fill }} />
+                {p.name}:
+              </span>
+              <span className="font-black text-slate-900">{formatWeight(Number(p.value))}</span>
+            </div>
+          ))}
+        </div>
+        
+        {data.totalVolumes !== undefined && (
+          <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2">
+            <div className="flex justify-between font-black text-indigo-600 uppercase text-[10.5px]">
+              <span>Volumes Totais:</span>
+              <span>{data.totalVolumes} {data.totalVolumes === 1 ? 'vol' : 'vols'}</span>
+            </div>
+            
+            {Object.keys(data.volumesByShift || {}).length > 0 && (
+              <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150">
+                <span className="font-black text-slate-700 uppercase tracking-wide text-[9px] block mb-1">Por Turno:</span>
+                <div className="space-y-1">
+                  {Object.entries(data.volumesByShift).map(([shift, vol]) => (
+                    <div key={shift} className="flex justify-between items-center">
+                      <span className="text-slate-500">{shift}:</span>
+                      <span className="font-extrabold text-slate-800">{vol} vol{vol !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {Object.keys(data.volumesByMachine || {}).length > 0 && (
+              <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150">
+                <span className="font-black text-slate-700 uppercase tracking-wide text-[9px] block mb-1">Por Máquina:</span>
+                <div className="space-y-1">
+                  {Object.entries(data.volumesByMachine)
+                    .sort((a, b) => (b[1] as number) - (a[1] as number))
+                    .map(([machine, vol]) => (
+                      <div key={machine} className="flex justify-between items-center gap-2">
+                        <span className="text-slate-500 truncate max-w-[120px]" title={machine}>{machine}:</span>
+                        <span className="font-extrabold text-slate-800 shrink-0">{vol} vol{vol !== 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
   if (percent < 0.05) return null;
   const RADIAN = Math.PI / 180;
@@ -4211,6 +4282,29 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
         logging: false,
         useCORS: true,
         onclone: (clonedDoc) => {
+          // Replace all oklch color references in all style sheets to prevent html2canvas oklch crash
+          const styleElements = clonedDoc.querySelectorAll('style');
+          styleElements.forEach((style) => {
+            if (style.innerHTML) {
+              style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)');
+            }
+          });
+
+          // Also scan inline styles for any oklch colors
+          const allElements = clonedDoc.querySelectorAll('*');
+          allElements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            if (htmlEl.style) {
+              for (let i = 0; i < htmlEl.style.length; i++) {
+                const styleName = htmlEl.style[i];
+                const value = htmlEl.style.getPropertyValue(styleName);
+                if (value && value.includes('oklch')) {
+                  htmlEl.style.setProperty(styleName, value.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)'));
+                }
+              }
+            }
+          });
+
           const clonedEl = clonedDoc.getElementById(id);
           if (clonedEl) {
             clonedEl.style.height = 'auto';
@@ -5734,7 +5828,31 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
           backgroundColor: '#ffffff',
           scale: 1.2, // Reduzido de 2 para 1.2 para otimizar tamanho do PDF
           logging: false,
-          useCORS: true
+          useCORS: true,
+          onclone: (clonedDoc) => {
+            // Replace all oklch color references in all style sheets to prevent html2canvas oklch crash
+            const styleElements = clonedDoc.querySelectorAll('style');
+            styleElements.forEach((style) => {
+              if (style.innerHTML) {
+                style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)');
+              }
+            });
+
+            // Also scan inline styles for any oklch colors
+            const allElements = clonedDoc.querySelectorAll('*');
+            allElements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              if (htmlEl.style) {
+                for (let i = 0; i < htmlEl.style.length; i++) {
+                  const styleName = htmlEl.style[i];
+                  const value = htmlEl.style.getPropertyValue(styleName);
+                  if (value && value.includes('oklch')) {
+                    htmlEl.style.setProperty(styleName, value.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)'));
+                  }
+                }
+              }
+            });
+          }
         });
         return canvas.toDataURL('image/jpeg', 0.6); // Convertido para JPEG com qualidade 0.6 para excelente compressão
       } catch (err) {
@@ -8831,18 +8949,49 @@ Produção total:
               const scatterData = Object.values(scatterMap).filter(d => d.prod > 0 || d.wastes > 0);
 
               // Daily trend composite (Composed Chart Data)
-              const dailyTrendMap: Record<string, { date: string, label: string, ecoBP: number, ecoBM: number, borra: number, prod: number }> = {};
+              const dailyTrendMap: Record<string, { 
+                date: string; 
+                label: string; 
+                ecoBP: number; 
+                ecoBM: number; 
+                borra: number; 
+                prod: number;
+                totalVolumes: number;
+                volumesByShift: Record<string, number>;
+                volumesByMachine: Record<string, number>;
+              }> = {};
               biFilteredData.forEach(e => {
                 const d = e.date;
                 const label = d.split('-').reverse().slice(0, 2).join('/');
                 if (!dailyTrendMap[d]) {
-                  dailyTrendMap[d] = { date: d, label, ecoBP: 0, ecoBM: 0, borra: 0, prod: 0 };
+                  dailyTrendMap[d] = { 
+                    date: d, 
+                    label, 
+                    ecoBP: 0, 
+                    ecoBM: 0, 
+                    borra: 0, 
+                    prod: 0,
+                    totalVolumes: 0,
+                    volumesByShift: {},
+                    volumesByMachine: {}
+                  };
                 }
                 dailyTrendMap[d].ecoBP += (e.ecoBP || 0);
                 dailyTrendMap[d].ecoBM += (e.ecoBM || 0);
                 dailyTrendMap[d].borra += (e.borraTotal || 0);
                 if (!e.machine.toLowerCase().includes('erema')) {
                   dailyTrendMap[d].prod += (e.netWeight || 0);
+                }
+
+                const vol = e.volumes || 0;
+                dailyTrendMap[d].totalVolumes += vol;
+                if (e.shift && e.shift.trim()) {
+                  const s = e.shift.trim().toUpperCase();
+                  dailyTrendMap[d].volumesByShift[s] = (dailyTrendMap[d].volumesByShift[s] || 0) + vol;
+                }
+                if (e.machine && e.machine.trim()) {
+                  const m = e.machine.trim().toUpperCase();
+                  dailyTrendMap[d].volumesByMachine[m] = (dailyTrendMap[d].volumesByMachine[m] || 0) + vol;
                 }
               });
               const dailyTrendData = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -9754,7 +9903,7 @@ Produção total:
                               <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
                               <YAxis stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
                               <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
-                              <RechartsTooltip formatter={(value: any) => formatWeight(Number(value))} />
+                              <RechartsTooltip content={<BiComposedTooltip formatWeight={formatWeight} />} />
                               <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 10 }} />
                               <Bar dataKey="ecoBP" name="Eco B Produção" stackId="loss" fill="#3b82f6" />
                               <Bar dataKey="ecoBM" name="Eco B Manutenção" stackId="loss" fill="#8b5cf6" />
@@ -10349,7 +10498,7 @@ Produção total:
                                       <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
                                       <YAxis stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
                                       <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
-                                      <RechartsTooltip formatter={(value: any) => formatWeight(value)} />
+                                      <RechartsTooltip content={<BiComposedTooltip formatWeight={formatWeight} />} />
                                       <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
                                       <Bar dataKey="ecoBP" name="Eco B Produção" stackId="loss" fill="#3b82f6" />
                                       <Bar dataKey="ecoBM" name="Eco B Manutenção" stackId="loss" fill="#8b5cf6" />
