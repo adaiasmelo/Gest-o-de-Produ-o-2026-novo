@@ -425,33 +425,30 @@ const BiComposedTooltip = ({ active, payload, label, formatWeight }: BiComposedT
               <span>{data.totalVolumes} {data.totalVolumes === 1 ? 'vol' : 'vols'}</span>
             </div>
             
-            {Object.keys(data.volumesByShift || {}).length > 0 && (
-              <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150">
-                <span className="font-black text-slate-700 uppercase tracking-wide text-[9px] block mb-1">Por Turno:</span>
-                <div className="space-y-1">
-                  {Object.entries(data.volumesByShift).map(([shift, vol]) => (
-                    <div key={shift} className="flex justify-between items-center">
-                      <span className="text-slate-500">{shift}:</span>
-                      <span className="font-extrabold text-slate-800">{vol} vol{vol !== 1 ? 's' : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {Object.keys(data.volumesByMachine || {}).length > 0 && (
-              <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150">
-                <span className="font-black text-slate-700 uppercase tracking-wide text-[9px] block mb-1">Por Máquina:</span>
-                <div className="space-y-1">
-                  {Object.entries(data.volumesByMachine)
-                    .sort((a, b) => (b[1] as number) - (a[1] as number))
-                    .map(([machine, vol]) => (
-                      <div key={machine} className="flex justify-between items-center gap-2">
-                        <span className="text-slate-500 truncate max-w-[120px]" title={machine}>{machine}:</span>
-                        <span className="font-extrabold text-slate-800 shrink-0">{vol} vol{vol !== 1 ? 's' : ''}</span>
+            {data.volumesByShiftMachine && Object.keys(data.volumesByShiftMachine).length > 0 && (
+              <div className="space-y-2">
+                {Object.entries(data.volumesByShiftMachine).map(([shift, machines]) => {
+                  const machineEntries = Object.entries(machines as Record<string, number>)
+                    .sort((a, b) => b[1] - a[1]);
+                  
+                  if (machineEntries.length === 0) return null;
+
+                  return (
+                    <div key={shift} className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-150">
+                      <span className="font-black text-slate-700 uppercase tracking-wide text-[9px] block mb-1">
+                        {shift}
+                      </span>
+                      <div className="space-y-1 pl-1 border-l border-slate-200">
+                        {machineEntries.map(([machine, vol]) => (
+                          <div key={machine} className="flex justify-between items-center gap-2">
+                            <span className="text-slate-500 truncate max-w-[120px]" title={machine}>{machine}:</span>
+                            <span className="font-extrabold text-slate-800 shrink-0">{vol} {vol === 1 ? 'vol' : 'vols'}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -8957,8 +8954,7 @@ Produção total:
                 borra: number; 
                 prod: number;
                 totalVolumes: number;
-                volumesByShift: Record<string, number>;
-                volumesByMachine: Record<string, number>;
+                volumesByShiftMachine: Record<string, Record<string, number>>;
               }> = {};
               biFilteredData.forEach(e => {
                 const d = e.date;
@@ -8972,26 +8968,29 @@ Produção total:
                     borra: 0, 
                     prod: 0,
                     totalVolumes: 0,
-                    volumesByShift: {},
-                    volumesByMachine: {}
+                    volumesByShiftMachine: {}
                   };
                 }
                 dailyTrendMap[d].ecoBP += (e.ecoBP || 0);
                 dailyTrendMap[d].ecoBM += (e.ecoBM || 0);
                 dailyTrendMap[d].borra += (e.borraTotal || 0);
-                if (!e.machine.toLowerCase().includes('erema')) {
+                
+                const machineUpper = (e.machine || '').trim().toUpperCase();
+                const isErema = machineUpper.includes('EREMA');
+                
+                if (!isErema) {
                   dailyTrendMap[d].prod += (e.netWeight || 0);
-                }
-
-                const vol = e.volumes || 0;
-                dailyTrendMap[d].totalVolumes += vol;
-                if (e.shift && e.shift.trim()) {
-                  const s = e.shift.trim().toUpperCase();
-                  dailyTrendMap[d].volumesByShift[s] = (dailyTrendMap[d].volumesByShift[s] || 0) + vol;
-                }
-                if (e.machine && e.machine.trim()) {
-                  const m = e.machine.trim().toUpperCase();
-                  dailyTrendMap[d].volumesByMachine[m] = (dailyTrendMap[d].volumesByMachine[m] || 0) + vol;
+                  const vol = e.volumes || 0;
+                  dailyTrendMap[d].totalVolumes += vol;
+                  
+                  if (vol > 0) {
+                    const s = (e.shift || '').trim().toUpperCase() || 'NÃO ESPECIFICADO';
+                    const m = machineUpper || 'NÃO ESPECIFICADO';
+                    if (!dailyTrendMap[d].volumesByShiftMachine[s]) {
+                      dailyTrendMap[d].volumesByShiftMachine[s] = {};
+                    }
+                    dailyTrendMap[d].volumesByShiftMachine[s][m] = (dailyTrendMap[d].volumesByShiftMachine[s][m] || 0) + vol;
+                  }
                 }
               });
               const dailyTrendData = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date));
