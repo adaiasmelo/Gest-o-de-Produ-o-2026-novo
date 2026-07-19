@@ -485,7 +485,7 @@ const CustomBiDot = (props: CustomBiDotProps) => {
       cy={cy}
       r={5}
       fill="#10b981"
-      className="cursor-pointer transition-all duration-200 hover:scale-150 active:scale-110"
+      className="cursor-default"
     />
   );
 };
