@@ -400,20 +400,32 @@ interface BiComposedTooltipProps {
 
 const BiComposedTooltip = ({ active, payload, label, formatWeight }: BiComposedTooltipProps) => {
   if (active && payload && payload.length) {
+    const isLine = payload.some((p: any) => p.dataKey === 'prod');
+    if (!isLine) return null;
+
     const data = payload[0].payload;
+    if (!data) return null;
+
+    const metrics = [
+      { name: 'Eco B Produção', value: data.ecoBP, color: '#3b82f6' },
+      { name: 'Eco B Manutenção', value: data.ecoBM, color: '#8b5cf6' },
+      { name: 'Resíduo Borra', value: data.borra, color: '#f43f5e' },
+      { name: 'Produção Líquida', value: data.prod, color: '#10b981', isMain: true }
+    ];
+
     return (
       <div className="bg-white/95 backdrop-blur-md text-slate-850 p-4 rounded-2xl shadow-xl border border-slate-150 text-xs max-w-[280px] z-50">
         <p className="font-extrabold border-b border-slate-100 pb-2 mb-2 text-slate-500 uppercase tracking-wider text-[10px]">
           Data: {data.date ? data.date.split('-').reverse().join('/') : label}
         </p>
         <div className="space-y-1.5">
-          {payload.map((p: any, i: number) => (
-            <div key={i} className="flex justify-between gap-4 items-center">
+          {metrics.map((p: any, i: number) => (
+            <div key={i} className={`flex justify-between gap-4 items-center ${p.isMain ? 'border-t border-slate-100 pt-1.5 mt-1.5' : ''}`}>
               <span className="font-semibold text-slate-600 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color || p.fill }} />
+                <span className={`rounded-full inline-block ${p.isMain ? 'w-2.5 h-2.5 bg-[#10b981]' : 'w-2 h-2'}`} style={p.isMain ? {} : { backgroundColor: p.color }} />
                 {p.name}:
               </span>
-              <span className="font-black text-slate-900">{formatWeight(Number(p.value))}</span>
+              <span className={`font-black ${p.isMain ? 'text-emerald-600' : 'text-slate-900'}`}>{formatWeight(Number(p.value || 0))}</span>
             </div>
           ))}
         </div>
@@ -457,6 +469,25 @@ const BiComposedTooltip = ({ active, payload, label, formatWeight }: BiComposedT
     );
   }
   return null;
+};
+
+interface CustomBiDotProps {
+  cx?: number;
+  cy?: number;
+}
+
+const CustomBiDot = (props: CustomBiDotProps) => {
+  const { cx, cy } = props;
+  if (cx === undefined || cy === undefined) return null;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={5}
+      fill="#10b981"
+      className="cursor-pointer transition-all duration-200 hover:scale-150 active:scale-110"
+    />
+  );
 };
 
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
@@ -9902,12 +9933,12 @@ Produção total:
                               <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
                               <YAxis stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
                               <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
-                              <RechartsTooltip content={<BiComposedTooltip formatWeight={formatWeight} />} />
+                              <RechartsTooltip shared={false} content={<BiComposedTooltip formatWeight={formatWeight} />} cursor={false} />
                               <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 10 }} />
                               <Bar dataKey="ecoBP" name="Eco B Produção" stackId="loss" fill="#3b82f6" />
                               <Bar dataKey="ecoBM" name="Eco B Manutenção" stackId="loss" fill="#8b5cf6" />
                               <Bar dataKey="borra" name="Resíduo Borra" stackId="loss" fill="#f43f5e" />
-                              <Line yAxisId="right" type="monotone" dataKey="prod" name="Produção Líquida" stroke="#10b981" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                              <Line yAxisId="right" type="monotone" dataKey="prod" name="Produção Líquida" stroke="#10b981" strokeWidth={3} dot={<CustomBiDot />} activeDot={false} />
                             </ComposedChart>
                           </ResponsiveContainer>
                         ) : (
@@ -10469,14 +10500,14 @@ Produção total:
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button
+                              <button 
                                 onClick={() => downloadChartAsPNG(fullscreenChart, 'Gráfico Ampliado')}
                                 className="p-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-xl transition-all cursor-pointer border border-slate-200"
                                 title="Baixar Imagem"
                               >
                                 <Download size={18} />
                               </button>
-                              <button
+                              <button 
                                 onClick={() => setFullscreenChart(null)}
                                 className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-all cursor-pointer border border-rose-100"
                                 title="Fechar"
@@ -10497,12 +10528,12 @@ Produção total:
                                       <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
                                       <YAxis stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
                                       <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
-                                      <RechartsTooltip content={<BiComposedTooltip formatWeight={formatWeight} />} />
+                                      <RechartsTooltip shared={false} content={<BiComposedTooltip formatWeight={formatWeight} />} cursor={false} />
                                       <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
                                       <Bar dataKey="ecoBP" name="Eco B Produção" stackId="loss" fill="#3b82f6" />
                                       <Bar dataKey="ecoBM" name="Eco B Manutenção" stackId="loss" fill="#8b5cf6" />
                                       <Bar dataKey="borra" name="Resíduo Borra" stackId="loss" fill="#f43f5e" />
-                                      <Line yAxisId="right" type="monotone" dataKey="prod" name="Produção Líquida" stroke="#10b981" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+                                      <Line yAxisId="right" type="monotone" dataKey="prod" name="Produção Líquida" stroke="#10b981" strokeWidth={4} dot={<CustomBiDot />} activeDot={false} />
                                     </ComposedChart>
                                   </ResponsiveContainer>
                                 ) : (
