@@ -20,7 +20,7 @@ import { db, auth, messaging, OperationType, handleFirestoreError, seedInitialDa
 import { getToken, onMessage } from 'firebase/messaging';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession } from './types';
+import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession, AccessLog } from './types';
 import * as XLSX from 'xlsx';
 
 import PdfChoiceModal from './components/PdfChoiceModal';
@@ -745,6 +745,7 @@ export const App: React.FC = () => {
 
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [isActiveUsersModalOpen, setIsActiveUsersModalOpen] = useState(false);
   const [systemName, setSystemName] = useState(() => localStorage.getItem('manupackaging_system_name') || 'CONTROLE DE PRODUÇÃO');
   const [loginSystemName, setLoginSystemName] = useState(() => localStorage.getItem('manupackaging_login_name') || 'CONTROLE DE PRODUÇÃO');
@@ -1766,6 +1767,16 @@ export const App: React.FC = () => {
       console.warn('Erro ao escutar active_sessions:', err);
     });
 
+    const unsubAccessLogs = onSnapshot(collection(db, 'access_logs'), (snap) => {
+      const data = snap.docs.map(docRef => ({
+        ...docRef.data(),
+        id: docRef.id
+      })) as AccessLog[];
+      setAccessLogs(data);
+    }, (err) => {
+      console.warn('Erro ao escutar access_logs:', err);
+    });
+
     return () => {
       unsubProduction();
       unsubEmployees();
@@ -1780,6 +1791,7 @@ export const App: React.FC = () => {
       unsubRibbon();
       unsubVacations();
       unsubActiveSessions();
+      unsubAccessLogs();
     };
   }, [currentUser]);
 
@@ -2221,6 +2233,41 @@ export const App: React.FC = () => {
     };
   }, [loggedUser]);
 
+  const recordAccessLog = async (user: { name: string; registration: string; role: string }, action: 'login' | 'logout' | 'disconnect') => {
+    if (!user || !user.name) return;
+    try {
+      const id = Math.random().toString(36).substring(2, 15);
+      const now = new Date().toISOString();
+      const device = typeof window !== 'undefined' && window.innerWidth < 768 ? 'Mobile' : 'Desktop';
+      await setDoc(doc(db, 'access_logs', id), {
+        id,
+        name: user.name,
+        registration: user.registration,
+        role: user.role,
+        action,
+        timestamp: now,
+        device
+      });
+    } catch (e) {
+      console.error('Erro ao registrar histórico de acesso:', e);
+    }
+  };
+
+  const handleClearAccessLogs = async () => {
+    if (!confirm('Tem certeza que deseja limpar todo o histórico de acessos?')) return;
+    try {
+      const batch = writeBatch(db);
+      accessLogs.forEach(log => {
+        batch.delete(doc(db, 'access_logs', log.id));
+      });
+      await batch.commit();
+      addNotification('Histórico de acessos limpo com sucesso.');
+    } catch (e) {
+      console.error('Erro ao limpar histórico:', e);
+      alert('Erro ao limpar histórico de acessos.');
+    }
+  };
+
   const onlineUsers = useMemo(() => {
     const nowMs = Date.now();
     return activeSessions.filter(s => {
@@ -2232,6 +2279,14 @@ export const App: React.FC = () => {
 
   const handleDisconnectUser = async (sessionId: string) => {
     try {
+      const targetSession = activeSessions.find(s => s.id === sessionId);
+      if (targetSession) {
+        recordAccessLog({
+          name: targetSession.name,
+          registration: targetSession.registration,
+          role: targetSession.role
+        }, 'disconnect');
+      }
       await deleteDoc(doc(db, 'active_sessions', sessionId));
       addNotification('Sessão encerrada com sucesso.');
     } catch (e) {
@@ -2243,6 +2298,7 @@ export const App: React.FC = () => {
   const handleLogout = async () => {
     if (loggedUser) {
       const sessionId = loggedUser.id || loggedUser.registration;
+      recordAccessLog(loggedUser, 'logout');
       try {
         await deleteDoc(doc(db, 'active_sessions', sessionId));
       } catch (e) {
@@ -2317,6 +2373,7 @@ export const App: React.FC = () => {
         isReadOnly: true
       }
     };
+    recordAccessLog(guestUser, 'login');
     setLoggedUser(guestUser);
     localStorage.setItem('manupackaging_user', JSON.stringify(guestUser));
   };
@@ -2341,6 +2398,7 @@ export const App: React.FC = () => {
           isReadOnly: false
         }
       };
+      recordAccessLog(defaultAdmin, 'login');
       setLoggedUser(defaultAdmin);
       localStorage.setItem('manupackaging_user', JSON.stringify(defaultAdmin));
       return;
@@ -2365,6 +2423,7 @@ export const App: React.FC = () => {
       try {
         const updated = { ...user, password: pass, isFirstAccess: false };
         await setDoc(doc(db, 'system_users', user.id), updated);
+        recordAccessLog(updated, 'login');
         setLoggedUser(updated);
         localStorage.setItem('manupackaging_user', JSON.stringify(updated));
 
@@ -2380,6 +2439,7 @@ export const App: React.FC = () => {
     }
 
     if (user.password === pass) {
+      recordAccessLog(user, 'login');
       setLoggedUser(user);
       localStorage.setItem('manupackaging_user', JSON.stringify(user));
       
@@ -2476,6 +2536,7 @@ export const App: React.FC = () => {
         
         const success = await authenticateBiometrics(user.biometricId);
         if (success) {
+          recordAccessLog(user, 'login');
           setLoggedUser(user);
           localStorage.setItem('manupackaging_user', JSON.stringify(user));
           setBiometricScanStatus('success');
@@ -14871,7 +14932,9 @@ Produção total:
         isOpen={isActiveUsersModalOpen}
         onClose={() => setIsActiveUsersModalOpen(false)}
         activeSessions={activeSessions}
+        accessLogs={accessLogs}
         onDisconnectUser={handleDisconnectUser}
+        onClearHistory={isAdmin ? handleClearAccessLogs : undefined}
         currentUserId={loggedUser?.id || loggedUser?.registration}
       />
       <QuickAllocationModal

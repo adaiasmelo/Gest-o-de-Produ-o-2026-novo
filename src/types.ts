@@ -242,6 +242,16 @@ export interface ActiveSession {
   status?: 'active' | 'disconnected';
 }
 
+export interface AccessLog {
+  id: string;
+  name: string;
+  registration: string;
+  role: string;
+  action: 'login' | 'logout' | 'disconnect';
+  timestamp: string;
+  device?: string;
+}
+
 export interface StockItem {
   code: string;
   name: string; // descrição
