@@ -309,6 +309,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
                               <select value={formData.shift} onChange={e => setFormData({...formData, shift: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500">
                                   {formData.sector === 'Liderança' ? (
                                       ['Integral', 'Dia', 'Noite'].map(s => <option key={s} value={s}>{s}</option>)
+                                  ) : formData.sector === 'Extrusão' ? (
+                                      ['Diurno 1', 'Noturno 1', 'Diurno 2', 'Noturno 2'].map(s => <option key={s} value={s}>{s}</option>)
                                   ) : (
                                       Array.from(new Set([
                                         ...(formData.shift ? [formData.shift] : []),

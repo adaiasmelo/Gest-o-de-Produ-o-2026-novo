@@ -20,10 +20,11 @@ import { db, auth, messaging, OperationType, handleFirestoreError, seedInitialDa
 import { getToken, onMessage } from 'firebase/messaging';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation } from './types';
+import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession } from './types';
 import * as XLSX from 'xlsx';
 
 import PdfChoiceModal from './components/PdfChoiceModal';
+import { ActiveUsersModal } from './components/ActiveUsersModal';
 import { IMPORTED_COLLABORATORS } from './constants/importedCollaborators';
 import { INITIAL_DATA, GOAL_VALUE, DEFAULT_OPERATORS, INITIAL_EMPLOYEES, INITIAL_LOGS } from './constants';
 import { isBiometricAvailable, registerBiometrics, authenticateBiometrics } from './services/biometricService';
@@ -532,18 +533,23 @@ const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 600): Prom
   });
 };
 
-const sanitizeShift = (sh: string | undefined): string => {
+const sanitizeShift = (sh: string | undefined, sectorOrMachine?: string): string => {
   if (!sh) return 'Diurno';
   const trimmed = sh.trim();
   const lower = trimmed.toLowerCase();
   
-  if (lower === 'comercial') return 'Comercial';
-  if (lower === 'integral') return 'Diurno';
-  if (lower === 'dia') return 'Diurno';
-  if (lower === 'noite') return 'Noturno';
+  const ctx = (sectorOrMachine || '').toLowerCase();
+  const isExtrusion = ctx.includes('cast') || ctx.includes('extrus');
+  
+  if (lower === 'comercial') {
+    return isExtrusion ? 'Diurno 1' : 'Comercial';
+  }
+  if (lower === 'integral') return isExtrusion ? 'Diurno 1' : 'Diurno';
+  if (lower === 'dia') return isExtrusion ? 'Diurno 1' : 'Diurno';
+  if (lower === 'noite') return isExtrusion ? 'Noturno 1' : 'Noturno';
   
   if (lower.includes('comercial')) {
-    return 'Comercial';
+    return isExtrusion ? 'Diurno 1' : 'Comercial';
   }
   return trimmed;
 };
@@ -738,6 +744,8 @@ export const App: React.FC = () => {
   };
 
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [isActiveUsersModalOpen, setIsActiveUsersModalOpen] = useState(false);
   const [systemName, setSystemName] = useState(() => localStorage.getItem('manupackaging_system_name') || 'CONTROLE DE PRODUÇÃO');
   const [loginSystemName, setLoginSystemName] = useState(() => localStorage.getItem('manupackaging_login_name') || 'CONTROLE DE PRODUÇÃO');
   const [loginSystemSubtitle, setLoginSystemSubtitle] = useState(() => localStorage.getItem('manupackaging_login_subtitle') || '');
@@ -849,7 +857,7 @@ export const App: React.FC = () => {
       const saved = localStorage.getItem('manupackaging_production');
       const loaded: ProductionEntry[] = saved ? JSON.parse(saved) : [];
       return loaded
-        .map(e => ({ ...e, shift: sanitizeShift(e.shift) }))
+        .map(e => ({ ...e, shift: sanitizeShift(e.shift, e.machine) }))
         .filter(entry => {
           if (!entry || !entry.date) return false;
           const year = parseInt(entry.date.split('-')[0], 10);
@@ -903,7 +911,7 @@ export const App: React.FC = () => {
     try {
       const saved = localStorage.getItem('manupackaging_employees');
       const loaded: Employee[] = saved ? JSON.parse(saved) : [];
-      return loaded.map(e => upgradeEmployee({ ...e, shift: sanitizeShift(e.shift) }));
+      return loaded.map(e => upgradeEmployee({ ...e, shift: sanitizeShift(e.shift, e.sector || e.machine) }));
     } catch (e) {
       return [];
     }
@@ -1381,7 +1389,7 @@ export const App: React.FC = () => {
       
       snap.docs.forEach(docRef => {
         const raw = docRef.data() as ProductionEntry;
-        const cleaned = { ...raw, shift: sanitizeShift(raw.shift), id: docRef.id };
+        const cleaned = { ...raw, shift: sanitizeShift(raw.shift, raw.machine), id: docRef.id };
         const upgraded = { ...cleaned, operator: upgradeName(cleaned.operator) };
         
         // Exclude and delete older entries from firebase if prior to 2026-01-01
@@ -1399,10 +1407,10 @@ export const App: React.FC = () => {
           return;
         }
 
-        if (upgraded.operator !== cleaned.operator) {
+        if (upgraded.operator !== raw.operator || upgraded.shift !== raw.shift) {
           // Asynchronously update Firestore in background
           setDoc(doc(db, 'productionEntries', docRef.id), upgraded).catch(err => {
-            console.error('Erro ao migrar operador em productionEntries:', err);
+            console.error('Erro ao migrar dados em productionEntries:', err);
           });
         }
         docsFiltered.push(upgraded);
@@ -1455,10 +1463,10 @@ export const App: React.FC = () => {
     const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
       const data = snap.docs.map(docRef => {
         const raw = docRef.data() as Employee;
-        const cleaned = { ...raw, shift: sanitizeShift(raw.shift), id: docRef.id };
+        const cleaned = { ...raw, shift: sanitizeShift(raw.shift, raw.sector || raw.machine), id: docRef.id };
         const upgraded = upgradeEmployee(cleaned);
         
-        if (upgraded.name !== cleaned.name || upgraded.registration !== cleaned.registration || upgraded.role !== cleaned.role) {
+        if (upgraded.name !== raw.name || upgraded.registration !== raw.registration || upgraded.role !== raw.role || upgraded.shift !== raw.shift) {
           // Asynchronously update Firestore in background
           setDoc(doc(db, 'employees', docRef.id), upgraded).catch(err => {
             console.error('Erro ao migrar colaborador no Firestore:', err);
@@ -1748,6 +1756,16 @@ export const App: React.FC = () => {
       console.warn('Erro ao escutar vacations:', err);
     });
 
+    const unsubActiveSessions = onSnapshot(collection(db, 'active_sessions'), (snap) => {
+      const data = snap.docs.map(docRef => ({
+        ...docRef.data(),
+        id: docRef.id
+      })) as ActiveSession[];
+      setActiveSessions(data);
+    }, (err) => {
+      console.warn('Erro ao escutar active_sessions:', err);
+    });
+
     return () => {
       unsubProduction();
       unsubEmployees();
@@ -1761,6 +1779,7 @@ export const App: React.FC = () => {
       unsubStock();
       unsubRibbon();
       unsubVacations();
+      unsubActiveSessions();
     };
   }, [currentUser]);
 
@@ -2159,7 +2178,77 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  // User Presence & Heartbeat em tempo real
+  useEffect(() => {
+    if (!loggedUser) return;
+
+    const sessionId = loggedUser.id || loggedUser.registration;
+    const storageKey = `login_time_${sessionId}`;
+    let loginTime = localStorage.getItem(storageKey);
+    if (!loginTime) {
+      loginTime = new Date().toISOString();
+      localStorage.setItem(storageKey, loginTime);
+    }
+
+    const updatePresence = async () => {
+      const now = new Date().toISOString();
+      try {
+        await setDoc(doc(db, 'active_sessions', sessionId), {
+          id: sessionId,
+          name: loggedUser.name,
+          registration: loggedUser.registration,
+          role: loggedUser.role,
+          lastSeen: now,
+          loginTime: loginTime,
+          device: typeof window !== 'undefined' && window.innerWidth < 768 ? 'Mobile' : 'Desktop'
+        }, { merge: true });
+      } catch (e) {
+        console.error('Erro ao atualizar presença em tempo real:', e);
+      }
+    };
+
+    updatePresence();
+    const interval = setInterval(updatePresence, 20000);
+
+    const handleBeforeUnload = () => {
+      updatePresence();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [loggedUser]);
+
+  const onlineUsers = useMemo(() => {
+    const nowMs = Date.now();
+    return activeSessions.filter(s => {
+      if (!s.lastSeen) return false;
+      const diff = nowMs - new Date(s.lastSeen).getTime();
+      return diff < 120000;
+    });
+  }, [activeSessions]);
+
+  const handleDisconnectUser = async (sessionId: string) => {
+    try {
+      await deleteDoc(doc(db, 'active_sessions', sessionId));
+      addNotification('Sessão encerrada com sucesso.');
+    } catch (e) {
+      console.error('Erro ao desconectar usuário:', e);
+      alert('Erro ao desconectar usuário.');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (loggedUser) {
+      const sessionId = loggedUser.id || loggedUser.registration;
+      try {
+        await deleteDoc(doc(db, 'active_sessions', sessionId));
+      } catch (e) {
+        console.error('Erro ao remover presença ao sair:', e);
+      }
+    }
     setLoggedUser(null);
     setLoginMatricula('');
     setLoginPass('');
@@ -2758,6 +2847,8 @@ export const App: React.FC = () => {
 
 
   const isAdmin = loggedUser?.registration === '1010' || loggedUser?.role === 'Administrador';
+  const isSupervisor = (loggedUser?.role || '').toLowerCase().includes('supervisor');
+  const canViewActiveUsers = isAdmin || isSupervisor;
   const isReadOnlyAccount = !isAdmin && loggedUser?.permissions?.isReadOnly;
   const canViewDashboard = isAdmin || loggedUser?.permissions?.canViewDashboard || isReadOnlyAccount;
   const canViewReports = isAdmin || loggedUser?.permissions?.canViewReports || isReadOnlyAccount;
@@ -7750,6 +7841,20 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
           </div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-3 ml-2">
+          {canViewActiveUsers && (
+            <button 
+              onClick={() => setIsActiveUsersModalOpen(true)}
+              className="p-2.5 md:p-3 px-3 md:px-4 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl md:rounded-2xl transition-all shadow-sm hover:bg-emerald-100 flex items-center gap-2 active:scale-95 cursor-pointer"
+              title="Ver Usuários Logados em Tempo Real"
+            >
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] md:text-xs font-black uppercase tracking-wider hidden sm:inline whitespace-nowrap">{onlineUsers.length} On-line</span>
+              <Users size={18} className="text-emerald-600 shrink-0 md:w-5 md:h-5" />
+            </button>
+          )}
           {canEditProduction && (
             <button onClick={() => { setEditingEntry(null); setIsModalOpen(true); }} className="bg-blue-600 text-white p-2.5 md:p-3.5 rounded-xl md:rounded-2xl shadow-xl hover:bg-blue-700 active:scale-95 transition-all"><Plus size={18} className="md:w-[22px] md:h-[22px]" /></button>
           )}
@@ -14588,8 +14693,8 @@ Produção total:
                     if (data.dashboardMonth) setDashboardMonth(data.dashboardMonth);
 
                     // Restore to LocalStorage
-                    if (data.productionData) setProductionData(data.productionData.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift) })));
-                    if (data.employees) setEmployees(data.employees.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift) })));
+                    if (data.productionData) setProductionData(data.productionData.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift, e.machine || e.sector) })));
+                    if (data.employees) setEmployees(data.employees.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift, e.sector || e.machine) })));
                     if (data.availableShifts) setAvailableShifts(data.availableShifts);
                     if (data.personnelLogs) setPersonnelLogs(data.personnelLogs);
 
@@ -14760,6 +14865,14 @@ Produção total:
         onUpdateUsers={setSystemUsers}
         availableRoles={availableRoles} 
         collaborators={collaborators}
+      />
+      
+      <ActiveUsersModal
+        isOpen={isActiveUsersModalOpen}
+        onClose={() => setIsActiveUsersModalOpen(false)}
+        activeSessions={activeSessions}
+        onDisconnectUser={handleDisconnectUser}
+        currentUserId={loggedUser?.id || loggedUser?.registration}
       />
       <QuickAllocationModal
         isOpen={isQuickAllocModalOpen}

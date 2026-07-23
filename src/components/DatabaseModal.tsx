@@ -57,6 +57,46 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const uniqueRoles = Array.from(new Set(availableRoles));
   const uniqueShifts = Array.from(new Set(availableShifts));
   const uniqueMachines = Array.from(new Set(machines));
+
+  const shiftsForDatabaseSector = useMemo(() => {
+    const s = newEmp.sector ? newEmp.sector.toLowerCase() : '';
+    if (s.includes('extrusão') || s.includes('extrusao')) {
+      return ['Diurno 1', 'Noturno 1', 'Diurno 2', 'Noturno 2'];
+    }
+    if (s.includes('liderança') || s.includes('lideranca')) {
+      return ['Integral', 'Dia', 'Noite'];
+    }
+    if (s.includes('reciclagem')) {
+      return ['Diurno 1', 'Diurno 2'];
+    }
+    if (s.includes('fita')) {
+      return ['Diurno 1', 'Diurno 2', 'Comercial'];
+    }
+    return [...uniqueShifts, 'Integral'];
+  }, [newEmp.sector, uniqueShifts]);
+
+  const handleDatabaseSectorChange = (sector: string) => {
+    const s = sector.toLowerCase();
+    let defaultShift = 'Diurno 1';
+    let defaultMachine = 'Cast 1';
+    if (s.includes('liderança') || s.includes('lideranca')) {
+      defaultShift = 'Integral';
+      defaultMachine = 'Geral';
+    } else if (s.includes('reciclagem')) {
+      defaultShift = 'Diurno 1';
+      defaultMachine = 'Erema 1';
+    } else if (s.includes('fita')) {
+      defaultShift = 'Comercial';
+      defaultMachine = 'Ghezzi';
+    }
+    setNewEmp(prev => ({
+      ...prev,
+      sector,
+      shift: defaultShift,
+      machine: defaultMachine
+    }));
+  };
+
   const [confirmModal, setConfirmModal] = useState<{ id: string, name: string, type: 'delete' | 'terminate' } | null>(null);
   const [showExcludedSlots, setShowExcludedSlots] = useState(false);
 
@@ -261,7 +301,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Setor</label>
                 <select 
                   value={newEmp.sector}
-                  onChange={(e) => setNewEmp({...newEmp, sector: e.target.value})}
+                  onChange={(e) => handleDatabaseSectorChange(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none h-[42px]"
                 >
                   {['Extrusão', 'Reciclagem', 'Fita', 'Liderança'].map(s => <option key={s} value={s}>{s}</option>)}
@@ -285,8 +325,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                   onChange={(e) => setNewEmp({...newEmp, shift: e.target.value})}
                   className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none h-[42px]"
                 >
-                  {uniqueShifts.map(s => <option key={s} value={s}>{s}</option>)}
-                  <option value="Integral">Integral</option>
+                  {shiftsForDatabaseSector.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="w-32 space-y-1.5">

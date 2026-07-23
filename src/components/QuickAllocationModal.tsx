@@ -87,6 +87,23 @@ export const QuickAllocationModal: React.FC<QuickAllocationModalProps> = ({
     }));
   };
 
+  const shiftsForSector = useMemo(() => {
+    const s = newEmp.sector ? newEmp.sector.toLowerCase() : '';
+    if (s.includes('extrusão') || s.includes('extrusao')) {
+      return ['Diurno 1', 'Noturno 1', 'Diurno 2', 'Noturno 2'];
+    }
+    if (s.includes('liderança') || s.includes('lideranca')) {
+      return ['Integral', 'Dia', 'Noite'];
+    }
+    if (s.includes('reciclagem')) {
+      return ['Diurno 1', 'Diurno 2'];
+    }
+    if (s.includes('fita')) {
+      return ['Diurno 1', 'Diurno 2', 'Comercial'];
+    }
+    return uniqueShifts;
+  }, [newEmp.sector, uniqueShifts]);
+
   const filteredCollaboratorsForSelect = useMemo(() => {
     const list = collaborators || [];
     if (!colSearchTerm) return list;
@@ -254,7 +271,7 @@ export const QuickAllocationModal: React.FC<QuickAllocationModalProps> = ({
                 onChange={(e) => setNewEmp({ ...newEmp, shift: e.target.value })}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all h-[44px]"
               >
-                {uniqueShifts.map(s => <option key={s} value={s}>{s}</option>)}
+                {shiftsForSector.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 

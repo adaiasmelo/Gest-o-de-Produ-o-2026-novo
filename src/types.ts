@@ -231,6 +231,17 @@ export interface SystemUser {
   permissions?: UserPermissions;
 }
 
+export interface ActiveSession {
+  id: string;
+  name: string;
+  registration: string;
+  role: string;
+  loginTime: string;
+  lastSeen: string;
+  device?: string;
+  status?: 'active' | 'disconnected';
+}
+
 export interface StockItem {
   code: string;
   name: string; // descrição
