@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Tv, Maximize2, Minimize2, Play, Pause, ChevronLeft, ChevronRight, 
   Trophy, TrendingUp, Target, Calendar, Clock, Activity, 
   Award, BarChart3, Factory, RefreshCw, X, Sliders, Flame, Users,
-  ArrowUpRight, ArrowDownRight, TrendingDown
+  ArrowUpRight, ArrowDownRight, TrendingDown, Scale, AlertCircle, Percent
 } from 'lucide-react';
 import { 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, 
-  Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell 
+  Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, LabelList,
+  ComposedChart, Line
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { ProductionEntry, RibbonCuttingEntry, Collaborator } from '../types';
@@ -22,6 +23,104 @@ interface ProjectionDashboardProps {
   systemLogo?: string;
   onClose: () => void;
 }
+
+const ContinuousConfettiOverlay: React.FC = () => {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = canvas.parentElement?.clientWidth || 300);
+    let height = (canvas.height = canvas.parentElement?.clientHeight || 200);
+
+    const handleResize = () => {
+      if (!canvas || !canvas.parentElement) return;
+      width = canvas.width = canvas.parentElement.clientWidth;
+      height = canvas.height = canvas.parentElement.clientHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    const colors = ['#f59e0b', '#10b981', '#6366f1', '#ec4899', '#3b82f6', '#8b5cf6', '#eab308', '#f43f5e', '#fbbf24'];
+    const particleCount = 45;
+
+    interface Particle {
+      x: number;
+      y: number;
+      size: number;
+      color: string;
+      speedY: number;
+      speedX: number;
+      angle: number;
+      angularSpeed: number;
+      shape: 'rect' | 'circle';
+    }
+
+    const particles: Particle[] = Array.from({ length: particleCount }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 7 + 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      speedY: Math.random() * 1.8 + 0.8,
+      speedX: (Math.random() - 0.5) * 0.9,
+      angle: Math.random() * Math.PI * 2,
+      angularSpeed: (Math.random() - 0.5) * 0.08,
+      shape: Math.random() > 0.35 ? 'rect' : 'circle',
+    }));
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      particles.forEach((p) => {
+        p.y += p.speedY;
+        p.x += Math.sin(p.angle) * 0.6 + p.speedX;
+        p.angle += p.angularSpeed;
+
+        if (p.y > height + 10) {
+          p.y = -10;
+          p.x = Math.random() * width;
+        }
+        if (p.x < -10) p.x = width + 10;
+        if (p.x > width + 10) p.x = -10;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.color;
+
+        if (p.shape === 'rect') {
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none w-full h-full z-0 opacity-85"
+    />
+  );
+};
 
 export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   productionData,
@@ -40,7 +139,38 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const [slideDuration, setSlideDuration] = useState<number>(30); // Default 30s
   const [timeRemaining, setTimeRemaining] = useState<number>(30);
   const [viewMode, setViewMode] = useState<'slides' | 'grid'>('slides');
+  const [comparisonView, setComparisonView] = useState<'daily' | 'monthly'>('daily');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const historyScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll monthly timeline list on Slide 1 proportional to slide duration
+  useEffect(() => {
+    if (currentSlide !== 1) return;
+    const container = historyScrollRef.current;
+    if (!container) return;
+
+    let animId: number;
+    let startTime: number | null = null;
+
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const maxScroll = container.scrollHeight - container.clientHeight;
+
+      if (maxScroll > 0) {
+        const durationMs = slideDuration * 1000;
+        const elapsed = (timestamp - startTime) % durationMs;
+        const progress = elapsed / durationMs;
+        container.scrollTop = progress * maxScroll;
+      }
+
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [currentSlide, slideDuration]);
 
   // Clock tick
   useEffect(() => {
@@ -98,7 +228,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          setCurrentSlide((slide) => (slide + 1) % 4);
+          setCurrentSlide((slide) => (slide + 1) % 5);
           return slideDuration;
         }
         return prev - 1;
@@ -119,6 +249,20 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     setTimeRemaining(newDuration);
   };
 
+  // Helper formatting with dot decimals and thousand separators
+  const formatNumDot = (num: number, minDec: number = 0, maxDec: number = 1) => {
+    if (isNaN(num) || num === null || num === undefined) return '0';
+    const fixed = num.toFixed(maxDec);
+    const parts = fixed.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if (maxDec > 0 && parts[1]) {
+      let dec = parts[1];
+      if (minDec === 0) dec = dec.replace(/0+$/, '');
+      if (dec.length > 0) return `${parts[0]}.${dec}`;
+    }
+    return parts[0];
+  };
+
   // Helper formatting with dynamic kg/T conversion and smaller unit font size
   const renderWeight = (
     val: number,
@@ -128,7 +272,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     const absVal = Math.abs(val || 0);
     if (absVal >= 1000) {
       const tons = val / 1000;
-      const numStr = tons.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 });
+      const numStr = formatNumDot(tons, 1, 3);
       return (
         <span className="inline-flex items-baseline">
           <span>{numStr}</span>
@@ -136,7 +280,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
         </span>
       );
     }
-    const numStr = (val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const numStr = formatNumDot(val || 0, 0, 0);
     return (
       <span className="inline-flex items-baseline">
         <span>{numStr}</span>
@@ -149,7 +293,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     val: number,
     unitClass: string = 'text-[0.45em] font-extrabold opacity-75 ml-1 select-none'
   ) => {
-    const numStr = (val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const numStr = formatNumDot(val || 0, 0, 0);
     return (
       <span className="inline-flex items-baseline">
         <span>{numStr}</span>
@@ -161,9 +305,9 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const formatWeightStr = (val: number) => {
     const absVal = Math.abs(val || 0);
     if (absVal >= 1000) {
-      return (val / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 }) + ' T';
+      return `${formatNumDot(val / 1000, 1, 2)} T`;
     }
-    return (val || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
+    return `${formatNumDot(val || 0, 0, 0)} kg`;
   };
 
   // Calculate Metrics
@@ -395,25 +539,64 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       else if (e.machine.toLowerCase().includes('erema')) shiftMap[shiftKey].erema += net;
     });
 
-    // Machine comparison dataset for Recharts including Mês Anterior
-    const machineComparisonData = [
+    // Machine comparison datasets for Recharts
+    const daysInCurrentMonth = Math.max(1, currentDayNum);
+    const daysInPrevMonth = new Date(prevYear, prevMonth, 0).getDate() || 30;
+
+    const c1Curr = machineMonthMap['Cast 1'] || 0;
+    const c1Prev = prevMachineMap['Cast 1'] || 0;
+    const c1Yest = machineYesterdayMap['Cast 1'] || 0;
+    const c1DailyAvg = Math.round(c1Curr / daysInCurrentMonth);
+    const c1PrevDailyAvg = Math.round(c1Prev / daysInPrevMonth);
+
+    const c2Curr = machineMonthMap['Cast 2'] || 0;
+    const c2Prev = prevMachineMap['Cast 2'] || 0;
+    const c2Yest = machineYesterdayMap['Cast 2'] || 0;
+    const c2DailyAvg = Math.round(c2Curr / daysInCurrentMonth);
+    const c2PrevDailyAvg = Math.round(c2Prev / daysInPrevMonth);
+
+    const erCurr = eremaMonthTotal;
+    const erPrev = prevMachineMap['Erema'] || 0;
+    const erYest = machineYesterdayMap['Erema'] || 0;
+    const erDailyAvg = Math.round(erCurr / daysInCurrentMonth);
+    const erPrevDailyAvg = Math.round(erPrev / daysInPrevMonth);
+
+    const machineDailyComparisonData = [
       {
         name: 'Cast 1',
-        'Acumulado Mês': machineMonthMap['Cast 1'] || 0,
-        'Mês Anterior': prevMachineMap['Cast 1'] || 0,
-        Ontem: machineYesterdayMap['Cast 1'] || 0,
+        'Ontem (Dia)': c1Yest,
+        'Média Diária Mês': c1DailyAvg,
+        'Média Mês Anterior': c1PrevDailyAvg,
       },
       {
         name: 'Cast 2',
-        'Acumulado Mês': machineMonthMap['Cast 2'] || 0,
-        'Mês Anterior': prevMachineMap['Cast 2'] || 0,
-        Ontem: machineYesterdayMap['Cast 2'] || 0,
+        'Ontem (Dia)': c2Yest,
+        'Média Diária Mês': c2DailyAvg,
+        'Média Mês Anterior': c2PrevDailyAvg,
       },
       {
         name: 'Erema',
-        'Acumulado Mês': eremaMonthTotal,
-        'Mês Anterior': prevMachineMap['Erema'] || 0,
-        Ontem: machineYesterdayMap['Erema'] || 0,
+        'Ontem (Dia)': erYest,
+        'Média Diária Mês': erDailyAvg,
+        'Média Mês Anterior': erPrevDailyAvg,
+      },
+    ];
+
+    const machineMonthlyComparisonData = [
+      {
+        name: 'Cast 1',
+        'Acumulado Mês': c1Curr,
+        'Mês Anterior': c1Prev,
+      },
+      {
+        name: 'Cast 2',
+        'Acumulado Mês': c2Curr,
+        'Mês Anterior': c2Prev,
+      },
+      {
+        name: 'Erema',
+        'Acumulado Mês': erCurr,
+        'Mês Anterior': erPrev,
       },
     ];
 
@@ -424,6 +607,239 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       { name: 'Eco A', value: totalEcoA, color: '#10b981' },
       { name: 'Borra', value: totalBorra, color: '#ef4444' },
     ].filter((item) => item.value > 0);
+
+    // --- 1. Monthly Timeline Data (MoM / YoY / Filtered Time Trend) ---
+    const monthlyDict: Record<string, {
+      monthStr: string;
+      label: string;
+      fullLabel: string;
+      producao: number;
+      ecoA: number;
+      ecoB: number;
+      borra: number;
+      perdaTotal: number;
+      manutencao: number;
+      processo: number;
+      outros: number;
+      paradasTotal: number;
+      tubetesEcoB: number;
+    }> = {};
+
+    productionData.forEach((e) => {
+      if (!e || !e.date || typeof e.date !== 'string') return;
+      const m = e.date.substring(0, 7);
+      const yr = parseInt(m.split('-')[0], 10);
+      if (isNaN(yr) || yr < 2026) return;
+
+      if (!monthlyDict[m]) {
+        const parts = m.split('-');
+        const label = `${parts[1]}/${parts[0]}`;
+        const dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+        const fullLabel = dateObj.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+
+        monthlyDict[m] = {
+          monthStr: m,
+          label,
+          fullLabel,
+          producao: 0,
+          ecoA: 0,
+          ecoB: 0,
+          borra: 0,
+          perdaTotal: 0,
+          manutencao: 0,
+          processo: 0,
+          outros: 0,
+          paradasTotal: 0,
+          tubetesEcoB: 0,
+        };
+      }
+
+      const isErema = e.machine && e.machine.toLowerCase().includes('erema');
+      const net = e.netWeight || 0;
+      if (!isErema) {
+        monthlyDict[m].producao += net;
+      }
+
+      const ecoBVal = (e.ecoBP || 0) + (e.ecoBM || 0);
+      const borraVal = e.borraTotal || 0;
+      const ecoAVal = e.ecoA || 0;
+      const tubetesVal = e.tubetesEcoB || (e.materials ? e.materials.reduce((acc: number, mat: any) => acc + (mat.tubetesEcoB || 0), 0) : 0);
+
+      monthlyDict[m].ecoA += ecoAVal;
+      monthlyDict[m].ecoB += ecoBVal;
+      monthlyDict[m].borra += borraVal;
+      monthlyDict[m].perdaTotal += (ecoBVal + borraVal);
+
+      monthlyDict[m].manutencao += (e.manutencaoMin || 0);
+      monthlyDict[m].processo += (e.processoMin || 0);
+      monthlyDict[m].outros += (e.outrosMin || 0);
+      monthlyDict[m].paradasTotal += ((e.manutencaoMin || 0) + (e.processoMin || 0) + (e.outrosMin || 0));
+      monthlyDict[m].tubetesEcoB += tubetesVal;
+    });
+
+    const sortedMonthKeys = Object.keys(monthlyDict).sort();
+    const monthlyTimelineData = sortedMonthKeys.map((m, idx) => {
+      const item = monthlyDict[m];
+      const grossTotal = item.producao + item.perdaTotal;
+      const perdaPerc = grossTotal > 0 ? (item.perdaTotal / grossTotal) * 100 : 0;
+      const ecoAPerc = item.producao > 0 ? (item.ecoA / item.producao) * 100 : 0;
+      const ratioEcoBTubetes = item.tubetesEcoB > 0 ? item.ecoB / item.tubetesEcoB : 0;
+
+      // Calculate MoM growth vs previous index month
+      let momProdVar: number | null = null;
+      let momPerdaVar: number | null = null;
+      if (idx > 0) {
+        const prevKey = sortedMonthKeys[idx - 1];
+        const prevItem = monthlyDict[prevKey];
+        if (prevItem.producao > 0) {
+          momProdVar = ((item.producao - prevItem.producao) / prevItem.producao) * 100;
+        }
+        const prevGross = prevItem.producao + prevItem.perdaTotal;
+        const prevPerdaPerc = prevGross > 0 ? (prevItem.perdaTotal / prevGross) * 100 : 0;
+        momPerdaVar = perdaPerc - prevPerdaPerc;
+      }
+
+      return {
+        ...item,
+        producao: Math.round(item.producao),
+        perdaTotal: Math.round(item.perdaTotal),
+        perdaPerc: parseFloat(perdaPerc.toFixed(2)),
+        ecoAPerc: parseFloat(ecoAPerc.toFixed(2)),
+        ratioEcoBTubetes: parseFloat(ratioEcoBTubetes.toFixed(2)),
+        rendimentoPerc: grossTotal > 0 ? parseFloat(((item.producao / grossTotal) * 100).toFixed(2)) : 100,
+        momProdVar: momProdVar !== null ? parseFloat(momProdVar.toFixed(1)) : null,
+        momPerdaVar: momPerdaVar !== null ? parseFloat(momPerdaVar.toFixed(2)) : null,
+      };
+    });
+
+    // Stoppage / Indisponibilidade totals
+    let totalManutencaoMin = 0;
+    let totalProcessoMin = 0;
+    let totalOutrosMin = 0;
+    monthProdEntries.forEach((e) => {
+      totalManutencaoMin += (e.manutencaoMin || 0);
+      totalProcessoMin += (e.processoMin || 0);
+      totalOutrosMin += (e.outrosMin || 0);
+    });
+    const totalParadasMin = totalManutencaoMin + totalProcessoMin + totalOutrosMin;
+    const totalParadasHoras = (totalParadasMin / 60).toFixed(1);
+
+    // --- 2. Daily Eco B vs Tubetes Eco B Correlation Data ---
+    const dailyEcoBTubetesDict: Record<string, {
+      date: string;
+      dateBR: string;
+      day: string;
+      ecoB: number;
+      tubetesEcoB: number;
+      cast1EcoB: number;
+      cast2EcoB: number;
+      cast1Tubetes: number;
+      cast2Tubetes: number;
+    }> = {};
+
+    monthProdEntries.forEach((e) => {
+      const d = e.date;
+      if (!d) return;
+      const ecoBVal = (e.ecoBP || 0) + (e.ecoBM || 0);
+      const tubetesVal = e.tubetesEcoB || (e.materials ? e.materials.reduce((acc: number, mat: any) => acc + (mat.tubetesEcoB || 0), 0) : 0);
+      const isCast1 = e.machine && e.machine.toLowerCase().includes('cast 1');
+      const isCast2 = e.machine && e.machine.toLowerCase().includes('cast 2');
+
+      if (!dailyEcoBTubetesDict[d]) {
+        const parts = d.split('-');
+        const dateBR = `${parts[2]}/${parts[1]}`;
+        dailyEcoBTubetesDict[d] = {
+          date: d,
+          dateBR,
+          day: parts[2],
+          ecoB: 0,
+          tubetesEcoB: 0,
+          cast1EcoB: 0,
+          cast2EcoB: 0,
+          cast1Tubetes: 0,
+          cast2Tubetes: 0,
+        };
+      }
+
+      dailyEcoBTubetesDict[d].ecoB += ecoBVal;
+      dailyEcoBTubetesDict[d].tubetesEcoB += tubetesVal;
+
+      if (isCast1) {
+        dailyEcoBTubetesDict[d].cast1EcoB += ecoBVal;
+        dailyEcoBTubetesDict[d].cast1Tubetes += tubetesVal;
+      } else if (isCast2) {
+        dailyEcoBTubetesDict[d].cast2EcoB += ecoBVal;
+        dailyEcoBTubetesDict[d].cast2Tubetes += tubetesVal;
+      }
+    });
+
+    const dailyEcoBTubetesData = Object.values(dailyEcoBTubetesDict)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item) => ({
+        ...item,
+        ratio: item.tubetesEcoB > 0 ? parseFloat((item.ecoB / item.tubetesEcoB).toFixed(2)) : 0,
+      }));
+
+    let totalTubetesMonth = 0;
+    monthProdEntries.forEach((e) => {
+      totalTubetesMonth += e.tubetesEcoB || (e.materials ? e.materials.reduce((acc: number, mat: any) => acc + (mat.tubetesEcoB || 0), 0) : 0);
+    });
+    const overallRatioMonth = totalTubetesMonth > 0 ? (totalEcoBP + totalEcoBM) / totalTubetesMonth : 0;
+
+    // --- 3. Daily Loss Evolution vs Net Production Data ---
+    const dailyLossProdDict: Record<string, {
+      date: string;
+      dateBR: string;
+      day: string;
+      producao: number;
+      perdaEcoB: number;
+      perdaBorra: number;
+      perdaTotal: number;
+    }> = {};
+
+    monthProdEntries.forEach((e) => {
+      const d = e.date;
+      if (!d) return;
+      const isErema = e.machine && e.machine.toLowerCase().includes('erema');
+      const net = !isErema ? (e.netWeight || 0) : 0;
+      const ecoBVal = (e.ecoBP || 0) + (e.ecoBM || 0);
+      const borraVal = e.borraTotal || 0;
+
+      if (!dailyLossProdDict[d]) {
+        const parts = d.split('-');
+        const dateBR = `${parts[2]}/${parts[1]}`;
+        dailyLossProdDict[d] = {
+          date: d,
+          dateBR,
+          day: parts[2],
+          producao: 0,
+          perdaEcoB: 0,
+          perdaBorra: 0,
+          perdaTotal: 0,
+        };
+      }
+
+      dailyLossProdDict[d].producao += net;
+      dailyLossProdDict[d].perdaEcoB += ecoBVal;
+      dailyLossProdDict[d].perdaBorra += borraVal;
+      dailyLossProdDict[d].perdaTotal += (ecoBVal + borraVal);
+    });
+
+    const dailyLossProdData = Object.values(dailyLossProdDict)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item) => {
+        const gross = item.producao + item.perdaTotal;
+        const perdaPerc = gross > 0 ? (item.perdaTotal / gross) * 100 : 0;
+        return {
+          ...item,
+          perdaPerc: parseFloat(perdaPerc.toFixed(2)),
+          rendimentoPerc: parseFloat((100 - perdaPerc).toFixed(2)),
+        };
+      });
+
+    const totalGrossMonth = prodMonthTotal + totalEcoBP + totalEcoBM + totalBorra;
+    const overallLossPercMonth = totalGrossMonth > 0 ? ((totalEcoBP + totalEcoBM + totalBorra) / totalGrossMonth) * 100 : 0;
+    const overallYieldPercMonth = 100 - overallLossPercMonth;
 
     return {
       currentGoal,
@@ -449,7 +865,16 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       machineYesterdayMap,
       dailyChartData,
       shiftMap,
-      machineComparisonData,
+      machineDailyComparisonData,
+      machineMonthlyComparisonData,
+      daysInCurrentMonth,
+      daysInPrevMonth,
+      c1DailyAvg,
+      c2DailyAvg,
+      erDailyAvg,
+      c1PrevDailyAvg,
+      c2PrevDailyAvg,
+      erPrevDailyAvg,
       scrapDistributionData,
       currentDayNum,
       // Previous month additions
@@ -467,13 +892,27 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       eremaVar,
       ribbonVar,
       ecoBVar,
+      // New chart additions
+      monthlyTimelineData,
+      dailyEcoBTubetesData,
+      totalTubetesMonth,
+      overallRatioMonth,
+      dailyLossProdData,
+      overallLossPercMonth,
+      overallYieldPercMonth,
+      totalManutencaoMin,
+      totalProcessoMin,
+      totalOutrosMin,
+      totalParadasMin,
+      totalParadasHoras,
     };
   }, [productionData, ribbonEntries, goals, dashboardMonth]);
 
   const slideTitles = [
     'Visão Geral & Indicadores',
-    'Desempenho por Equipamento',
-    'Análise Gráfica & Turnos',
+    'Tendência Evolutiva (MoM/YoY)',
+    'Indisponibilidade (min)',
+    'Eco B vs Tubetes Eco B',
     'Ranking de Operadores',
   ];
 
@@ -748,38 +1187,41 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   {/* Middle Row: Best Operator Spotlight & Machine Highlights */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto">
                     {/* Melhor Operador Spotlight */}
-                    <div className="lg:col-span-1 bg-gradient-to-br from-amber-500/10 via-white to-amber-50/60 border-2 border-amber-400 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-                      <div className="flex items-center justify-between border-b-2 border-amber-200 pb-4">
-                        <div className="flex items-center gap-3">
-                          <Trophy className="w-8 h-8 lg:w-10 lg:h-10 text-amber-500" />
-                          <h2 className="text-lg md:text-xl lg:text-2xl font-black text-amber-900 uppercase tracking-wide">
-                            Melhor Operador do Mês
-                          </h2>
+                    <div className="lg:col-span-1 bg-gradient-to-br from-amber-500/10 via-white to-amber-50/60 border-2 border-amber-400 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between relative overflow-hidden">
+                      <ContinuousConfettiOverlay />
+                      <div className="relative z-10 flex flex-col justify-between h-full">
+                        <div className="flex items-center justify-between border-b-2 border-amber-200 pb-4">
+                          <div className="flex items-center gap-3">
+                            <Trophy className="w-8 h-8 lg:w-10 lg:h-10 text-amber-500" />
+                            <h2 className="text-lg md:text-xl lg:text-2xl font-black text-amber-900 uppercase tracking-wide">
+                              Melhor Operador do Mês
+                            </h2>
+                          </div>
+                          <span className="text-4xl">🥇</span>
                         </div>
-                        <span className="text-4xl">🥇</span>
-                      </div>
 
-                      <div className="my-6 flex items-center gap-6">
-                        <div className="w-24 h-24 lg:w-28 lg:h-28 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1.5 shadow-md shrink-0">
-                          <div className="w-full h-full bg-white rounded-[1.2rem] flex items-center justify-center text-4xl lg:text-5xl font-black text-amber-600 border border-amber-200">
-                            {metrics.bestOperator.name ? metrics.bestOperator.name.charAt(0).toUpperCase() : 'O'}
+                        <div className="my-6 flex items-center gap-6">
+                          <div className="w-24 h-24 lg:w-28 lg:h-28 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1.5 shadow-md shrink-0">
+                            <div className="w-full h-full bg-white rounded-[1.2rem] flex items-center justify-center text-4xl lg:text-5xl font-black text-amber-600 border border-amber-200">
+                              {metrics.bestOperator.name ? metrics.bestOperator.name.charAt(0).toUpperCase() : 'O'}
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 truncate tracking-tight">
+                              {metrics.bestOperator.name}
+                            </h3>
+                            <p className="text-sm md:text-base font-black text-amber-700 uppercase tracking-wider mt-1">
+                              Máquina: {metrics.bestOperator.machine || 'Extrusão'}
+                            </p>
+                            <div className="mt-3 text-3xl lg:text-4xl font-mono font-black text-emerald-600">
+                              {renderWeight(metrics.bestOperator.totalNet)}
+                            </div>
                           </div>
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 truncate tracking-tight">
-                            {metrics.bestOperator.name}
-                          </h3>
-                          <p className="text-sm md:text-base font-black text-amber-700 uppercase tracking-wider mt-1">
-                            Máquina: {metrics.bestOperator.machine || 'Extrusão'}
-                          </p>
-                          <div className="mt-3 text-3xl lg:text-4xl font-mono font-black text-emerald-600">
-                            {renderWeight(metrics.bestOperator.totalNet)}
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="bg-amber-100/90 border border-amber-300 rounded-2xl p-4 text-center text-xs md:text-sm font-black text-amber-900 tracking-wider uppercase">
-                        Líder em Produtividade e Eficiência da Extrusão
+                        <div className="bg-amber-100/90 border border-amber-300 rounded-2xl p-4 text-center text-xs md:text-sm font-black text-amber-900 tracking-wider uppercase">
+                          Líder em Produtividade e Eficiência da Extrusão
+                        </div>
                       </div>
                     </div>
 
@@ -894,180 +1336,266 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                 </div>
               )}
 
-              {/* SLIDE 1: GRÁFICO PROMINENTE DE COMPARAÇÃO DE EQUIPAMENTOS */}
+              {/* SLIDE 1: TENDÊNCIA EVOLUTIVA DE FILTRO DE TEMPO (MoM / YoY) */}
               {currentSlide === 1 && (
                 <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  {!isFullscreen && (
-                    <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-                      <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                        <Factory className="w-8 h-8 text-blue-600" /> Desempenho Comparativo por Equipamento
-                      </h2>
-                      <span className="text-sm md:text-base font-mono font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
-                        Mês: {dashboardMonth} vs {metrics.prevMonthName}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <TrendingUp className="w-8 h-8 text-blue-600" /> Tendência Evolutiva de Filtro de Tempo (MoM / YoY)
+                    </h2>
+                    <span className="text-sm md:text-base font-mono font-black text-blue-700 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
+                      Análise Histórica & Crescimento
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
-                    {/* Big Prominent Bar Chart */}
+                    {/* Main Composed Chart */}
                     <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <BarChart3 className="w-6 h-6 text-blue-600" /> Volume Atual vs Mês Anterior vs Ontem
+                          <Activity className="w-6 h-6 text-blue-600" /> Produção Líquida (kg) vs Taxa de Descarte (%)
                         </h3>
-                        <div className="flex items-center gap-4 md:gap-6 text-xs md:text-sm lg:text-base font-extrabold flex-wrap">
-                          <span className="flex items-center gap-2 text-blue-600">
-                            <span className="w-3.5 h-3.5 rounded-md bg-blue-600"></span> Acumulado Mês
+                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                          <span className="flex items-center gap-1.5 text-blue-600">
+                            <span className="w-3.5 h-3.5 rounded-sm bg-blue-600"></span> Vol. Produção
                           </span>
-                          <span className="flex items-center gap-2 text-slate-600">
-                            <span className="w-3.5 h-3.5 rounded-md bg-slate-500"></span> Mês Ant. ({metrics.prevMonthName})
+                          <span className="flex items-center gap-1.5 text-rose-600">
+                            <span className="w-3 h-0.5 bg-rose-600 border-2 border-rose-600"></span> Índice Descarte %
                           </span>
-                          <span className="flex items-center gap-2 text-indigo-500">
-                            <span className="w-3.5 h-3.5 rounded-md bg-indigo-500"></span> Ontem
+                          <span className="flex items-center gap-1.5 text-emerald-600">
+                            <span className="w-3 h-0.5 bg-emerald-600 border-2 border-emerald-600"></span> Eco A %
                           </span>
                         </div>
                       </div>
 
                       <div className="w-full h-[360px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={metrics.machineComparisonData} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" vertical={false} />
-                            <XAxis dataKey="name" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 16, fontWeight: 800 }} />
-                            <YAxis stroke="#475569" tick={{ fill: '#334155', fontSize: 14, fontWeight: 700 }} tickFormatter={(val: number) => formatWeightStr(val)} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '16px', fontWeight: 'bold' }}
-                              formatter={(value: number) => [formatWeightStr(value), 'Volume']}
+                          <ComposedChart data={metrics.monthlyTimelineData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                            <YAxis
+                              yAxisId="left"
+                              stroke="#2563eb"
+                              tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
+                              tickFormatter={(val: number) => formatWeightStr(val)}
                             />
-                            <Bar dataKey="Acumulado Mês" name="Acumulado Mês" fill="#2563eb" radius={[10, 10, 0, 0]} barSize={40} />
-                            <Bar dataKey="Mês Anterior" name={`Mês Anterior (${metrics.prevMonthName})`} fill="#64748b" radius={[10, 10, 0, 0]} barSize={40} />
-                            <Bar dataKey="Ontem" name="Ontem" fill="#6366f1" radius={[10, 10, 0, 0]} barSize={40} />
+                            <YAxis
+                              yAxisId="right"
+                              orientation="right"
+                              stroke="#e11d48"
+                              domain={[0, 'auto']}
+                              tick={{ fill: '#be123c', fontSize: 13, fontWeight: 700 }}
+                              tickFormatter={(val: number) => `${formatNumDot(val, 1, 1)}%`}
+                            />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '15px', fontWeight: 'bold' }}
+                              formatter={(value: any, name: any) => {
+                                if (name === 'Produção Líquida') return [formatWeightStr(Number(value)), 'Produção Líquida'];
+                                if (name === 'Taxa de Descarte %') return [`${formatNumDot(Number(value), 1, 2)}%`, 'Índice de Perda'];
+                                return [`${formatNumDot(Number(value), 1, 2)}%`, 'Envio Eco A'];
+                              }}
+                            />
+                            <Bar yAxisId="left" dataKey="producao" name="Produção Líquida" fill="#2563eb" radius={[8, 8, 0, 0]} barSize={40}>
+                              <LabelList
+                                dataKey="producao"
+                                position="top"
+                                formatter={(val: number) => formatWeightStr(val)}
+                                style={{ fontSize: 11, fontWeight: 800, fill: '#1d4ed8' }}
+                              />
+                            </Bar>
+                            <Line yAxisId="right" type="monotone" dataKey="perdaPerc" name="Taxa de Descarte %" stroke="#e11d48" strokeWidth={3} dot={{ r: 5 }} />
+                            <Line yAxisId="right" type="monotone" dataKey="ecoAPerc" name="Eco A %" stroke="#10b981" strokeWidth={3} strokeDasharray="4 4" dot={{ r: 4 }} />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Summary Cards & Breakdown */}
+                    <div className="flex flex-col justify-between gap-3">
+                      {/* Current Month MoM Performance Card */}
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-5 shadow-md">
+                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block mb-1">
+                          Crescimento Mensal (MoM)
+                        </span>
+                        <div className="text-2xl lg:text-3xl font-black text-slate-900 font-mono my-1 flex items-center gap-2">
+                          {renderWeight(metrics.prodMonthTotal)}
+                          {metrics.prodVar !== null && (
+                            <span className={`text-sm font-black px-2.5 py-0.5 rounded-xl font-mono ${
+                              metrics.prodVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {metrics.prodVar >= 0 ? '+' : ''}{formatNumDot(metrics.prodVar, 1, 1)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-bold text-slate-600 border-t border-blue-200/60 pt-1.5 mt-1">
+                          Comparado com o volume total de {renderWeight(metrics.prevMonthProdTotal)} em {metrics.prevMonthName}.
+                        </p>
+                      </div>
+
+                      {/* Yield Card & Loss Breakdown Side-by-Side Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Rendimento Físico do Processo */}
+                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 border-2 border-emerald-200 rounded-3xl p-4 shadow-md flex flex-col justify-between">
+                          <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wider block">
+                            Rendimento Físico
+                          </span>
+                          <div className="text-2xl lg:text-3xl font-mono font-black text-emerald-600 my-1">
+                            {metrics.overallYieldPercMonth.toFixed(2)}%
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-600 border-t border-emerald-200/60 pt-1 flex justify-between items-center">
+                            <span>Descarte:</span>
+                            <strong className="text-rose-700 font-mono font-black">{metrics.overallLossPercMonth.toFixed(2)}%</strong>
+                          </div>
+                        </div>
+
+                        {/* Composição de Perdas (Mês) */}
+                        <div className="bg-gradient-to-br from-amber-50 to-rose-50/40 border-2 border-amber-200 rounded-3xl p-4 shadow-md flex flex-col justify-between">
+                          <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider block">
+                            Composição de Perdas
+                          </span>
+                          <div className="space-y-1 my-1">
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-amber-800">Eco B:</span>
+                              <span className="font-mono font-black text-amber-700">{renderWeight(metrics.totalEcoB)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-rose-800">Borra:</span>
+                              <span className="font-mono font-black text-rose-700">{renderWeight(metrics.totalBorra)}</span>
+                            </div>
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-700 border-t border-amber-200/60 pt-1 flex justify-between items-center">
+                            <span>Total:</span>
+                            <strong className="font-mono text-rose-700 font-black">{renderWeight(metrics.totalEcoB + metrics.totalBorra)}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Historical Months Table */}
+                      <div className="bg-white border-2 border-slate-200 rounded-3xl p-4 shadow-md flex-1 flex flex-col max-h-[140px] overflow-hidden">
+                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1 border-b border-slate-100 pb-1 shrink-0">
+                          Histórico Mês a Mês
+                        </h4>
+                        <div
+                          ref={historyScrollRef}
+                          className="space-y-1 text-xs font-bold overflow-y-auto flex-1 pr-1 scrollbar-none"
+                        >
+                          {metrics.monthlyTimelineData.map((m) => (
+                            <div key={m.monthStr} className="flex items-center justify-between py-0.5 border-b border-slate-100 last:border-0">
+                              <span className="text-slate-800 font-extrabold">{m.fullLabel}:</span>
+                              <span className="font-mono text-slate-900">{renderWeight(m.producao)}</span>
+                              <span className={`font-mono text-xs font-black ${m.perdaPerc > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {m.perdaPerc}% descarte
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 2: HISTÓRICO OPERACIONAL DE INDISPONIBILIDADE (MIN) */}
+              {currentSlide === 2 && (
+                <div className="w-full flex-1 flex flex-col justify-between gap-6">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Clock className="w-8 h-8 text-rose-600" /> Histórico Operacional de Indisponibilidade (min)
+                    </h2>
+                    <span className="text-sm md:text-base font-mono font-black text-rose-700 bg-rose-50 px-4 py-1.5 rounded-full border border-rose-200">
+                      Gestão de Paradas
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
+                    {/* Stacked Bar Chart for Stoppages */}
+                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                          <Activity className="w-6 h-6 text-rose-600" /> Distribuição de Minutos Parados por Categoria
+                        </h3>
+                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                          <span className="flex items-center gap-1.5 text-rose-600">
+                            <span className="w-3.5 h-3.5 rounded-sm bg-rose-600"></span> Manutenção
+                          </span>
+                          <span className="flex items-center gap-1.5 text-amber-600">
+                            <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Processo
+                          </span>
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="w-3.5 h-3.5 rounded-sm bg-slate-500"></span> Outros
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-[360px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={metrics.monthlyTimelineData} margin={{ top: 20, right: 20, left: 10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                            <YAxis stroke="#475569" tick={{ fill: '#334155', fontSize: 13, fontWeight: 700 }} tickFormatter={(val: number) => `${val} min`} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
+                              formatter={(value: number, name: string) => [`${value} min (${(value / 60).toFixed(1)} h)`, name]}
+                            />
+                            <Bar dataKey="manutencao" name="Manutenção" fill="#ef4444" stackId="stoppage" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="processo" name="Processo" fill="#f59e0b" stackId="stoppage" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="outros" name="Outros" fill="#64748b" stackId="stoppage" radius={[8, 8, 0, 0]}>
+                              <LabelList
+                                dataKey="paradasTotal"
+                                position="top"
+                                formatter={(val: number) => `${val} min`}
+                                style={{ fontSize: 12, fontWeight: 800, fill: '#be123c' }}
+                              />
+                            </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
-                    {/* Detailed Cards Column */}
+                    {/* Stoppage Metric Cards */}
                     <div className="flex flex-col justify-between gap-4">
-                      {/* Cast 1 Detail */}
-                      <div className="bg-white border-2 border-blue-200 rounded-3xl p-5 shadow-md flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm md:text-base font-black text-blue-600 uppercase">
-                            <span className="w-3.5 h-3.5 rounded-full bg-blue-600"></span> Cast 1
-                          </div>
-                          <div className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-slate-900 font-mono mt-1">
-                            {renderWeight(metrics.machineMonthMap['Cast 1'] || 0)}
-                          </div>
+                      {/* Total Stoppage Time Card */}
+                      <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-6 shadow-md">
+                        <span className="text-xs font-black text-rose-700 uppercase tracking-widest block mb-1">
+                          Total de Indisponibilidade no Mês
+                        </span>
+                        <div className="text-4xl font-mono font-black text-rose-700 my-2">
+                          {metrics.totalParadasMin} <span className="text-base font-black text-rose-600">min</span>
                         </div>
-                        <div className="text-right space-y-1">
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Mês Ant. ({metrics.prevMonthName})</span>
-                            <span className="text-sm lg:text-base font-black text-slate-700 font-mono">
-                              {renderWeight(metrics.prevMachineMap['Cast 1'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
-                              {metrics.cast1Var !== null && (
-                                <span className={`ml-1 text-xs ${metrics.cast1Var >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  ({metrics.cast1Var >= 0 ? '+' : ''}{metrics.cast1Var.toFixed(1)}%)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Ontem</span>
-                            <span className="text-sm lg:text-base font-black text-blue-600 font-mono">
-                              {renderWeight(metrics.machineYesterdayMap['Cast 1'] || 0, 'text-[0.7em] font-extrabold text-blue-600 ml-0.5')}
-                            </span>
-                          </div>
-                        </div>
+                        <p className="text-xs font-bold text-slate-600 border-t border-rose-200/60 pt-2 mt-2">
+                          Equivalente a <strong className="text-slate-900 font-mono font-black">{metrics.totalParadasHoras} horas</strong> de paradas na produção.
+                        </p>
                       </div>
 
-                      {/* Cast 2 Detail */}
-                      <div className="bg-white border-2 border-indigo-200 rounded-3xl p-5 shadow-md flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm md:text-base font-black text-indigo-600 uppercase">
-                            <span className="w-3.5 h-3.5 rounded-full bg-indigo-600"></span> Cast 2
-                          </div>
-                          <div className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-slate-900 font-mono mt-1">
-                            {renderWeight(metrics.machineMonthMap['Cast 2'] || 0)}
-                          </div>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Mês Ant. ({metrics.prevMonthName})</span>
-                            <span className="text-sm lg:text-base font-black text-slate-700 font-mono">
-                              {renderWeight(metrics.prevMachineMap['Cast 2'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
-                              {metrics.cast2Var !== null && (
-                                <span className={`ml-1 text-xs ${metrics.cast2Var >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  ({metrics.cast2Var >= 0 ? '+' : ''}{metrics.cast2Var.toFixed(1)}%)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Ontem</span>
-                            <span className="text-sm lg:text-base font-black text-indigo-600 font-mono">
-                              {renderWeight(metrics.machineYesterdayMap['Cast 2'] || 0, 'text-[0.7em] font-extrabold text-indigo-600 ml-0.5')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                      {/* Stoppage Causes Breakdown Card */}
+                      <div className="bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-md flex-1 flex flex-col justify-between space-y-3">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">
+                          Detalhamento de Minutos
+                        </h4>
 
-                      {/* Erema Detail */}
-                      <div className="bg-white border-2 border-teal-200 rounded-3xl p-5 shadow-md flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm md:text-base font-black text-teal-600 uppercase">
-                            <span className="w-3.5 h-3.5 rounded-full bg-teal-600"></span> Erema
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-2xl">
+                            <div>
+                              <span className="text-xs font-black text-rose-800 uppercase block">Manutenção</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Corretiva / Preventiva</span>
+                            </div>
+                            <span className="text-lg font-mono font-black text-rose-700">{metrics.totalManutencaoMin} min</span>
                           </div>
-                          <div className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-slate-900 font-mono mt-1">
-                            {renderWeight(metrics.eremaMonthTotal)}
-                          </div>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Mês Ant. ({metrics.prevMonthName})</span>
-                            <span className="text-sm lg:text-base font-black text-slate-700 font-mono">
-                              {renderWeight(metrics.prevMachineMap['Erema'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
-                              {metrics.eremaVar !== null && (
-                                <span className={`ml-1 text-xs ${metrics.eremaVar >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  ({metrics.eremaVar >= 0 ? '+' : ''}{metrics.eremaVar.toFixed(1)}%)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Ontem</span>
-                            <span className="text-sm lg:text-base font-black text-teal-600 font-mono">
-                              {renderWeight(metrics.machineYesterdayMap['Erema'] || 0, 'text-[0.7em] font-extrabold text-teal-600 ml-0.5')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Corte de Fita Detail */}
-                      <div className="bg-white border-2 border-purple-200 rounded-3xl p-5 shadow-md flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm md:text-base font-black text-purple-600 uppercase">
-                            <span className="w-3.5 h-3.5 rounded-full bg-purple-600"></span> Corte de Fita
+                          <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                            <div>
+                              <span className="text-xs font-black text-amber-800 uppercase block">Processo</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Ajustes & Trocas</span>
+                            </div>
+                            <span className="text-lg font-mono font-black text-amber-700">{metrics.totalProcessoMin} min</span>
                           </div>
-                          <div className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-slate-900 font-mono mt-1">
-                            {renderM2(metrics.ribbonMonthM2)}
-                          </div>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Mês Ant. ({metrics.prevMonthName})</span>
-                            <span className="text-sm lg:text-base font-black text-slate-700 font-mono">
-                              {renderM2(metrics.prevMonthRibbonM2, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
-                              {metrics.ribbonVar !== null && (
-                                <span className={`ml-1 text-xs ${metrics.ribbonVar >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  ({metrics.ribbonVar >= 0 ? '+' : ''}{metrics.ribbonVar.toFixed(1)}%)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-slate-400 uppercase block">Ontem</span>
-                            <span className="text-sm lg:text-base font-black text-purple-600 font-mono">
-                              {renderM2(metrics.ribbonYesterdayM2, 'text-[0.7em] font-extrabold text-purple-600 ml-0.5')}
-                            </span>
+
+                          <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                            <div>
+                              <span className="text-xs font-black text-slate-800 uppercase block">Outros</span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Eventos Diversos</span>
+                            </div>
+                            <span className="text-lg font-mono font-black text-slate-700">{metrics.totalOutrosMin} min</span>
                           </div>
                         </div>
                       </div>
@@ -1076,123 +1604,127 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                 </div>
               )}
 
-              {/* SLIDE 2: EVOLUÇÃO DIÁRIA & GRÁFICO DE TURNOS E PERDAS */}
-              {currentSlide === 2 && (
+              {/* SLIDE 3: CORRELAÇÃO ESTRUTURADA: ECO B VS TUBETES ECO B */}
+              {currentSlide === 3 && (
                 <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  {!isFullscreen && (
-                    <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-                      <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                        <TrendingUp className="w-8 h-8 text-emerald-600" /> Gráficos de Evolução Diária & Perdas
-                      </h2>
-                      <span className="text-sm md:text-base font-mono font-black text-emerald-700 bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-200">
-                        Análise de Tendência
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Scale className="w-8 h-8 text-amber-600" /> Correlação Estruturada: Eco B vs Tubetes Eco B
+                    </h2>
+                    <span className="text-sm md:text-base font-mono font-black text-amber-700 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">
+                      Análise de Densidade & Insumos
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
-                    {/* Area Chart: Daily Progression */}
+                    {/* Dual Axis Composed Chart */}
                     <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-6 h-6 text-emerald-600" /> Evolução do Volume de Produção Diário
+                          <Activity className="w-6 h-6 text-amber-600" /> Histórico Diário: Eco B (Barras, Eixo Esq.) vs Tubetes (Linha, Eixo Dir.)
                         </h3>
-                        <div className="flex items-center gap-4 text-sm md:text-base font-extrabold">
-                          <span className="flex items-center gap-2 text-blue-600">
-                            <span className="w-3.5 h-3.5 rounded-full bg-blue-600"></span> Cast 1
+                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                          <span className="flex items-center gap-1.5 text-amber-600">
+                            <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Eco B (kg)
                           </span>
-                          <span className="flex items-center gap-2 text-indigo-600">
-                            <span className="w-3.5 h-3.5 rounded-full bg-indigo-600"></span> Cast 2
+                          <span className="flex items-center gap-1.5 text-blue-600">
+                            <span className="w-3 h-0.5 bg-blue-600 border-2 border-blue-600"></span> Tubetes (un)
                           </span>
                         </div>
                       </div>
 
                       <div className="w-full h-[360px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={metrics.dailyChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="colorCast1" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8} />
-                                <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1} />
-                              </linearGradient>
-                              <linearGradient id="colorCast2" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8} />
-                                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.1} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" vertical={false} />
-                            <XAxis dataKey="day" stroke="#475569" tick={{ fill: '#334155', fontSize: 13, fontWeight: 800 }} />
-                            <YAxis stroke="#475569" tick={{ fill: '#334155', fontSize: 13, fontWeight: 700 }} tickFormatter={(val: number) => formatWeightStr(val)} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '16px', fontWeight: 'bold' }}
-                              formatter={(value: number) => [formatWeightStr(value), 'Volume']}
+                          <ComposedChart data={metrics.dailyEcoBTubetesData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis dataKey="dateBR" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                            <YAxis
+                              yAxisId="left"
+                              stroke="#d97706"
+                              tick={{ fill: '#b45309', fontSize: 13, fontWeight: 700 }}
+                              tickFormatter={(val: number) => formatWeightStr(val)}
                             />
-                            <Area type="monotone" dataKey="cast1" name="Cast 1" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorCast1)" stackId="1" />
-                            <Area type="monotone" dataKey="cast2" name="Cast 2" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorCast2)" stackId="1" />
-                          </AreaChart>
+                            <YAxis
+                              yAxisId="right"
+                              orientation="right"
+                              stroke="#2563eb"
+                              tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
+                              tickFormatter={(val: number) => `${val} un`}
+                            />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
+                              formatter={(value: any, name: string) => {
+                                if (name === 'Eco B Gerado') return [formatWeightStr(Number(value)), 'Eco B Gerado'];
+                                return [`${Number(value).toLocaleString('pt-BR')} un`, 'Tubetes Usados'];
+                              }}
+                            />
+                            <Bar yAxisId="left" dataKey="ecoB" name="Eco B Gerado" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={36}>
+                              <LabelList
+                                dataKey="ecoB"
+                                position="top"
+                                formatter={(val: number) => (val > 0 ? formatWeightStr(val) : '')}
+                                style={{ fontSize: 10, fontWeight: 800, fill: '#b45309' }}
+                              />
+                            </Bar>
+                            <Line yAxisId="right" type="monotone" dataKey="tubetesEcoB" name="Tubetes Usados" stroke="#2563eb" strokeWidth={3} dot={{ r: 5 }}>
+                              <LabelList
+                                dataKey="tubetesEcoB"
+                                position="top"
+                                formatter={(val: number) => (val > 0 ? `${val} un` : '')}
+                                style={{ fontSize: 10, fontWeight: 800, fill: '#1d4ed8' }}
+                              />
+                            </Line>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
-                    {/* Scrap / Loss Distribution Donut Chart */}
-                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-                      <h3 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Flame className="w-6 h-6 text-amber-500" /> Distribuição de Refilo e Perdas
-                      </h3>
-
-                      <div className="w-full h-[240px] relative flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={metrics.scrapDistributionData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={65}
-                              outerRadius={95}
-                              paddingAngle={5}
-                              dataKey="value"
-                            >
-                              {metrics.scrapDistributionData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
-                              formatter={(val: number) => [formatWeightStr(val), 'Volume']}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
+                    {/* KPI Cards Block */}
+                    <div className="flex flex-col justify-between gap-4">
+                      {/* Total Eco B Generated Card */}
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-6 shadow-md">
+                        <span className="text-xs font-black text-amber-800 uppercase tracking-widest block mb-1">
+                          Volume Total de Eco B (Mês)
+                        </span>
+                        <div className="text-4xl font-mono font-black text-amber-600 my-2">
+                          {renderWeight(metrics.totalEcoB)}
+                        </div>
+                        <p className="text-xs font-bold text-slate-600 border-t border-amber-200/60 pt-2 mt-2">
+                          Eco BP: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBP)}</strong> | Eco BM: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBM)}</strong>
+                        </p>
                       </div>
 
-                      <div className="space-y-3 pt-4 border-t-2 border-slate-100 mt-2">
-                        {metrics.scrapDistributionData.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-sm lg:text-base font-bold text-slate-700">
-                            <span className="flex items-center gap-2">
-                              <span className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }}></span>
-                              {item.name}:
-                            </span>
-                            <span className="font-mono font-black text-slate-900">{renderWeight(item.value, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}</span>
-                          </div>
-                        ))}
+                      {/* Tubetes Consumed & Ratio Card */}
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-6 shadow-md">
+                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block mb-1">
+                          Tubetes Eco B Consumidos
+                        </span>
+                        <div className="text-4xl font-mono font-black text-blue-800 my-2">
+                          {metrics.totalTubetesMonth.toLocaleString('pt-BR')} <span className="text-base font-black text-blue-600">unidades</span>
+                        </div>
+                        <div className="mt-3 p-3 bg-white/80 border border-blue-200 rounded-2xl flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-600 uppercase">Relação Média:</span>
+                          <span className="text-lg font-mono font-black text-emerald-600">
+                            {renderWeight(metrics.overallRatioMonth, 'text-[0.6em] font-black opacity-80 ml-0.5', '/ Tubete')}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* SLIDE 3: RANKING DE OPERADORES DE EXTRUSÃO */}
-              {currentSlide === 3 && (
+              {/* SLIDE 4: RANKING DE OPERADORES DE EXTRUSÃO */}
+              {currentSlide === 4 && (
                 <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  {!isFullscreen && (
-                    <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-                      <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                        <Award className="w-8 h-8 text-amber-500" /> Ranking de Melhores Operadores do Mês
-                      </h2>
-                      <span className="text-sm md:text-base font-mono font-black text-amber-700 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">
-                        Líderes de Produtividade
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Award className="w-8 h-8 text-amber-500" /> Ranking de Melhores Operadores do Mês
+                    </h2>
+                    <span className="text-sm md:text-base font-mono font-black text-amber-700 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">
+                      Líderes de Produtividade
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
                     {metrics.topOperators.slice(0, 6).map((op, index) => {
@@ -1210,19 +1742,22 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                               : 'border-slate-200'
                           }`}
                         >
-                          <div className={`text-3xl lg:text-4xl font-black w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center rounded-2xl shrink-0 border ${
-                            index === 0
-                              ? 'bg-amber-400 text-slate-900 border-amber-300 shadow-md'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}>
-                            {medal}
-                          </div>
+                          {index === 0 && <ContinuousConfettiOverlay />}
+                          <div className="relative z-10 flex items-center gap-6 w-full">
+                            <div className={`text-3xl lg:text-4xl font-black w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center rounded-2xl shrink-0 border ${
+                              index === 0
+                                ? 'bg-amber-400 text-slate-900 border-amber-300 shadow-md'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}>
+                              {medal}
+                            </div>
 
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-2xl md:text-3xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
-                            <p className="text-sm md:text-base font-bold text-slate-500 uppercase tracking-wider mt-1">{op.machine}</p>
-                            <div className="text-3xl lg:text-4xl font-mono font-black text-emerald-600 mt-2">
-                              {renderWeight(op.totalNet)}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-2xl md:text-3xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
+                              <p className="text-sm md:text-base font-bold text-slate-500 uppercase tracking-wider mt-1">{op.machine}</p>
+                              <div className="text-3xl lg:text-4xl font-mono font-black text-emerald-600 mt-2">
+                                {renderWeight(op.totalNet)}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1308,20 +1843,23 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
             </div>
 
             {/* Best Operator Card */}
-            <div className="bg-gradient-to-br from-amber-50 to-white border-2 border-amber-300 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-              <div>
-                <span className="text-sm font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
-                  <Trophy className="w-6 h-6 text-amber-500" /> Destaque do Mês
-                </span>
-                <div className="my-6">
-                  <h4 className="text-3xl font-black text-slate-900">{metrics.bestOperator.name}</h4>
-                  <p className="text-sm font-black text-amber-700 uppercase mt-2">
-                    Equipamento: {metrics.bestOperator.machine}
-                  </p>
+            <div className="bg-gradient-to-br from-amber-50 to-white border-2 border-amber-300 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between relative overflow-hidden">
+              <ContinuousConfettiOverlay />
+              <div className="relative z-10 flex flex-col justify-between h-full">
+                <div>
+                  <span className="text-sm font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
+                    <Trophy className="w-6 h-6 text-amber-500" /> Destaque do Mês
+                  </span>
+                  <div className="my-6">
+                    <h4 className="text-3xl font-black text-slate-900">{metrics.bestOperator.name}</h4>
+                    <p className="text-sm font-black text-amber-700 uppercase mt-2">
+                      Equipamento: {metrics.bestOperator.machine}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-4xl font-mono font-black text-emerald-600">
-                {renderWeight(metrics.bestOperator.totalNet)}
+                <div className="text-4xl font-mono font-black text-emerald-600">
+                  {renderWeight(metrics.bestOperator.totalNet)}
+                </div>
               </div>
             </div>
           </div>

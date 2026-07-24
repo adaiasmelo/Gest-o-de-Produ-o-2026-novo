@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip as RechartsTooltip, Legend, LineChart, Line, ComposedChart, Area
+  Tooltip as RechartsTooltip, Legend, LineChart, Line, ComposedChart, Area, LabelList
 } from 'recharts';
 import { Employee } from '../types';
 
@@ -1960,7 +1960,14 @@ export const BiAnalyticsView: React.FC<BiAnalyticsViewProps> = ({ productionData
                           />
                           <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                           <Bar yAxisId="left" dataKey="ecoB" name="Eco B" fill="#3b82f6" opacity={0.8} radius={[4, 4, 0, 0]} />
-                          <Line yAxisId="right" type="monotone" dataKey="tubetesEcoB" name="Tubetes" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="tubetesEcoB" name="Tubetes" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }}>
+                            <LabelList
+                              dataKey="tubetesEcoB"
+                              position="top"
+                              formatter={(val: number) => (val > 0 ? `${val} un` : '')}
+                              style={{ fontSize: 9, fontWeight: 800, fill: '#d97706' }}
+                            />
+                          </Line>
                         </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
