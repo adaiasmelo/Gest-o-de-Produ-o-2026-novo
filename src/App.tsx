@@ -7,7 +7,7 @@ import {
   LogOut, Search, Activity, Package, ChevronRight, TrendingDown, Upload, Info,
   UserPlus, Download, AlertCircle, FileSpreadsheet, Scale, FileText, Menu, Fingerprint, Smartphone, Bell, Volume2, Share, ExternalLink, Mail, Copy,
   Home as HomeIcon, WifiOff, Image as ImageIcon, LayoutDashboard, BarChart3, ChevronDown,
-  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils
+  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils, Tv
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -43,6 +43,7 @@ import { MaintenanceTab } from './components/MaintenanceTab';
 import { VacationPlanning } from './components/VacationPlanning';
 import { OperationalTraining } from './components/OperationalTraining';
 import { LunchSchedule } from './components/LunchSchedule';
+import { ProjectionDashboard } from './components/ProjectionDashboard';
 
 
 const TRAINING_MODULES = [
@@ -756,7 +757,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'extrusion' | 'ribbon' | 'personnel' | 'evaluations' | 'maintenance'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'extrusion' | 'ribbon' | 'personnel' | 'evaluations' | 'maintenance' | 'projection'>('home');
   const [personnelSubView, setPersonnelSubView] = useState<'board' | 'vacations' | 'training' | 'lunch'>('board');
   const [isExtrusionMenuOpen, setIsExtrusionMenuOpen] = useState(false);
   const [isRibbonMenuOpen, setIsRibbonMenuOpen] = useState(false);
@@ -7919,6 +7920,19 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
           {canEditProduction && (
             <button onClick={() => { setEditingEntry(null); setIsModalOpen(true); }} className="bg-blue-600 text-white p-2.5 md:p-3.5 rounded-xl md:rounded-2xl shadow-xl hover:bg-blue-700 active:scale-95 transition-all"><Plus size={18} className="md:w-[22px] md:h-[22px]" /></button>
           )}
+          <button 
+            onClick={() => {
+              setActiveTab('projection');
+              if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+              }
+            }}
+            className="p-2.5 md:p-3 px-3 md:px-4 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl md:rounded-2xl transition-all shadow-sm hover:bg-indigo-100 flex items-center gap-2 active:scale-95 cursor-pointer"
+            title="Projetar em TV / Tela Cheia"
+          >
+            <Tv size={18} className="text-indigo-600 shrink-0 md:w-5 md:h-5" />
+            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider hidden sm:inline whitespace-nowrap">Projeção TV</span>
+          </button>
           {canManageSettings && (
             <button onClick={() => setIsSettingsModalOpen(true)} className="p-3 md:p-3.5 text-blue-600 bg-blue-50 border border-blue-100 rounded-xl md:rounded-2xl transition-all shadow-sm active:scale-95" title="Configurações"><Settings size={20} className="md:w-[22px] md:h-[22px]" /></button>
           )}
@@ -8178,6 +8192,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
           )}
  
           <button onClick={() => setActiveTab('maintenance')} className={`flex-1 shrink-0 min-w-max flex items-center justify-center gap-1 px-3 py-2 md:px-6 md:py-3.5 rounded-xl md:rounded-[1.4rem] text-[10px] md:text-[11px] font-black uppercase transition-all ${activeTab === 'maintenance' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500'}`}><Wrench className="w-3.5 h-3.5 md:w-[18px] md:h-[18px] shrink-0 mr-0.5"/> <span className="whitespace-nowrap">Manutenção</span></button>
+          <button onClick={() => setActiveTab('projection')} className={`flex-1 shrink-0 min-w-max flex items-center justify-center gap-1 px-3 py-2 md:px-6 md:py-3.5 rounded-xl md:rounded-[1.4rem] text-[10px] md:text-[11px] font-black uppercase transition-all ${activeTab === 'projection' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}><Tv className="w-3.5 h-3.5 md:w-[18px] md:h-[18px] shrink-0 mr-0.5 text-indigo-400 animate-pulse"/> <span className="whitespace-nowrap">Projeção</span></button>
         </div>
       </div>
 
@@ -14568,6 +14583,19 @@ Produção total:
 
         {activeTab === 'maintenance' && (
           <MaintenanceTab setPdfModal={setPdfModal} loggedUser={loggedUser} employees={employees} />
+        )}
+
+        {activeTab === 'projection' && (
+          <ProjectionDashboard
+            productionData={productionData}
+            ribbonEntries={ribbonEntries}
+            goals={goals}
+            dashboardMonth={dashboardMonth}
+            collaborators={collaborators}
+            systemName={systemName}
+            systemLogo={systemLogo || undefined}
+            onClose={() => setActiveTab('home')}
+          />
         )}
 
 
