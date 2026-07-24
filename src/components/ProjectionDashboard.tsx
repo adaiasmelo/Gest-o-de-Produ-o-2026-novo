@@ -143,35 +143,6 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const historyScrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll monthly timeline list on Slide 1 proportional to slide duration
-  useEffect(() => {
-    if (currentSlide !== 1) return;
-    const container = historyScrollRef.current;
-    if (!container) return;
-
-    let animId: number;
-    let startTime: number | null = null;
-
-    const step = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const maxScroll = container.scrollHeight - container.clientHeight;
-
-      if (maxScroll > 0) {
-        const durationMs = slideDuration * 1000;
-        const elapsed = (timestamp - startTime) % durationMs;
-        const progress = elapsed / durationMs;
-        container.scrollTop = progress * maxScroll;
-      }
-
-      animId = requestAnimationFrame(step);
-    };
-
-    animId = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(animId);
-    };
-  }, [currentSlide, slideDuration]);
-
   // Clock tick
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -908,6 +879,39 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     };
   }, [productionData, ribbonEntries, goals, dashboardMonth]);
 
+  // Auto-scroll monthly timeline list on Slide 1 proportional to slow reading speed
+  useEffect(() => {
+    if (currentSlide !== 1 && viewMode !== 'grid') return;
+
+    let animId: number;
+    let startTime: number | null = null;
+
+    const step = (timestamp: number) => {
+      const container = historyScrollRef.current;
+      if (container) {
+        if (!startTime) {
+          startTime = timestamp;
+          container.scrollTop = 0;
+        }
+        const maxScroll = container.scrollHeight - container.clientHeight;
+
+        if (maxScroll > 0) {
+          const pixelsPerSecond = 16; // Slower, comfortable reading speed
+          const elapsedSec = (timestamp - startTime) / 1000;
+          container.scrollTop = (elapsedSec * pixelsPerSecond) % maxScroll;
+        }
+      }
+
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [currentSlide, slideDuration, viewMode, metrics.monthlyTimelineData]);
+
   const slideTitles = [
     'Visão Geral & Indicadores',
     'Tendência Evolutiva (MoM/YoY)',
@@ -1338,265 +1342,310 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 1: TENDÊNCIA EVOLUTIVA DE FILTRO DE TEMPO (MoM / YoY) */}
               {currentSlide === 1 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                <div className="w-full flex-1 flex flex-col justify-between gap-4 overflow-hidden h-full">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
                     <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
                       <TrendingUp className="w-8 h-8 text-blue-600" /> Tendência Evolutiva de Filtro de Tempo (MoM / YoY)
                     </h2>
-                    <span className="text-sm md:text-base font-mono font-black text-blue-700 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
+                    <span className="text-sm md:text-base font-mono font-black text-blue-700 bg-blue-50 px-4 py-1 rounded-full border border-blue-200">
                       Análise Histórica & Crescimento
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
-                    {/* Main Composed Chart */}
-                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-6 h-6 text-blue-600" /> Produção Líquida (kg) vs Taxa de Descarte (%)
-                        </h3>
-                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
-                          <span className="flex items-center gap-1.5 text-blue-600">
-                            <span className="w-3.5 h-3.5 rounded-sm bg-blue-600"></span> Vol. Produção
-                          </span>
-                          <span className="flex items-center gap-1.5 text-rose-600">
-                            <span className="w-3 h-0.5 bg-rose-600 border-2 border-rose-600"></span> Índice Descarte %
-                          </span>
-                          <span className="flex items-center gap-1.5 text-emerald-600">
-                            <span className="w-3 h-0.5 bg-emerald-600 border-2 border-emerald-600"></span> Eco A %
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="w-full h-[360px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={metrics.monthlyTimelineData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                            <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
-                            <YAxis
-                              yAxisId="left"
-                              stroke="#2563eb"
-                              tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
-                              tickFormatter={(val: number) => formatWeightStr(val)}
-                            />
-                            <YAxis
-                              yAxisId="right"
-                              orientation="right"
-                              stroke="#e11d48"
-                              domain={[0, 'auto']}
-                              tick={{ fill: '#be123c', fontSize: 13, fontWeight: 700 }}
-                              tickFormatter={(val: number) => `${formatNumDot(val, 1, 1)}%`}
-                            />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '15px', fontWeight: 'bold' }}
-                              formatter={(value: any, name: any) => {
-                                if (name === 'Produção Líquida') return [formatWeightStr(Number(value)), 'Produção Líquida'];
-                                if (name === 'Taxa de Descarte %') return [`${formatNumDot(Number(value), 1, 2)}%`, 'Índice de Perda'];
-                                return [`${formatNumDot(Number(value), 1, 2)}%`, 'Envio Eco A'];
-                              }}
-                            />
-                            <Bar yAxisId="left" dataKey="producao" name="Produção Líquida" fill="#2563eb" radius={[8, 8, 0, 0]} barSize={40}>
-                              <LabelList
-                                dataKey="producao"
-                                position="top"
-                                formatter={(val: number) => formatWeightStr(val)}
-                                style={{ fontSize: 11, fontWeight: 800, fill: '#1d4ed8' }}
-                              />
-                            </Bar>
-                            <Line yAxisId="right" type="monotone" dataKey="perdaPerc" name="Taxa de Descarte %" stroke="#e11d48" strokeWidth={3} dot={{ r: 5 }} />
-                            <Line yAxisId="right" type="monotone" dataKey="ecoAPerc" name="Eco A %" stroke="#10b981" strokeWidth={3} strokeDasharray="4 4" dot={{ r: 4 }} />
-                          </ComposedChart>
-                        </ResponsiveContainer>
+                  {/* TOP: Main Composed Chart (Occupies largest vertical area) */}
+                  <div className="w-full flex-1 min-h-[280px] bg-white border-2 border-slate-200 rounded-3xl p-5 lg:p-6 shadow-md flex flex-col justify-between overflow-hidden">
+                    <div className="flex items-center justify-between mb-2 shrink-0">
+                      <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-6 h-6 text-blue-600" /> Produção Líquida (kg) vs Taxa de Descarte (%)
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                        <span className="flex items-center gap-1.5 text-blue-600">
+                          <span className="w-3.5 h-3.5 rounded-sm bg-blue-600"></span> Vol. Produção
+                        </span>
+                        <span className="flex items-center gap-1.5 text-rose-600">
+                          <span className="w-3 h-0.5 bg-rose-600 border-2 border-rose-600"></span> Índice Descarte %
+                        </span>
+                        <span className="flex items-center gap-1.5 text-emerald-600">
+                          <span className="w-3 h-0.5 bg-emerald-600 border-2 border-emerald-600"></span> Eco A %
+                        </span>
                       </div>
                     </div>
 
-                    {/* Summary Cards & Breakdown */}
-                    <div className="flex flex-col justify-between gap-3">
-                      {/* Current Month MoM Performance Card */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-5 shadow-md">
-                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block mb-1">
-                          Crescimento Mensal (MoM)
-                        </span>
-                        <div className="text-2xl lg:text-3xl font-black text-slate-900 font-mono my-1 flex items-center gap-2">
-                          {renderWeight(metrics.prodMonthTotal)}
-                          {metrics.prodVar !== null && (
-                            <span className={`text-sm font-black px-2.5 py-0.5 rounded-xl font-mono ${
-                              metrics.prodVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                            }`}>
-                              {metrics.prodVar >= 0 ? '+' : ''}{formatNumDot(metrics.prodVar, 1, 1)}%
+                    <div className="w-full flex-1 min-h-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={metrics.monthlyTimelineData} margin={{ top: 55, right: 30, left: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                          <YAxis
+                            yAxisId="left"
+                            stroke="#2563eb"
+                            tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
+                            tickFormatter={(val: number) => formatWeightStr(val)}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            stroke="#e11d48"
+                            domain={[0, 'auto']}
+                            tick={{ fill: '#be123c', fontSize: 13, fontWeight: 700 }}
+                            tickFormatter={(val: number) => `${formatNumDot(val, 1, 1)}%`}
+                          />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '15px', fontWeight: 'bold' }}
+                            formatter={(value: any, name: any) => {
+                              if (name === 'Produção Líquida') return [formatWeightStr(Number(value)), 'Produção Líquida'];
+                              if (name === 'Taxa de Descarte %') return [`${formatNumDot(Number(value), 1, 2)}%`, 'Índice de Perda'];
+                              return [`${formatNumDot(Number(value), 1, 2)}%`, 'Envio Eco A'];
+                            }}
+                          />
+                          <Bar yAxisId="left" dataKey="producao" name="Produção Líquida" fill="#2563eb" radius={[8, 8, 0, 0]} barSize={42}>
+                            <LabelList
+                              dataKey="producao"
+                              content={(props: any) => {
+                                const { x, y, width, value, index, payload } = props;
+                                const item = payload || metrics.monthlyTimelineData[index];
+                                if (!item) return null;
+
+                                const prodVal = item.producao ?? value;
+                                let numStr = '';
+                                let unitStr = 'kg';
+                                if (prodVal !== undefined && prodVal !== null) {
+                                  const absVal = Math.abs(prodVal);
+                                  if (absVal >= 1000) {
+                                    numStr = formatNumDot(prodVal / 1000, 1, 1);
+                                    unitStr = 'T';
+                                  } else {
+                                    numStr = formatNumDot(prodVal, 0, 0);
+                                  }
+                                }
+
+                                const perdaVal = item.perdaPerc;
+                                const perdaStr = (perdaVal !== undefined && perdaVal !== null) ? `${formatNumDot(perdaVal, 1, 1)}%` : '';
+
+                                const ecoAVal = item.ecoAPerc;
+                                const ecoAStr = (ecoAVal !== undefined && ecoAVal !== null) ? `${formatNumDot(ecoAVal, 1, 1)}%` : '';
+
+                                return (
+                                  <g transform={`translate(${x + width / 2},${y - 50})`}>
+                                    {/* Line 1: Vol Produção (Blue) */}
+                                    <text textAnchor="middle" y={0} fill="#1d4ed8" fontWeight={900}>
+                                      <tspan fontSize={14}>{numStr}</tspan>
+                                      <tspan fontSize={10} fontWeight={900} dx={1}>{unitStr}</tspan>
+                                    </text>
+
+                                    {/* Line 2: Taxa de Descarte % (Rose/Red) */}
+                                    {perdaStr && (
+                                      <text textAnchor="middle" y={16} fill="#e11d48" fontWeight={900} fontSize={13}>
+                                        {perdaStr}
+                                      </text>
+                                    )}
+
+                                    {/* Line 3: Eco A % (Emerald/Green) */}
+                                    {ecoAStr && (
+                                      <text textAnchor="middle" y={32} fill="#059669" fontWeight={900} fontSize={13}>
+                                        {ecoAStr}
+                                      </text>
+                                    )}
+                                  </g>
+                                );
+                              }}
+                            />
+                          </Bar>
+                          <Line yAxisId="right" type="monotone" dataKey="perdaPerc" name="Taxa de Descarte %" stroke="#e11d48" strokeWidth={3} dot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="ecoAPerc" name="Eco A %" stroke="#10b981" strokeWidth={3} strokeDasharray="4 4" dot={{ r: 4 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* BOTTOM: 4 Cards Row (Equal width side by side) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full shrink-0 h-[200px]">
+                    {/* Card 1: Crescimento Mensal (MoM) */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs lg:text-sm font-black text-blue-900 uppercase tracking-wider block border-b border-blue-200/60 pb-1.5">
+                        Crescimento Mensal (MoM)
+                      </span>
+                      <div className="text-3xl lg:text-4xl xl:text-5xl font-black text-slate-900 font-mono my-auto flex items-center justify-between gap-2 flex-wrap">
+                        <span>{renderWeight(metrics.prodMonthTotal)}</span>
+                        {metrics.prodVar !== null && (
+                          <span className={`text-base lg:text-lg font-black px-3 py-1 rounded-xl font-mono shadow-sm ${
+                            metrics.prodVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {metrics.prodVar >= 0 ? '+' : ''}{formatNumDot(metrics.prodVar, 1, 1)}%
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-blue-200/60 pt-2 flex justify-between items-center">
+                        <span>vs {metrics.prevMonthName}:</span>
+                        <strong className="font-mono font-black text-slate-900 text-base lg:text-lg">{renderWeight(metrics.prevMonthProdTotal)}</strong>
+                      </p>
+                    </div>
+
+                    {/* Card 2: Rendimento Físico */}
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 border-2 border-emerald-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs lg:text-sm font-black text-emerald-900 uppercase tracking-wider block border-b border-emerald-200/60 pb-1.5">
+                        Rendimento Físico
+                      </span>
+                      <div className="text-4xl lg:text-5xl xl:text-6xl font-mono font-black text-emerald-600 my-auto text-center leading-none tracking-tight">
+                        {metrics.overallYieldPercMonth.toFixed(2)}%
+                      </div>
+                      <div className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-emerald-200/60 pt-2 flex justify-between items-center">
+                        <span>Taxa de Descarte:</span>
+                        <strong className="text-rose-700 font-mono font-black text-lg lg:text-xl">{metrics.overallLossPercMonth.toFixed(2)}%</strong>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Composição de Perdas */}
+                    <div className="bg-gradient-to-br from-amber-50 to-rose-50/40 border-2 border-amber-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs lg:text-sm font-black text-amber-900 uppercase tracking-wider block border-b border-amber-200/60 pb-1.5">
+                        Composição de Perdas
+                      </span>
+                      <div className="space-y-2 my-auto">
+                        <div className="flex items-center justify-between text-base lg:text-lg font-extrabold">
+                          <span className="text-amber-900">Eco B (Refilo):</span>
+                          <span className="font-mono font-black text-amber-700 text-lg lg:text-2xl">{renderWeight(metrics.totalEcoB)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-base lg:text-lg font-extrabold">
+                          <span className="text-rose-900">Borra Total:</span>
+                          <span className="font-mono font-black text-rose-700 text-lg lg:text-2xl">{renderWeight(metrics.totalBorra)}</span>
+                        </div>
+                      </div>
+                      <div className="text-base lg:text-lg font-black text-slate-800 border-t border-amber-200/60 pt-2 flex justify-between items-center">
+                        <span>Total Descarte:</span>
+                        <strong className="font-mono text-rose-700 font-black text-xl lg:text-2xl">{renderWeight(metrics.totalEcoB + metrics.totalBorra)}</strong>
+                      </div>
+                    </div>
+
+                    {/* Card 4: Histórico Mês a Mês (Auto Scroll) */}
+                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col h-full overflow-hidden">
+                      <h4 className="text-xs lg:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1 shrink-0">
+                        Histórico Mês a Mês
+                      </h4>
+                      <div
+                        ref={historyScrollRef}
+                        className="space-y-1.5 text-xs lg:text-sm font-bold overflow-y-auto flex-1 pr-1 scrollbar-none"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                      >
+                        {(metrics.monthlyTimelineData.length > 0
+                          ? Array(10).fill(metrics.monthlyTimelineData).flat()
+                          : []
+                        ).map((m, idx) => (
+                          <div key={`${m.monthStr}-${idx}`} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 shrink-0">
+                            <span className="text-slate-800 font-extrabold">{m.fullLabel}:</span>
+                            <span className="font-mono text-slate-900 font-black">{renderWeight(m.producao)}</span>
+                            <span className={`font-mono text-xs lg:text-sm font-black ${m.perdaPerc > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {m.perdaPerc}% descarte
                             </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] font-bold text-slate-600 border-t border-blue-200/60 pt-1.5 mt-1">
-                          Comparado com o volume total de {renderWeight(metrics.prevMonthProdTotal)} em {metrics.prevMonthName}.
-                        </p>
-                      </div>
-
-                      {/* Yield Card & Loss Breakdown Side-by-Side Grid */}
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Rendimento Físico do Processo */}
-                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 border-2 border-emerald-200 rounded-3xl p-4 shadow-md flex flex-col justify-between">
-                          <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wider block">
-                            Rendimento Físico
-                          </span>
-                          <div className="text-2xl lg:text-3xl font-mono font-black text-emerald-600 my-1">
-                            {metrics.overallYieldPercMonth.toFixed(2)}%
                           </div>
-                          <div className="text-[11px] font-bold text-slate-600 border-t border-emerald-200/60 pt-1 flex justify-between items-center">
-                            <span>Descarte:</span>
-                            <strong className="text-rose-700 font-mono font-black">{metrics.overallLossPercMonth.toFixed(2)}%</strong>
-                          </div>
-                        </div>
-
-                        {/* Composição de Perdas (Mês) */}
-                        <div className="bg-gradient-to-br from-amber-50 to-rose-50/40 border-2 border-amber-200 rounded-3xl p-4 shadow-md flex flex-col justify-between">
-                          <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider block">
-                            Composição de Perdas
-                          </span>
-                          <div className="space-y-1 my-1">
-                            <div className="flex items-center justify-between text-xs font-bold">
-                              <span className="text-amber-800">Eco B:</span>
-                              <span className="font-mono font-black text-amber-700">{renderWeight(metrics.totalEcoB)}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs font-bold">
-                              <span className="text-rose-800">Borra:</span>
-                              <span className="font-mono font-black text-rose-700">{renderWeight(metrics.totalBorra)}</span>
-                            </div>
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-700 border-t border-amber-200/60 pt-1 flex justify-between items-center">
-                            <span>Total:</span>
-                            <strong className="font-mono text-rose-700 font-black">{renderWeight(metrics.totalEcoB + metrics.totalBorra)}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Historical Months Table */}
-                      <div className="bg-white border-2 border-slate-200 rounded-3xl p-4 shadow-md flex-1 flex flex-col max-h-[140px] overflow-hidden">
-                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1 border-b border-slate-100 pb-1 shrink-0">
-                          Histórico Mês a Mês
-                        </h4>
-                        <div
-                          ref={historyScrollRef}
-                          className="space-y-1 text-xs font-bold overflow-y-auto flex-1 pr-1 scrollbar-none"
-                        >
-                          {metrics.monthlyTimelineData.map((m) => (
-                            <div key={m.monthStr} className="flex items-center justify-between py-0.5 border-b border-slate-100 last:border-0">
-                              <span className="text-slate-800 font-extrabold">{m.fullLabel}:</span>
-                              <span className="font-mono text-slate-900">{renderWeight(m.producao)}</span>
-                              <span className={`font-mono text-xs font-black ${m.perdaPerc > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                {m.perdaPerc}% descarte
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                        ))}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* SLIDE 2: HISTÓRICO OPERACIONAL DE INDISPONIBILIDADE (MIN) */}
+              {/* SLIDE 2: HISTÓRICO DE PARADA DE MÁQUINA */}
               {currentSlide === 2 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
+                <div className="w-full flex-1 flex flex-col justify-between gap-4 h-full">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 shrink-0">
                     <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                      <Clock className="w-8 h-8 text-rose-600" /> Histórico Operacional de Indisponibilidade (min)
+                      <Clock className="w-8 h-8 text-rose-600" /> Histórico de parada de máquina
                     </h2>
                     <span className="text-sm md:text-base font-mono font-black text-rose-700 bg-rose-50 px-4 py-1.5 rounded-full border border-rose-200">
                       Gestão de Paradas
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
-                    {/* Stacked Bar Chart for Stoppages */}
-                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-6 h-6 text-rose-600" /> Distribuição de Minutos Parados por Categoria
-                        </h3>
-                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
-                          <span className="flex items-center gap-1.5 text-rose-600">
-                            <span className="w-3.5 h-3.5 rounded-sm bg-rose-600"></span> Manutenção
-                          </span>
-                          <span className="flex items-center gap-1.5 text-amber-600">
-                            <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Processo
-                          </span>
-                          <span className="flex items-center gap-1.5 text-slate-600">
-                            <span className="w-3.5 h-3.5 rounded-sm bg-slate-500"></span> Outros
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="w-full h-[360px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={metrics.monthlyTimelineData} margin={{ top: 20, right: 20, left: 10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                            <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
-                            <YAxis stroke="#475569" tick={{ fill: '#334155', fontSize: 13, fontWeight: 700 }} tickFormatter={(val: number) => `${val} min`} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
-                              formatter={(value: number, name: string) => [`${value} min (${(value / 60).toFixed(1)} h)`, name]}
-                            />
-                            <Bar dataKey="manutencao" name="Manutenção" fill="#ef4444" stackId="stoppage" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="processo" name="Processo" fill="#f59e0b" stackId="stoppage" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="outros" name="Outros" fill="#64748b" stackId="stoppage" radius={[8, 8, 0, 0]}>
-                              <LabelList
-                                dataKey="paradasTotal"
-                                position="top"
-                                formatter={(val: number) => `${val} min`}
-                                style={{ fontSize: 12, fontWeight: 800, fill: '#be123c' }}
-                              />
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
+                  {/* TOP: Chart occupying upper area */}
+                  <div className="w-full flex-1 flex flex-col justify-between bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-md min-h-0">
+                    <div className="flex items-center justify-between mb-2 shrink-0">
+                      <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-6 h-6 text-rose-600" /> Distribuição de Minutos Parados por Categoria
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                        <span className="flex items-center gap-1.5 text-rose-600">
+                          <span className="w-3.5 h-3.5 rounded-sm bg-rose-600"></span> Manutenção
+                        </span>
+                        <span className="flex items-center gap-1.5 text-amber-600">
+                          <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Processo
+                        </span>
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <span className="w-3.5 h-3.5 rounded-sm bg-slate-500"></span> Outros
+                        </span>
                       </div>
                     </div>
 
-                    {/* Stoppage Metric Cards */}
-                    <div className="flex flex-col justify-between gap-4">
-                      {/* Total Stoppage Time Card */}
-                      <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-6 shadow-md">
-                        <span className="text-xs font-black text-rose-700 uppercase tracking-widest block mb-1">
-                          Total de Indisponibilidade no Mês
-                        </span>
-                        <div className="text-4xl font-mono font-black text-rose-700 my-2">
-                          {metrics.totalParadasMin} <span className="text-base font-black text-rose-600">min</span>
-                        </div>
-                        <p className="text-xs font-bold text-slate-600 border-t border-rose-200/60 pt-2 mt-2">
-                          Equivalente a <strong className="text-slate-900 font-mono font-black">{metrics.totalParadasHoras} horas</strong> de paradas na produção.
-                        </p>
+                    <div className="w-full flex-1 min-h-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={metrics.monthlyTimelineData} margin={{ top: 25, right: 20, left: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="fullLabel" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                          <YAxis stroke="#475569" tick={{ fill: '#334155', fontSize: 13, fontWeight: 700 }} tickFormatter={(val: number) => `${val} min`} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
+                            formatter={(value: number, name: string) => [`${value} min (${(value / 60).toFixed(1)} h)`, name]}
+                          />
+                          <Bar dataKey="manutencao" name="Manutenção" fill="#ef4444" stackId="stoppage" radius={[0, 0, 0, 0]} />
+                          <Bar dataKey="processo" name="Processo" fill="#f59e0b" stackId="stoppage" radius={[0, 0, 0, 0]} />
+                          <Bar dataKey="outros" name="Outros" fill="#64748b" stackId="stoppage" radius={[8, 8, 0, 0]}>
+                            <LabelList
+                              dataKey="paradasTotal"
+                              position="top"
+                              formatter={(val: number) => (val > 0 ? `${val} min` : '')}
+                              style={{ fontSize: 13, fontWeight: 900, fill: '#be123c' }}
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* BOTTOM: Cards Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full shrink-0 h-[200px]">
+                    {/* Total Stoppage Time Card */}
+                    <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs lg:text-sm font-black text-rose-900 uppercase tracking-wider block border-b border-rose-200/60 pb-1.5">
+                        Total de Indisponibilidade no Mês
+                      </span>
+                      <div className="text-3xl lg:text-4xl xl:text-5xl font-mono font-black text-rose-700 my-auto">
+                        {metrics.totalParadasMin} <span className="text-base lg:text-xl font-black text-rose-600">min</span>
                       </div>
+                      <p className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-rose-200/60 pt-2 flex justify-between items-center">
+                        <span>Equivalente em Horas:</span>
+                        <strong className="text-slate-900 font-mono font-black text-base lg:text-xl">{metrics.totalParadasHoras} h</strong>
+                      </p>
+                    </div>
 
-                      {/* Stoppage Causes Breakdown Card */}
-                      <div className="bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-md flex-1 flex flex-col justify-between space-y-3">
-                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">
-                          Detalhamento de Minutos
-                        </h4>
+                    {/* Stoppage Causes Breakdown Card */}
+                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
+                      <h4 className="text-xs lg:text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1.5 shrink-0">
+                        Detalhamento de Minutos
+                      </h4>
 
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-2xl">
-                            <div>
-                              <span className="text-xs font-black text-rose-800 uppercase block">Manutenção</span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">Corretiva / Preventiva</span>
-                            </div>
-                            <span className="text-lg font-mono font-black text-rose-700">{metrics.totalManutencaoMin} min</span>
+                      <div className="grid grid-cols-3 gap-3 my-auto">
+                        <div className="flex flex-col justify-between p-3 bg-rose-50 border border-rose-200 rounded-2xl">
+                          <div>
+                            <span className="text-xs lg:text-sm font-black text-rose-900 uppercase block">Manutenção</span>
+                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Corretiva / Preventiva</span>
                           </div>
+                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-rose-700 mt-2">{metrics.totalManutencaoMin} min</span>
+                        </div>
 
-                          <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-2xl">
-                            <div>
-                              <span className="text-xs font-black text-amber-800 uppercase block">Processo</span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">Ajustes & Trocas</span>
-                            </div>
-                            <span className="text-lg font-mono font-black text-amber-700">{metrics.totalProcessoMin} min</span>
+                        <div className="flex flex-col justify-between p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                          <div>
+                            <span className="text-xs lg:text-sm font-black text-amber-900 uppercase block">Processo</span>
+                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Ajustes & Trocas</span>
                           </div>
+                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-amber-700 mt-2">{metrics.totalProcessoMin} min</span>
+                        </div>
 
-                          <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                            <div>
-                              <span className="text-xs font-black text-slate-800 uppercase block">Outros</span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">Eventos Diversos</span>
-                            </div>
-                            <span className="text-lg font-mono font-black text-slate-700">{metrics.totalOutrosMin} min</span>
+                        <div className="flex flex-col justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                          <div>
+                            <span className="text-xs lg:text-sm font-black text-slate-900 uppercase block">Outros</span>
+                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Eventos Diversos</span>
                           </div>
+                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-slate-700 mt-2">{metrics.totalOutrosMin} min</span>
                         </div>
                       </div>
                     </div>
