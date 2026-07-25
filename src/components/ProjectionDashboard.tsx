@@ -915,7 +915,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const slideTitles = [
     'Visão Geral & Indicadores',
     'Tendência Evolutiva (MoM/YoY)',
-    'Indisponibilidade (min)',
+    'Histórico de parada de máquina',
     'Eco B vs Tubetes Eco B',
     'Ranking de Operadores',
   ];
@@ -1055,7 +1055,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       )}
 
       {/* Main Viewport */}
-      <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-y-auto relative bg-slate-100 flex flex-col justify-between">
+      <main className="flex-1 p-3 md:p-4 lg:p-5 overflow-hidden relative bg-slate-100 flex flex-col justify-between h-full min-h-0">
         {viewMode === 'slides' ? (
           <AnimatePresence mode="wait">
             <motion.div
@@ -1064,59 +1064,59 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
               transition={{ duration: 0.4 }}
-              className="w-full flex-1 flex flex-col justify-between gap-6"
+              className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden"
             >
               {/* SLIDE 0: VISÃO GERAL DE PRODUÇÃO & METAS */}
               {currentSlide === 0 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-6">
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
                   {/* Top 4 Key Metric Cards (Extra Large Text for Fullscreen TV) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 flex-1 min-h-0">
                     {/* Produção de Ontem */}
-                    <div className="bg-white border-2 border-blue-200 rounded-3xl p-6 lg:p-8 shadow-md hover:shadow-xl transition-all flex flex-col justify-between min-h-[220px]">
+                    <div className="bg-white border-2 border-blue-200 rounded-3xl p-4 lg:p-5 shadow-md hover:shadow-xl transition-all flex flex-col justify-between h-full min-h-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm md:text-base lg:text-lg font-black text-blue-700 uppercase tracking-widest flex items-center gap-2">
-                          <Calendar className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600 shrink-0" /> Produção de Ontem
+                        <span className="text-xs md:text-sm lg:text-base font-black text-blue-700 uppercase tracking-widest flex items-center gap-2">
+                          <Calendar className="w-5 h-5 text-blue-600 shrink-0" /> Produção de Ontem
                         </span>
-                        <span className="text-xs md:text-sm font-black text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                        <span className="text-[10px] md:text-xs font-black text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
                           Extrusão
                         </span>
                       </div>
-                      <div className="text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-black text-slate-900 font-mono my-3 tracking-tight">
+                      <div className="text-3xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black text-slate-900 font-mono my-auto tracking-tight">
                         {renderWeight(metrics.yesterdayProdTotal)}
                       </div>
-                      <div className="flex items-center justify-between text-sm md:text-base lg:text-lg font-bold text-slate-600 pt-4 border-t-2 border-slate-100 mt-2">
+                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600 pt-2 border-t border-slate-100">
                         <span>Corte de Fita:</span>
-                        <span className="font-mono text-indigo-600 font-black text-base lg:text-xl">{renderM2(metrics.ribbonYesterdayM2)}</span>
+                        <span className="font-mono text-indigo-600 font-black text-sm lg:text-lg">{renderM2(metrics.ribbonYesterdayM2)}</span>
                       </div>
                     </div>
 
                     {/* Meta Mensal & Progresso */}
-                    <div className="bg-white border-2 border-emerald-200 rounded-3xl p-6 lg:p-8 shadow-md hover:shadow-xl transition-all flex flex-col justify-between min-h-[220px]">
+                    <div className="bg-white border-2 border-emerald-200 rounded-3xl p-4 lg:p-5 shadow-md hover:shadow-xl transition-all flex flex-col justify-between h-full min-h-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm md:text-base lg:text-lg font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
-                          <Target className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600 shrink-0" /> Meta do Mês
+                        <span className="text-xs md:text-sm lg:text-base font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
+                          <Target className="w-5 h-5 text-emerald-600 shrink-0" /> Meta do Mês
                         </span>
-                        <span className="text-xs md:text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-300 font-mono">
+                        <span className="text-[10px] md:text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-300 font-mono">
                           {metrics.goalPercent.toFixed(1)}%
                         </span>
                       </div>
-                      <div className="text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-black text-slate-900 font-mono my-3 tracking-tight">
+                      <div className="text-3xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black text-slate-900 font-mono my-auto tracking-tight">
                         {renderWeight(metrics.prodMonthTotal)}
                       </div>
-                      <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden my-2 border border-slate-200 p-0.5">
+                      <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden my-1 border border-slate-200 p-0.5">
                         <div
                           className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full transition-all duration-1000 shadow-sm"
                           style={{ width: `${Math.min(100, metrics.goalPercent)}%` }}
                         />
                       </div>
-                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600">
+                      <div className="flex items-center justify-between text-[11px] md:text-xs lg:text-sm font-bold text-slate-600">
                         <span>Meta: {renderWeight(metrics.currentGoal, 'text-[0.7em] font-extrabold opacity-75 ml-0.5')}</span>
                         <span>Falta: {renderWeight(Math.max(0, metrics.currentGoal - metrics.prodMonthTotal), 'text-[0.7em] font-extrabold opacity-75 ml-0.5')}</span>
                       </div>
-                      <div className="pt-2 border-t border-slate-100 mt-2 flex items-center justify-between text-xs font-extrabold text-slate-500">
+                      <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] md:text-xs font-extrabold text-slate-500">
                         <span>Mês Ant. ({metrics.prevMonthName}): <strong className="font-mono text-slate-800">{renderWeight(metrics.prevMonthProdTotal, 'text-[0.7em] font-extrabold opacity-80 ml-0.5')}</strong></span>
                         {metrics.prodVar !== null && (
-                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-black font-mono ${
+                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-black font-mono ${
                             metrics.prodVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}>
                             {metrics.prodVar >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -1127,26 +1127,26 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                     </div>
 
                     {/* Projeção do Mês */}
-                    <div className="bg-white border-2 border-indigo-200 rounded-3xl p-6 lg:p-8 shadow-md hover:shadow-xl transition-all flex flex-col justify-between min-h-[220px]">
+                    <div className="bg-white border-2 border-indigo-200 rounded-3xl p-4 lg:p-5 shadow-md hover:shadow-xl transition-all flex flex-col justify-between h-full min-h-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm md:text-base lg:text-lg font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
-                          <TrendingUp className="w-5 h-5 lg:w-6 lg:h-6 text-indigo-600 shrink-0" /> Projeção Fechamento
+                        <span className="text-xs md:text-sm lg:text-base font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5 text-indigo-600 shrink-0" /> Projeção Fechamento
                         </span>
-                        <span className="text-xs md:text-sm font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-200">
+                        <span className="text-[10px] md:text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
                           Estimada
                         </span>
                       </div>
-                      <div className="text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-black text-indigo-600 font-mono my-3 tracking-tight">
+                      <div className="text-3xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black text-indigo-600 font-mono my-auto tracking-tight">
                         {renderWeight(metrics.projectedMonthTotal)}
                       </div>
-                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600 pt-4 border-t-2 border-slate-100 mt-2">
+                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600 pt-2 border-t border-slate-100">
                         <span>Ritmo Diário Nec.:</span>
-                        <span className="font-mono text-amber-600 font-black text-base lg:text-xl">{renderWeight(metrics.dailyGoalRequired, 'text-[0.55em] font-extrabold text-amber-700 ml-0.5', '/dia')}</span>
+                        <span className="font-mono text-amber-600 font-black text-sm lg:text-lg">{renderWeight(metrics.dailyGoalRequired, 'text-[0.55em] font-extrabold text-amber-700 ml-0.5', '/dia')}</span>
                       </div>
-                      <div className="pt-2 border-t border-slate-100 mt-2 flex items-center justify-between text-xs font-extrabold text-slate-500">
+                      <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] md:text-xs font-extrabold text-slate-500">
                         <span>vs Mês Ant. ({metrics.prevMonthName}):</span>
                         {metrics.projVar !== null ? (
-                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-black font-mono ${
+                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-black font-mono ${
                             metrics.projVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}>
                             {metrics.projVar >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -1159,26 +1159,26 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                     </div>
 
                     {/* Total Eco B Produzido */}
-                    <div className="bg-white border-2 border-amber-200 rounded-3xl p-6 lg:p-8 shadow-md hover:shadow-xl transition-all flex flex-col justify-between min-h-[220px]">
+                    <div className="bg-white border-2 border-amber-200 rounded-3xl p-4 lg:p-5 shadow-md hover:shadow-xl transition-all flex flex-col justify-between h-full min-h-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm md:text-base lg:text-lg font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-5 h-5 lg:w-6 lg:h-6 text-amber-600 shrink-0" /> Total Eco B Produzido
+                        <span className="text-xs md:text-sm lg:text-base font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-amber-600 shrink-0" /> Total Eco B Produzido
                         </span>
-                        <span className="text-xs md:text-sm font-black text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                        <span className="text-[10px] md:text-xs font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
                           Refilo
                         </span>
                       </div>
-                      <div className="text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-black text-amber-600 font-mono my-3 tracking-tight">
+                      <div className="text-3xl md:text-4xl lg:text-5xl 2xl:text-6xl font-black text-amber-600 font-mono my-auto tracking-tight">
                         {renderWeight(metrics.totalEcoB)}
                       </div>
-                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600 pt-4 border-t-2 border-slate-100 mt-2">
+                      <div className="flex items-center justify-between text-xs md:text-sm lg:text-base font-bold text-slate-600 pt-2 border-t border-slate-100">
                         <span>Eco BP: {renderWeight(metrics.totalEcoBP, 'text-[0.7em] font-extrabold opacity-80 ml-0.5')}</span>
                         <span>Eco BM: {renderWeight(metrics.totalEcoBM, 'text-[0.7em] font-extrabold opacity-80 ml-0.5')}</span>
                       </div>
-                      <div className="pt-2 border-t border-slate-100 mt-2 flex items-center justify-between text-xs font-extrabold text-slate-500">
+                      <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] md:text-xs font-extrabold text-slate-500">
                         <span>Mês Ant.: <strong className="font-mono text-slate-800">{renderWeight(metrics.prevMonthEcoB, 'text-[0.7em] font-extrabold opacity-80 ml-0.5')}</strong></span>
                         {metrics.ecoBVar !== null && (
-                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-black font-mono ${
+                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-black font-mono ${
                             metrics.ecoBVar <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                           }`}>
                             {metrics.ecoBVar >= 0 ? '+' : ''}{metrics.ecoBVar.toFixed(1)}%
@@ -1189,71 +1189,71 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* Middle Row: Best Operator Spotlight & Machine Highlights */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 flex-1 min-h-0">
                     {/* Melhor Operador Spotlight */}
-                    <div className="lg:col-span-1 bg-gradient-to-br from-amber-500/10 via-white to-amber-50/60 border-2 border-amber-400 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between relative overflow-hidden">
+                    <div className="lg:col-span-1 bg-gradient-to-br from-amber-500/10 via-white to-amber-50/60 border-2 border-amber-400 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between relative overflow-hidden h-full min-h-0">
                       <ContinuousConfettiOverlay />
                       <div className="relative z-10 flex flex-col justify-between h-full">
-                        <div className="flex items-center justify-between border-b-2 border-amber-200 pb-4">
-                          <div className="flex items-center gap-3">
-                            <Trophy className="w-8 h-8 lg:w-10 lg:h-10 text-amber-500" />
-                            <h2 className="text-lg md:text-xl lg:text-2xl font-black text-amber-900 uppercase tracking-wide">
+                        <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="w-6 h-6 text-amber-500" />
+                            <h2 className="text-sm md:text-base lg:text-lg font-black text-amber-900 uppercase tracking-wide">
                               Melhor Operador do Mês
                             </h2>
                           </div>
-                          <span className="text-4xl">🥇</span>
+                          <span className="text-2xl">🥇</span>
                         </div>
 
-                        <div className="my-6 flex items-center gap-6">
-                          <div className="w-24 h-24 lg:w-28 lg:h-28 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl p-1.5 shadow-md shrink-0">
-                            <div className="w-full h-full bg-white rounded-[1.2rem] flex items-center justify-center text-4xl lg:text-5xl font-black text-amber-600 border border-amber-200">
+                        <div className="my-auto flex items-center gap-4">
+                          <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-2xl p-1 shadow-md shrink-0">
+                            <div className="w-full h-full bg-white rounded-xl flex items-center justify-center text-2xl lg:text-3xl font-black text-amber-600 border border-amber-200">
                               {metrics.bestOperator.name ? metrics.bestOperator.name.charAt(0).toUpperCase() : 'O'}
                             </div>
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 truncate tracking-tight">
+                            <h3 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 truncate tracking-tight">
                               {metrics.bestOperator.name}
                             </h3>
-                            <p className="text-sm md:text-base font-black text-amber-700 uppercase tracking-wider mt-1">
+                            <p className="text-xs md:text-sm font-black text-amber-700 uppercase tracking-wider mt-0.5">
                               Máquina: {metrics.bestOperator.machine || 'Extrusão'}
                             </p>
-                            <div className="mt-3 text-3xl lg:text-4xl font-mono font-black text-emerald-600">
+                            <div className="mt-1 text-2xl lg:text-3xl font-mono font-black text-emerald-600">
                               {renderWeight(metrics.bestOperator.totalNet)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="bg-amber-100/90 border border-amber-300 rounded-2xl p-4 text-center text-xs md:text-sm font-black text-amber-900 tracking-wider uppercase">
-                          Líder em Produtividade e Eficiência da Extrusão
+                        <div className="bg-amber-100/90 border border-amber-300 rounded-xl p-2 text-center text-[11px] md:text-xs font-black text-amber-900 tracking-wider uppercase">
+                          Líder em Produtividade da Extrusão
                         </div>
                       </div>
                     </div>
 
                     {/* Machine Cards: Cast 1, Cast 2, Erema */}
-                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 h-full min-h-0">
                       {/* Cast 1 */}
-                      <div className="bg-white border-2 border-blue-200 rounded-3xl p-6 lg:p-8 flex flex-col justify-between shadow-md">
+                      <div className="bg-white border-2 border-blue-200 rounded-3xl p-4 lg:p-5 flex flex-col justify-between shadow-md h-full min-h-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm md:text-base lg:text-lg font-black text-blue-700 uppercase tracking-widest flex items-center gap-2">
-                            <Factory className="w-5 h-5 text-blue-600" /> Cast 1
+                          <span className="text-xs md:text-sm lg:text-base font-black text-blue-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <Factory className="w-4 h-4 text-blue-600" /> Cast 1
                           </span>
-                          <span className="w-3.5 h-3.5 rounded-full bg-blue-500"></span>
+                          <span className="w-3 h-3 rounded-full bg-blue-500"></span>
                         </div>
-                        <div className="my-4">
-                          <p className="text-xs md:text-sm text-slate-400 uppercase font-black">Acumulado Mês</p>
-                          <p className="text-4xl lg:text-5xl 2xl:text-6xl font-black text-blue-600 font-mono mt-1">
+                        <div className="my-auto">
+                          <p className="text-[10px] md:text-xs text-slate-400 uppercase font-black">Acumulado Mês</p>
+                          <p className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-blue-600 font-mono mt-0.5">
                             {renderWeight(metrics.machineMonthMap['Cast 1'] || 0)}
                           </p>
                         </div>
-                        <div className="pt-4 border-t-2 border-slate-100 text-xs md:text-sm lg:text-base font-bold text-slate-600 space-y-1">
+                        <div className="pt-2 border-t border-slate-100 text-xs font-bold text-slate-600 space-y-0.5">
                           <div className="flex justify-between items-center">
                             <span>Ontem:</span>
                             <span className="font-extrabold text-slate-900 font-mono">
                               {renderWeight(metrics.machineYesterdayMap['Cast 1'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-xs text-slate-500 pt-1 border-t border-slate-100">
-                            <span>Mês Ant. ({metrics.prevMonthName}):</span>
+                          <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5 border-t border-slate-100">
+                            <span>Mês Ant.:</span>
                             <span className="font-mono font-bold text-slate-700">
                               {renderWeight(metrics.prevMachineMap['Cast 1'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                               {metrics.cast1Var !== null && (
@@ -1267,28 +1267,28 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                       </div>
 
                       {/* Cast 2 */}
-                      <div className="bg-white border-2 border-indigo-200 rounded-3xl p-6 lg:p-8 flex flex-col justify-between shadow-md">
+                      <div className="bg-white border-2 border-indigo-200 rounded-3xl p-4 lg:p-5 flex flex-col justify-between shadow-md h-full min-h-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm md:text-base lg:text-lg font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
-                            <Factory className="w-5 h-5 text-indigo-600" /> Cast 2
+                          <span className="text-xs md:text-sm lg:text-base font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <Factory className="w-4 h-4 text-indigo-600" /> Cast 2
                           </span>
-                          <span className="w-3.5 h-3.5 rounded-full bg-indigo-500"></span>
+                          <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
                         </div>
-                        <div className="my-4">
-                          <p className="text-xs md:text-sm text-slate-400 uppercase font-black">Acumulado Mês</p>
-                          <p className="text-4xl lg:text-5xl 2xl:text-6xl font-black text-indigo-600 font-mono mt-1">
+                        <div className="my-auto">
+                          <p className="text-[10px] md:text-xs text-slate-400 uppercase font-black">Acumulado Mês</p>
+                          <p className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-indigo-600 font-mono mt-0.5">
                             {renderWeight(metrics.machineMonthMap['Cast 2'] || 0)}
                           </p>
                         </div>
-                        <div className="pt-4 border-t-2 border-slate-100 text-xs md:text-sm lg:text-base font-bold text-slate-600 space-y-1">
+                        <div className="pt-2 border-t border-slate-100 text-xs font-bold text-slate-600 space-y-0.5">
                           <div className="flex justify-between items-center">
                             <span>Ontem:</span>
                             <span className="font-extrabold text-slate-900 font-mono">
                               {renderWeight(metrics.machineYesterdayMap['Cast 2'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-xs text-slate-500 pt-1 border-t border-slate-100">
-                            <span>Mês Ant. ({metrics.prevMonthName}):</span>
+                          <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5 border-t border-slate-100">
+                            <span>Mês Ant.:</span>
                             <span className="font-mono font-bold text-slate-700">
                               {renderWeight(metrics.prevMachineMap['Cast 2'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                               {metrics.cast2Var !== null && (
@@ -1302,28 +1302,28 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                       </div>
 
                       {/* Erema */}
-                      <div className="bg-white border-2 border-teal-200 rounded-3xl p-6 lg:p-8 flex flex-col justify-between shadow-md">
+                      <div className="bg-white border-2 border-teal-200 rounded-3xl p-4 lg:p-5 flex flex-col justify-between shadow-md h-full min-h-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm md:text-base lg:text-lg font-black text-teal-700 uppercase tracking-widest flex items-center gap-2">
-                            <RefreshCw className="w-5 h-5 text-teal-600" /> Erema (Reciclado)
+                          <span className="text-xs md:text-sm lg:text-base font-black text-teal-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <RefreshCw className="w-4 h-4 text-teal-600" /> Erema (Reciclado)
                           </span>
-                          <span className="w-3.5 h-3.5 rounded-full bg-teal-500"></span>
+                          <span className="w-3 h-3 rounded-full bg-teal-500"></span>
                         </div>
-                        <div className="my-4">
-                          <p className="text-xs md:text-sm text-slate-400 uppercase font-black">Acumulado Mês</p>
-                          <p className="text-4xl lg:text-5xl 2xl:text-6xl font-black text-teal-600 font-mono mt-1">
+                        <div className="my-auto">
+                          <p className="text-[10px] md:text-xs text-slate-400 uppercase font-black">Acumulado Mês</p>
+                          <p className="text-2xl lg:text-3xl 2xl:text-4xl font-black text-teal-600 font-mono mt-0.5">
                             {renderWeight(metrics.eremaMonthTotal)}
                           </p>
                         </div>
-                        <div className="pt-4 border-t-2 border-slate-100 text-xs md:text-sm lg:text-base font-bold text-slate-600 space-y-1">
+                        <div className="pt-2 border-t border-slate-100 text-xs font-bold text-slate-600 space-y-0.5">
                           <div className="flex justify-between items-center">
                             <span>Ontem:</span>
                             <span className="font-extrabold text-slate-900 font-mono">
                               {renderWeight(metrics.machineYesterdayMap['Erema'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-xs text-slate-500 pt-1 border-t border-slate-100">
-                            <span>Mês Ant. ({metrics.prevMonthName}):</span>
+                          <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5 border-t border-slate-100">
+                            <span>Mês Ant.:</span>
                             <span className="font-mono font-bold text-slate-700">
                               {renderWeight(metrics.prevMachineMap['Erema'] || 0, 'text-[0.7em] font-extrabold text-slate-600 ml-0.5')}
                               {metrics.eremaVar !== null && (
@@ -1342,26 +1342,26 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 1: TENDÊNCIA EVOLUTIVA DE FILTRO DE TEMPO (MoM / YoY) */}
               {currentSlide === 1 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-4 overflow-hidden h-full">
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 overflow-hidden h-full min-h-0">
                   {/* Header */}
                   <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
-                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                      <TrendingUp className="w-8 h-8 text-blue-600" /> Tendência Evolutiva de Filtro de Tempo (MoM / YoY)
+                    <h2 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <TrendingUp className="w-7 h-7 text-blue-600" /> Tendência Evolutiva de Filtro de Tempo (MoM / YoY)
                     </h2>
-                    <span className="text-sm md:text-base font-mono font-black text-blue-700 bg-blue-50 px-4 py-1 rounded-full border border-blue-200">
+                    <span className="text-xs md:text-sm font-mono font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
                       Análise Histórica & Crescimento
                     </span>
                   </div>
 
                   {/* TOP: Main Composed Chart (Occupies largest vertical area) */}
-                  <div className="w-full flex-1 min-h-[280px] bg-white border-2 border-slate-200 rounded-3xl p-5 lg:p-6 shadow-md flex flex-col justify-between overflow-hidden">
+                  <div className="w-full flex-1 min-h-0 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between overflow-hidden">
                     <div className="flex items-center justify-between mb-2 shrink-0">
-                      <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <Activity className="w-6 h-6 text-blue-600" /> Produção Líquida (kg) vs Taxa de Descarte (%)
+                      <h3 className="text-sm md:text-base lg:text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-blue-600" /> Produção Líquida (kg) vs Taxa de Descarte (%)
                       </h3>
                       <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
                         <span className="flex items-center gap-1.5 text-blue-600">
-                          <span className="w-3.5 h-3.5 rounded-sm bg-blue-600"></span> Vol. Produção
+                          <span className="w-3 h-3 rounded-sm bg-blue-600"></span> Vol. Produção
                         </span>
                         <span className="flex items-center gap-1.5 text-rose-600">
                           <span className="w-3 h-0.5 bg-rose-600 border-2 border-rose-600"></span> Índice Descarte %
@@ -1460,81 +1460,81 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* BOTTOM: 4 Cards Row (Equal width side by side) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full shrink-0 h-[200px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
                     {/* Card 1: Crescimento Mensal (MoM) */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
-                      <span className="text-xs lg:text-sm font-black text-blue-900 uppercase tracking-wider block border-b border-blue-200/60 pb-1.5">
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-blue-900 uppercase tracking-wider block border-b border-blue-200/60 pb-1">
                         Crescimento Mensal (MoM)
                       </span>
-                      <div className="text-3xl lg:text-4xl xl:text-5xl font-black text-slate-900 font-mono my-auto flex items-center justify-between gap-2 flex-wrap">
+                      <div className="text-2xl lg:text-3xl xl:text-4xl font-black text-slate-900 font-mono my-auto flex items-center justify-between gap-2 flex-wrap">
                         <span>{renderWeight(metrics.prodMonthTotal)}</span>
                         {metrics.prodVar !== null && (
-                          <span className={`text-base lg:text-lg font-black px-3 py-1 rounded-xl font-mono shadow-sm ${
+                          <span className={`text-xs lg:text-sm font-black px-2 py-0.5 rounded-lg font-mono shadow-sm ${
                             metrics.prodVar >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}>
                             {metrics.prodVar >= 0 ? '+' : ''}{formatNumDot(metrics.prodVar, 1, 1)}%
                           </span>
                         )}
                       </div>
-                      <p className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-blue-200/60 pt-2 flex justify-between items-center">
+                      <p className="text-xs lg:text-sm font-extrabold text-slate-700 border-t border-blue-200/60 pt-1.5 flex justify-between items-center">
                         <span>vs {metrics.prevMonthName}:</span>
-                        <strong className="font-mono font-black text-slate-900 text-base lg:text-lg">{renderWeight(metrics.prevMonthProdTotal)}</strong>
+                        <strong className="font-mono font-black text-slate-900 text-sm lg:text-base">{renderWeight(metrics.prevMonthProdTotal)}</strong>
                       </p>
                     </div>
 
                     {/* Card 2: Rendimento Físico */}
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 border-2 border-emerald-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
-                      <span className="text-xs lg:text-sm font-black text-emerald-900 uppercase tracking-wider block border-b border-emerald-200/60 pb-1.5">
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 border-2 border-emerald-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-emerald-900 uppercase tracking-wider block border-b border-emerald-200/60 pb-1">
                         Rendimento Físico
                       </span>
-                      <div className="text-4xl lg:text-5xl xl:text-6xl font-mono font-black text-emerald-600 my-auto text-center leading-none tracking-tight">
+                      <div className="text-3xl lg:text-4xl xl:text-5xl font-mono font-black text-emerald-600 my-auto text-center leading-none tracking-tight">
                         {metrics.overallYieldPercMonth.toFixed(2)}%
                       </div>
-                      <div className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-emerald-200/60 pt-2 flex justify-between items-center">
+                      <div className="text-xs lg:text-sm font-extrabold text-slate-700 border-t border-emerald-200/60 pt-1.5 flex justify-between items-center">
                         <span>Taxa de Descarte:</span>
-                        <strong className="text-rose-700 font-mono font-black text-lg lg:text-xl">{metrics.overallLossPercMonth.toFixed(2)}%</strong>
+                        <strong className="text-rose-700 font-mono font-black text-base lg:text-lg">{metrics.overallLossPercMonth.toFixed(2)}%</strong>
                       </div>
                     </div>
 
                     {/* Card 3: Composição de Perdas */}
-                    <div className="bg-gradient-to-br from-amber-50 to-rose-50/40 border-2 border-amber-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
-                      <span className="text-xs lg:text-sm font-black text-amber-900 uppercase tracking-wider block border-b border-amber-200/60 pb-1.5">
+                    <div className="bg-gradient-to-br from-amber-50 to-rose-50/40 border-2 border-amber-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-amber-900 uppercase tracking-wider block border-b border-amber-200/60 pb-1">
                         Composição de Perdas
                       </span>
-                      <div className="space-y-2 my-auto">
-                        <div className="flex items-center justify-between text-base lg:text-lg font-extrabold">
+                      <div className="space-y-1 my-auto">
+                        <div className="flex items-center justify-between text-xs lg:text-sm font-extrabold">
                           <span className="text-amber-900">Eco B (Refilo):</span>
-                          <span className="font-mono font-black text-amber-700 text-lg lg:text-2xl">{renderWeight(metrics.totalEcoB)}</span>
+                          <span className="font-mono font-black text-amber-700 text-sm lg:text-base">{renderWeight(metrics.totalEcoB)}</span>
                         </div>
-                        <div className="flex items-center justify-between text-base lg:text-lg font-extrabold">
+                        <div className="flex items-center justify-between text-xs lg:text-sm font-extrabold">
                           <span className="text-rose-900">Borra Total:</span>
-                          <span className="font-mono font-black text-rose-700 text-lg lg:text-2xl">{renderWeight(metrics.totalBorra)}</span>
+                          <span className="font-mono font-black text-rose-700 text-sm lg:text-base">{renderWeight(metrics.totalBorra)}</span>
                         </div>
                       </div>
-                      <div className="text-base lg:text-lg font-black text-slate-800 border-t border-amber-200/60 pt-2 flex justify-between items-center">
+                      <div className="text-xs lg:text-sm font-black text-slate-800 border-t border-amber-200/60 pt-1.5 flex justify-between items-center">
                         <span>Total Descarte:</span>
-                        <strong className="font-mono text-rose-700 font-black text-xl lg:text-2xl">{renderWeight(metrics.totalEcoB + metrics.totalBorra)}</strong>
+                        <strong className="font-mono text-rose-700 font-black text-base lg:text-lg">{renderWeight(metrics.totalEcoB + metrics.totalBorra)}</strong>
                       </div>
                     </div>
 
                     {/* Card 4: Histórico Mês a Mês (Auto Scroll) */}
-                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col h-full overflow-hidden">
-                      <h4 className="text-xs lg:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1 shrink-0">
+                    <div className="bg-white border-2 border-slate-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col h-full overflow-hidden">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1 shrink-0">
                         Histórico Mês a Mês
                       </h4>
                       <div
                         ref={historyScrollRef}
-                        className="space-y-1.5 text-xs lg:text-sm font-bold overflow-y-auto flex-1 pr-1 scrollbar-none"
+                        className="space-y-1 text-xs font-bold overflow-y-auto flex-1 pr-1 scrollbar-none"
                         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       >
                         {(metrics.monthlyTimelineData.length > 0
                           ? Array(10).fill(metrics.monthlyTimelineData).flat()
                           : []
                         ).map((m, idx) => (
-                          <div key={`${m.monthStr}-${idx}`} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 shrink-0">
+                          <div key={`${m.monthStr}-${idx}`} className="flex items-center justify-between py-0.5 border-b border-slate-100 last:border-0 shrink-0">
                             <span className="text-slate-800 font-extrabold">{m.fullLabel}:</span>
                             <span className="font-mono text-slate-900 font-black">{renderWeight(m.producao)}</span>
-                            <span className={`font-mono text-xs lg:text-sm font-black ${m.perdaPerc > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            <span className={`font-mono text-xs font-black ${m.perdaPerc > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
                               {m.perdaPerc}% descarte
                             </span>
                           </div>
@@ -1547,31 +1547,31 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 2: HISTÓRICO DE PARADA DE MÁQUINA */}
               {currentSlide === 2 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-4 h-full">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 shrink-0">
-                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                      <Clock className="w-8 h-8 text-rose-600" /> Histórico de parada de máquina
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
+                    <h2 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Clock className="w-7 h-7 text-rose-600" /> Histórico de parada de máquina
                     </h2>
-                    <span className="text-sm md:text-base font-mono font-black text-rose-700 bg-rose-50 px-4 py-1.5 rounded-full border border-rose-200">
+                    <span className="text-xs md:text-sm font-mono font-black text-rose-700 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
                       Gestão de Paradas
                     </span>
                   </div>
 
                   {/* TOP: Chart occupying upper area */}
-                  <div className="w-full flex-1 flex flex-col justify-between bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-md min-h-0">
+                  <div className="w-full flex-1 flex flex-col justify-between bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md min-h-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-2 shrink-0">
-                      <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <Activity className="w-6 h-6 text-rose-600" /> Distribuição de Minutos Parados por Categoria
+                      <h3 className="text-sm md:text-base lg:text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-rose-600" /> Distribuição de Minutos Parados por Categoria
                       </h3>
                       <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
                         <span className="flex items-center gap-1.5 text-rose-600">
-                          <span className="w-3.5 h-3.5 rounded-sm bg-rose-600"></span> Manutenção
+                          <span className="w-3 h-3 rounded-sm bg-rose-600"></span> Manutenção
                         </span>
                         <span className="flex items-center gap-1.5 text-amber-600">
-                          <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Processo
+                          <span className="w-3 h-3 rounded-sm bg-amber-500"></span> Processo
                         </span>
                         <span className="flex items-center gap-1.5 text-slate-600">
-                          <span className="w-3.5 h-3.5 rounded-sm bg-slate-500"></span> Outros
+                          <span className="w-3 h-3 rounded-sm bg-slate-500"></span> Outros
                         </span>
                       </div>
                     </div>
@@ -1602,50 +1602,50 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* BOTTOM: Cards Row */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full shrink-0 h-[200px]">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
                     {/* Total Stoppage Time Card */}
-                    <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
-                      <span className="text-xs lg:text-sm font-black text-rose-900 uppercase tracking-wider block border-b border-rose-200/60 pb-1.5">
+                    <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-rose-900 uppercase tracking-wider block border-b border-rose-200/60 pb-1">
                         Total de Indisponibilidade no Mês
                       </span>
-                      <div className="text-3xl lg:text-4xl xl:text-5xl font-mono font-black text-rose-700 my-auto">
-                        {metrics.totalParadasMin} <span className="text-base lg:text-xl font-black text-rose-600">min</span>
+                      <div className="text-2xl lg:text-3xl xl:text-4xl font-mono font-black text-rose-700 my-auto">
+                        {metrics.totalParadasMin} <span className="text-sm lg:text-base font-black text-rose-600">min</span>
                       </div>
-                      <p className="text-sm lg:text-base font-extrabold text-slate-700 border-t border-rose-200/60 pt-2 flex justify-between items-center">
+                      <p className="text-xs lg:text-sm font-extrabold text-slate-700 border-t border-rose-200/60 pt-1.5 flex justify-between items-center">
                         <span>Equivalente em Horas:</span>
-                        <strong className="text-slate-900 font-mono font-black text-base lg:text-xl">{metrics.totalParadasHoras} h</strong>
+                        <strong className="text-slate-900 font-mono font-black text-sm lg:text-lg">{metrics.totalParadasHoras} h</strong>
                       </p>
                     </div>
 
                     {/* Stoppage Causes Breakdown Card */}
-                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full">
-                      <h4 className="text-xs lg:text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1.5 shrink-0">
+                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1 shrink-0">
                         Detalhamento de Minutos
                       </h4>
 
-                      <div className="grid grid-cols-3 gap-3 my-auto">
-                        <div className="flex flex-col justify-between p-3 bg-rose-50 border border-rose-200 rounded-2xl">
+                      <div className="grid grid-cols-3 gap-2 lg:gap-3 my-auto">
+                        <div className="flex flex-col justify-between p-2.5 bg-rose-50 border border-rose-200 rounded-2xl">
                           <div>
-                            <span className="text-xs lg:text-sm font-black text-rose-900 uppercase block">Manutenção</span>
-                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Corretiva / Preventiva</span>
+                            <span className="text-xs font-black text-rose-900 uppercase block">Manutenção</span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">Corretiva / Preventiva</span>
                           </div>
-                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-rose-700 mt-2">{metrics.totalManutencaoMin} min</span>
+                          <span className="text-lg lg:text-xl xl:text-2xl font-mono font-black text-rose-700 mt-1">{metrics.totalManutencaoMin} min</span>
                         </div>
 
-                        <div className="flex flex-col justify-between p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                        <div className="flex flex-col justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-2xl">
                           <div>
-                            <span className="text-xs lg:text-sm font-black text-amber-900 uppercase block">Processo</span>
-                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Ajustes & Trocas</span>
+                            <span className="text-xs font-black text-amber-900 uppercase block">Processo</span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">Ajustes & Trocas</span>
                           </div>
-                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-amber-700 mt-2">{metrics.totalProcessoMin} min</span>
+                          <span className="text-lg lg:text-xl xl:text-2xl font-mono font-black text-amber-700 mt-1">{metrics.totalProcessoMin} min</span>
                         </div>
 
-                        <div className="flex flex-col justify-between p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                        <div className="flex flex-col justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
                           <div>
-                            <span className="text-xs lg:text-sm font-black text-slate-900 uppercase block">Outros</span>
-                            <span className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase">Eventos Diversos</span>
+                            <span className="text-xs font-black text-slate-900 uppercase block">Outros</span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">Eventos Diversos</span>
                           </div>
-                          <span className="text-xl lg:text-2xl xl:text-3xl font-mono font-black text-slate-700 mt-2">{metrics.totalOutrosMin} min</span>
+                          <span className="text-lg lg:text-xl xl:text-2xl font-mono font-black text-slate-700 mt-1">{metrics.totalOutrosMin} min</span>
                         </div>
                       </div>
                     </div>
@@ -1655,26 +1655,26 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 3: CORRELAÇÃO ESTRUTURADA: ECO B VS TUBETES ECO B */}
               {currentSlide === 3 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                      <Scale className="w-8 h-8 text-amber-600" /> Correlação Estruturada: Eco B vs Tubetes Eco B
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
+                    <h2 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Scale className="w-7 h-7 text-amber-600" /> Correlação Estruturada: Eco B vs Tubetes Eco B
                     </h2>
-                    <span className="text-sm md:text-base font-mono font-black text-amber-700 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">
+                    <span className="text-xs md:text-sm font-mono font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
                       Análise de Densidade & Insumos
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto min-h-[460px]">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 flex-1 min-h-0">
                     {/* Dual Axis Composed Chart */}
-                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-6 lg:p-8 shadow-md flex flex-col justify-between">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base md:text-lg lg:text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-6 h-6 text-amber-600" /> Histórico Diário: Eco B (Barras, Eixo Esq.) vs Tubetes (Linha, Eixo Dir.)
+                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full min-h-0 overflow-hidden">
+                      <div className="flex items-center justify-between mb-2 shrink-0">
+                        <h3 className="text-sm md:text-base lg:text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-amber-600" /> Histórico Diário: Eco B (Barras, Eixo Esq.) vs Tubetes (Linha, Eixo Dir.)
                         </h3>
                         <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
                           <span className="flex items-center gap-1.5 text-amber-600">
-                            <span className="w-3.5 h-3.5 rounded-sm bg-amber-500"></span> Eco B (kg)
+                            <span className="w-3 h-3 rounded-sm bg-amber-500"></span> Eco B (kg)
                           </span>
                           <span className="flex items-center gap-1.5 text-blue-600">
                             <span className="w-3 h-0.5 bg-blue-600 border-2 border-blue-600"></span> Tubetes (un)
@@ -1682,7 +1682,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="w-full h-[360px]">
+                      <div className="w-full flex-1 min-h-0">
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart data={metrics.dailyEcoBTubetesData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -1729,31 +1729,31 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                     </div>
 
                     {/* KPI Cards Block */}
-                    <div className="flex flex-col justify-between gap-4">
+                    <div className="flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0">
                       {/* Total Eco B Generated Card */}
-                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-6 shadow-md">
-                        <span className="text-xs font-black text-amber-800 uppercase tracking-widest block mb-1">
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-4 lg:p-5 shadow-md flex-1 min-h-0 flex flex-col justify-between">
+                        <span className="text-xs font-black text-amber-800 uppercase tracking-widest block">
                           Volume Total de Eco B (Mês)
                         </span>
-                        <div className="text-4xl font-mono font-black text-amber-600 my-2">
+                        <div className="text-3xl lg:text-4xl font-mono font-black text-amber-600 my-auto">
                           {renderWeight(metrics.totalEcoB)}
                         </div>
-                        <p className="text-xs font-bold text-slate-600 border-t border-amber-200/60 pt-2 mt-2">
+                        <p className="text-xs font-bold text-slate-600 border-t border-amber-200/60 pt-2">
                           Eco BP: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBP)}</strong> | Eco BM: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBM)}</strong>
                         </p>
                       </div>
 
                       {/* Tubetes Consumed & Ratio Card */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-6 shadow-md">
-                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block mb-1">
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-4 lg:p-5 shadow-md flex-1 min-h-0 flex flex-col justify-between">
+                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block">
                           Tubetes Eco B Consumidos
                         </span>
-                        <div className="text-4xl font-mono font-black text-blue-800 my-2">
-                          {metrics.totalTubetesMonth.toLocaleString('pt-BR')} <span className="text-base font-black text-blue-600">unidades</span>
+                        <div className="text-3xl lg:text-4xl font-mono font-black text-blue-800 my-auto">
+                          {metrics.totalTubetesMonth.toLocaleString('pt-BR')} <span className="text-sm font-black text-blue-600">unidades</span>
                         </div>
-                        <div className="mt-3 p-3 bg-white/80 border border-blue-200 rounded-2xl flex items-center justify-between">
+                        <div className="p-2 bg-white/80 border border-blue-200 rounded-2xl flex items-center justify-between">
                           <span className="text-xs font-black text-slate-600 uppercase">Relação Média:</span>
-                          <span className="text-lg font-mono font-black text-emerald-600">
+                          <span className="text-base font-mono font-black text-emerald-600">
                             {renderWeight(metrics.overallRatioMonth, 'text-[0.6em] font-black opacity-80 ml-0.5', '/ Tubete')}
                           </span>
                         </div>
@@ -1765,17 +1765,17 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 4: RANKING DE OPERADORES DE EXTRUSÃO */}
               {currentSlide === 4 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-6">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4">
-                    <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                      <Award className="w-8 h-8 text-amber-500" /> Ranking de Melhores Operadores do Mês
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
+                    <h2 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                      <Award className="w-7 h-7 text-amber-500" /> Ranking de Melhores Operadores do Mês
                     </h2>
-                    <span className="text-sm md:text-base font-mono font-black text-amber-700 bg-amber-50 px-4 py-1.5 rounded-full border border-amber-200">
+                    <span className="text-xs md:text-sm font-mono font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
                       Líderes de Produtividade
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 flex-1 min-h-0 items-center">
                     {metrics.topOperators.slice(0, 6).map((op, index) => {
                       const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
                       const isTop3 = index < 3;
@@ -1783,7 +1783,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                       return (
                         <div
                           key={index}
-                          className={`bg-white rounded-3xl p-6 lg:p-8 border-2 shadow-md flex items-center gap-6 relative overflow-hidden transition-all ${
+                          className={`bg-white rounded-3xl p-4 lg:p-5 border-2 shadow-md flex items-center gap-4 relative overflow-hidden transition-all ${
                             index === 0
                               ? 'border-amber-400 bg-gradient-to-br from-amber-50/80 via-white to-amber-100/40 shadow-lg'
                               : isTop3
@@ -1792,8 +1792,8 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                           }`}
                         >
                           {index === 0 && <ContinuousConfettiOverlay />}
-                          <div className="relative z-10 flex items-center gap-6 w-full">
-                            <div className={`text-3xl lg:text-4xl font-black w-16 h-16 lg:w-20 lg:h-20 flex items-center justify-center rounded-2xl shrink-0 border ${
+                          <div className="relative z-10 flex items-center gap-4 w-full">
+                            <div className={`text-2xl lg:text-3xl font-black w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center rounded-2xl shrink-0 border ${
                               index === 0
                                 ? 'bg-amber-400 text-slate-900 border-amber-300 shadow-md'
                                 : 'bg-slate-100 text-slate-700 border-slate-200'
@@ -1802,9 +1802,9 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <h3 className="text-2xl md:text-3xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
-                              <p className="text-sm md:text-base font-bold text-slate-500 uppercase tracking-wider mt-1">{op.machine}</p>
-                              <div className="text-3xl lg:text-4xl font-mono font-black text-emerald-600 mt-2">
+                              <h3 className="text-lg md:text-xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">{op.machine}</p>
+                              <div className="text-xl lg:text-2xl font-mono font-black text-emerald-600 mt-1">
                                 {renderWeight(op.totalNet)}
                               </div>
                             </div>
