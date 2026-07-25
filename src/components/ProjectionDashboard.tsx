@@ -942,7 +942,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
               </span>
             </div>
             <p className="text-xs md:text-sm font-extrabold text-slate-500 tracking-wider">
-              PAINEL INDUSTRIAL AUTOMÁTICO • EXTRUSÃO & RECURSOS
+              PAINEL INDUSTRIAL AUTOMÁTICO • EXTRUSÃO & CORTE
             </p>
           </div>
         </div>
@@ -1665,98 +1665,97 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 flex-1 min-h-0">
-                    {/* Dual Axis Composed Chart */}
-                    <div className="lg:col-span-2 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between h-full min-h-0 overflow-hidden">
-                      <div className="flex items-center justify-between mb-2 shrink-0">
-                        <h3 className="text-sm md:text-base lg:text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                          <Activity className="w-5 h-5 text-amber-600" /> Histórico Diário: Eco B (Barras, Eixo Esq.) vs Tubetes (Linha, Eixo Dir.)
-                        </h3>
-                        <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
-                          <span className="flex items-center gap-1.5 text-amber-600">
-                            <span className="w-3 h-3 rounded-sm bg-amber-500"></span> Eco B (kg)
-                          </span>
-                          <span className="flex items-center gap-1.5 text-blue-600">
-                            <span className="w-3 h-0.5 bg-blue-600 border-2 border-blue-600"></span> Tubetes (un)
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="w-full flex-1 min-h-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={metrics.dailyEcoBTubetesData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                            <XAxis dataKey="dateBR" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
-                            <YAxis
-                              yAxisId="left"
-                              stroke="#d97706"
-                              tick={{ fill: '#b45309', fontSize: 13, fontWeight: 700 }}
-                              tickFormatter={(val: number) => formatWeightStr(val)}
-                            />
-                            <YAxis
-                              yAxisId="right"
-                              orientation="right"
-                              stroke="#2563eb"
-                              tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
-                              tickFormatter={(val: number) => `${val} un`}
-                            />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
-                              formatter={(value: any, name: string) => {
-                                if (name === 'Eco B Gerado') return [formatWeightStr(Number(value)), 'Eco B Gerado'];
-                                return [`${Number(value).toLocaleString('pt-BR')} un`, 'Tubetes Usados'];
-                              }}
-                            />
-                            <Bar yAxisId="left" dataKey="ecoB" name="Eco B Gerado" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={36}>
-                              <LabelList
-                                dataKey="ecoB"
-                                position="top"
-                                formatter={(val: number) => (val > 0 ? formatWeightStr(val) : '')}
-                                style={{ fontSize: 10, fontWeight: 800, fill: '#b45309' }}
-                              />
-                            </Bar>
-                            <Line yAxisId="right" type="monotone" dataKey="tubetesEcoB" name="Tubetes Usados" stroke="#2563eb" strokeWidth={3} dot={{ r: 5 }}>
-                              <LabelList
-                                dataKey="tubetesEcoB"
-                                position="top"
-                                formatter={(val: number) => (val > 0 ? `${val} un` : '')}
-                                style={{ fontSize: 10, fontWeight: 800, fill: '#1d4ed8' }}
-                              />
-                            </Line>
-                          </ComposedChart>
-                        </ResponsiveContainer>
+                  {/* TOP: Dual Axis Composed Chart (Occupies largest vertical area) */}
+                  <div className="w-full flex-1 min-h-0 bg-white border-2 border-slate-200 rounded-3xl p-4 lg:p-5 shadow-md flex flex-col justify-between overflow-hidden">
+                    <div className="flex items-center justify-between mb-2 shrink-0">
+                      <h3 className="text-sm md:text-base lg:text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-amber-600" /> Histórico Diário: Eco B (Barras, Eixo Esq.) vs Tubetes (Linha, Eixo Dir.)
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs md:text-sm font-extrabold">
+                        <span className="flex items-center gap-1.5 text-amber-600">
+                          <span className="w-3 h-3 rounded-sm bg-amber-500"></span> Eco B (kg)
+                        </span>
+                        <span className="flex items-center gap-1.5 text-blue-600">
+                          <span className="w-3 h-0.5 bg-blue-600 border-2 border-blue-600"></span> Tubetes (un)
+                        </span>
                       </div>
                     </div>
 
-                    {/* KPI Cards Block */}
-                    <div className="flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0">
-                      {/* Total Eco B Generated Card */}
-                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-4 lg:p-5 shadow-md flex-1 min-h-0 flex flex-col justify-between">
-                        <span className="text-xs font-black text-amber-800 uppercase tracking-widest block">
-                          Volume Total de Eco B (Mês)
-                        </span>
-                        <div className="text-3xl lg:text-4xl font-mono font-black text-amber-600 my-auto">
-                          {renderWeight(metrics.totalEcoB)}
-                        </div>
-                        <p className="text-xs font-bold text-slate-600 border-t border-amber-200/60 pt-2">
-                          Eco BP: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBP)}</strong> | Eco BM: <strong className="text-slate-900 font-mono">{renderWeight(metrics.totalEcoBM)}</strong>
-                        </p>
-                      </div>
+                    <div className="w-full flex-1 min-h-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={metrics.dailyEcoBTubetesData} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="dateBR" stroke="#475569" tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 800 }} />
+                          <YAxis
+                            yAxisId="left"
+                            stroke="#d97706"
+                            tick={{ fill: '#b45309', fontSize: 13, fontWeight: 700 }}
+                            tickFormatter={(val: number) => formatWeightStr(val)}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            stroke="#2563eb"
+                            tick={{ fill: '#1d4ed8', fontSize: 13, fontWeight: 700 }}
+                            tickFormatter={(val: number) => `${val} un`}
+                          />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '1rem', fontSize: '15px', fontWeight: 'bold' }}
+                            formatter={(value: any, name: string) => {
+                              if (name === 'Eco B Gerado') return [formatWeightStr(Number(value)), 'Eco B Gerado'];
+                              return [`${Number(value).toLocaleString('pt-BR')} un`, 'Tubetes Usados'];
+                            }}
+                          />
+                          <Bar yAxisId="left" dataKey="ecoB" name="Eco B Gerado" fill="#f59e0b" radius={[8, 8, 0, 0]} barSize={36}>
+                            <LabelList
+                              dataKey="ecoB"
+                              position="top"
+                              formatter={(val: number) => (val > 0 ? formatWeightStr(val) : '')}
+                              style={{ fontSize: 10, fontWeight: 800, fill: '#b45309' }}
+                            />
+                          </Bar>
+                          <Line yAxisId="right" type="monotone" dataKey="tubetesEcoB" name="Tubetes Usados" stroke="#2563eb" strokeWidth={3} dot={{ r: 5 }}>
+                            <LabelList
+                              dataKey="tubetesEcoB"
+                              position="top"
+                              formatter={(val: number) => (val > 0 ? `${val} un` : '')}
+                              style={{ fontSize: 10, fontWeight: 800, fill: '#1d4ed8' }}
+                            />
+                          </Line>
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
 
-                      {/* Tubetes Consumed & Ratio Card */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-4 lg:p-5 shadow-md flex-1 min-h-0 flex flex-col justify-between">
-                        <span className="text-xs font-black text-blue-700 uppercase tracking-widest block">
-                          Tubetes Eco B Consumidos
+                  {/* BOTTOM: 2 KPI Cards Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
+                    {/* Card 1: Volume Total de Eco B */}
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-amber-800 uppercase tracking-wider block border-b border-amber-200/60 pb-1">
+                        Volume Total de Eco B (Mês)
+                      </span>
+                      <div className="text-3xl lg:text-4xl xl:text-5xl font-mono font-black text-amber-600 my-auto">
+                        {renderWeight(metrics.totalEcoB)}
+                      </div>
+                      <div className="text-xs lg:text-sm font-bold text-slate-700 border-t border-amber-200/60 pt-1.5 flex justify-between items-center">
+                        <span>Eco BP: <strong className="text-slate-900 font-mono font-black">{renderWeight(metrics.totalEcoBP)}</strong></span>
+                        <span>Eco BM: <strong className="text-slate-900 font-mono font-black">{renderWeight(metrics.totalEcoBM)}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Tubetes Consumed & Ratio */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
+                      <span className="text-xs font-black text-blue-700 uppercase tracking-wider block border-b border-blue-200/60 pb-1">
+                        Tubetes Eco B Consumidos
+                      </span>
+                      <div className="text-3xl lg:text-4xl xl:text-5xl font-mono font-black text-blue-800 my-auto">
+                        {metrics.totalTubetesMonth.toLocaleString('pt-BR')} <span className="text-sm lg:text-base font-black text-blue-600">unidades</span>
+                      </div>
+                      <div className="text-xs lg:text-sm font-extrabold text-slate-700 border-t border-blue-200/60 pt-1.5 flex justify-between items-center">
+                        <span>Relação Média:</span>
+                        <span className="text-base lg:text-lg font-mono font-black text-emerald-600">
+                          {renderWeight(metrics.overallRatioMonth, 'text-[0.6em] font-black opacity-80 ml-0.5', '/ Tubete')}
                         </span>
-                        <div className="text-3xl lg:text-4xl font-mono font-black text-blue-800 my-auto">
-                          {metrics.totalTubetesMonth.toLocaleString('pt-BR')} <span className="text-sm font-black text-blue-600">unidades</span>
-                        </div>
-                        <div className="p-2 bg-white/80 border border-blue-200 rounded-2xl flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-600 uppercase">Relação Média:</span>
-                          <span className="text-base font-mono font-black text-emerald-600">
-                            {renderWeight(metrics.overallRatioMonth, 'text-[0.6em] font-black opacity-80 ml-0.5', '/ Tubete')}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
