@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Camera, Loader2, Search, Plus } from 'lucide-react';
+import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Camera, Loader2, Search, Plus, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { ProductionEntry, Shift, Collaborator, Employee } from '../types';
 import { extractProductionData } from '../services/aiService';
 
@@ -74,6 +74,16 @@ const calcTotalMinutes = (stops: StopItem[]): number => {
   return stops.reduce((sum, item) => sum + getDiffMinutes(item.de, item.ate), 0);
 };
 
+const PRESET_INFRACTIONS = [
+  '🛑 Não realizou parada obrigatória de limpeza (ex: 6h/6h)',
+  '⚠️ Descumprimento de Procedimento Operacional Padrão (POP)',
+  '🦺 Inobservância de Normas de Segurança / Uso de EPI',
+  '🗑️ Geração excessiva de aparas por falta de regulagem',
+  '⚙️ Operação de máquina fora dos parâmetros do processo',
+  '🕒 Atraso / Ausência não notificada no início do turno',
+  '📝 Outra Infração Personalizada...',
+];
+
 const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, collaborators, employees, activeMachines, availableShifts, initialData, dashboardMonth }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +125,15 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
     recycledUsed: 0,
     recycledBags: 0,
     materialType: 'LC3',
+    hasPenalty: false,
+    infractionType: '',
+    penaltyType: 'deduction_kg' as 'deduction_kg' | 'deduction_percent' | 'disqualify',
+    deductionValue: 500,
+    penaltyReason: '',
   });
+
+  const [selectedPresetInfraction, setSelectedPresetInfraction] = useState<string>(PRESET_INFRACTIONS[0]);
+  const [customInfractionText, setCustomInfractionText] = useState<string>('');
 
   const [manutencaoStops, setManutencaoStops] = useState<StopItem[]>([]);
   const [processoStops, setProcessoStops] = useState<StopItem[]>([]);
@@ -388,8 +406,28 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
           recycledUsed: initialData.recycledUsed ?? 0,
           recycledBags: initialData.recycledBags ?? (initialData.recycledUsed ? Number((initialData.recycledUsed / 1100).toFixed(2)) : 0),
           materialType: initialData.materialType || 'LC3',
+          hasPenalty: initialData.hasPenalty || false,
+          infractionType: initialData.infractionType || '',
+          penaltyType: initialData.penaltyType || 'deduction_kg',
+          deductionValue: initialData.deductionValue ?? 500,
+          penaltyReason: initialData.penaltyReason || '',
         });
+
+        if (initialData.infractionType) {
+          if (PRESET_INFRACTIONS.includes(initialData.infractionType)) {
+            setSelectedPresetInfraction(initialData.infractionType);
+            setCustomInfractionText('');
+          } else {
+            setSelectedPresetInfraction('📝 Outra Infração Personalizada...');
+            setCustomInfractionText(initialData.infractionType);
+          }
+        } else {
+          setSelectedPresetInfraction(PRESET_INFRACTIONS[0]);
+          setCustomInfractionText('');
+        }
       } else {
+        setSelectedPresetInfraction(PRESET_INFRACTIONS[0]);
+        setCustomInfractionText('');
         setFormData({
           date: getDefaultDateForMonth(dashboardMonth),
           operator: '',
@@ -425,6 +463,11 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
           recycledUsed: 0,
           recycledBags: 0,
           materialType: 'LC3',
+          hasPenalty: false,
+          infractionType: '',
+          penaltyType: 'deduction_kg',
+          deductionValue: 500,
+          penaltyReason: '',
         });
       }
     }
@@ -1471,6 +1514,160 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
                   <span className="text-sm font-black text-slate-700">{totalParadas} min</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Seção de Punição / Ocorrência no Ranking */}
+          {!formData.isNoWorkDay && (
+            <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-3xl space-y-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-rose-200/80 pb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-rose-800 font-black text-[10px] uppercase tracking-widest">
+                  <ShieldAlert size={15} className="text-rose-600" /> Ocorrência / Punição no Ranking
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer bg-white/80 px-2.5 py-1 rounded-xl border border-rose-200 hover:bg-white transition-all">
+                  <input
+                    type="checkbox"
+                    checked={formData.hasPenalty || false}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      hasPenalty: e.target.checked,
+                      infractionType: e.target.checked ? (prev.infractionType || selectedPresetInfraction || PRESET_INFRACTIONS[0]) : '',
+                      penaltyType: e.target.checked ? (prev.penaltyType || 'deduction_kg') : 'deduction_kg',
+                      deductionValue: e.target.checked ? (prev.deductionValue || 500) : 0,
+                    }))}
+                    className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] font-black uppercase text-rose-900">Aplicar Punição neste Lançamento</span>
+                </label>
+              </div>
+
+              {formData.hasPenalty && (
+                <div className="space-y-3 pt-1">
+                  <p className="text-[10px] text-rose-800 font-medium leading-tight bg-white/80 p-2.5 rounded-xl border border-rose-100">
+                    Se o operador descumpriu alguma regra neste turno (ex: <strong>não realizou a parada obrigatória de limpeza a cada 6h</strong>), selecione a infração e a punição a ser aplicada na pontuação/peso do ranking.
+                  </p>
+
+                  {/* Regra / Infração */}
+                  <div>
+                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                      Regra Descumprida / Infração *
+                    </label>
+                    <select
+                      value={selectedPresetInfraction}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedPresetInfraction(val);
+                        if (val !== '📝 Outra Infração Personalizada...') {
+                          setFormData(prev => ({ ...prev, infractionType: val }));
+                        } else {
+                          setFormData(prev => ({ ...prev, infractionType: customInfractionText }));
+                        }
+                      }}
+                      className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    >
+                      {PRESET_INFRACTIONS.map((preset) => (
+                        <option key={preset} value={preset}>{preset}</option>
+                      ))}
+                    </select>
+
+                    {selectedPresetInfraction === '📝 Outra Infração Personalizada...' && (
+                      <input
+                        type="text"
+                        placeholder="Especifique a regra ou infração..."
+                        value={customInfractionText}
+                        onChange={(e) => {
+                          setCustomInfractionText(e.target.value);
+                          setFormData(prev => ({ ...prev, infractionType: e.target.value }));
+                        }}
+                        className="w-full mt-2 bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      />
+                    )}
+                  </div>
+
+                  {/* Tipo de Punição */}
+                  <div>
+                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                      Tipo de Penalidade *
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                        formData.penaltyType === 'deduction_kg'
+                          ? 'border-rose-500 bg-white font-black text-rose-950 shadow-xs'
+                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="modalPenaltyType"
+                          checked={formData.penaltyType === 'deduction_kg'}
+                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_kg' }))}
+                          className="text-rose-600 focus:ring-rose-500"
+                        />
+                        <span className="text-[10px] font-black uppercase">Desconto em Kg</span>
+                      </label>
+
+                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                        formData.penaltyType === 'deduction_percent'
+                          ? 'border-amber-500 bg-white font-black text-amber-950 shadow-xs'
+                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="modalPenaltyType"
+                          checked={formData.penaltyType === 'deduction_percent'}
+                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_percent' }))}
+                          className="text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-[10px] font-black uppercase">Desconto %</span>
+                      </label>
+
+                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                        formData.penaltyType === 'disqualify'
+                          ? 'border-red-600 bg-red-100 font-black text-red-950 shadow-xs'
+                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="modalPenaltyType"
+                          checked={formData.penaltyType === 'disqualify'}
+                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'disqualify' }))}
+                          className="text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-[10px] font-black uppercase">Desqualificar</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Valor do Desconto */}
+                  {formData.penaltyType !== 'disqualify' && (
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                        Valor da Punição ({formData.penaltyType === 'deduction_kg' ? 'em Kg' : 'em %'}) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formData.deductionValue || 0}
+                        onChange={(e) => setFormData(prev => ({ ...prev, deductionValue: Number(e.target.value) || 0 }))}
+                        className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Observações */}
+                  <div>
+                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                      Justificativa / Observações (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Não efetuou a parada obrigatória de 6h para limpeza da matriz..."
+                      value={formData.penaltyReason || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, penaltyReason: e.target.value }))}
+                      className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -3,7 +3,8 @@ import {
   Tv, Maximize2, Minimize2, Play, Pause, ChevronLeft, ChevronRight, 
   Trophy, TrendingUp, Target, Calendar, Clock, Activity, 
   Award, BarChart3, Factory, RefreshCw, X, Sliders, Flame, Users,
-  ArrowUpRight, ArrowDownRight, TrendingDown, Scale, AlertCircle, Percent
+  ArrowUpRight, ArrowDownRight, TrendingDown, Scale, AlertCircle, Percent,
+  ShieldAlert, AlertTriangle
 } from 'lucide-react';
 import { 
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, 
@@ -11,7 +12,7 @@ import {
   ComposedChart, Line
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { ProductionEntry, RibbonCuttingEntry, Collaborator } from '../types';
+import { ProductionEntry, RibbonCuttingEntry, Collaborator, OperatorPenalty, Employee } from '../types';
 
 interface ProjectionDashboardProps {
   productionData: ProductionEntry[];
@@ -22,6 +23,10 @@ interface ProjectionDashboardProps {
   systemName: string;
   systemLogo?: string;
   onClose: () => void;
+  operatorPenalties?: OperatorPenalty[];
+  onAddPenalty?: (penalty: Omit<OperatorPenalty, 'id' | 'createdAt'>) => Promise<void> | void;
+  onDeletePenalty?: (id: string) => Promise<void> | void;
+  employees?: Employee[];
 }
 
 const ContinuousConfettiOverlay: React.FC = () => {
@@ -131,6 +136,10 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   systemName,
   systemLogo,
   onClose,
+  operatorPenalties = [],
+  onAddPenalty = () => {},
+  onDeletePenalty = () => {},
+  employees = [],
 }) => {
   // States for controls
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -142,6 +151,21 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const [comparisonView, setComparisonView] = useState<'daily' | 'monthly'>('daily');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const historyScrollRef = useRef<HTMLDivElement>(null);
+
+  // List of all operators for penalties modal
+  const allOperatorsList = useMemo(() => {
+    const set = new Set<string>();
+    (productionData || []).forEach((p) => {
+      if (p.operator && p.operator.trim()) set.add(p.operator.trim());
+    });
+    (collaborators || []).forEach((c) => {
+      if (c.name && c.name.trim()) set.add(c.name.trim());
+    });
+    (employees || []).forEach((e) => {
+      if (e.name && e.name.trim()) set.add(e.name.trim());
+    });
+    return Array.from(set).sort();
+  }, [productionData, collaborators, employees]);
 
   // Clock tick
   useEffect(() => {
@@ -310,7 +334,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     let yesterdayEcoB = 0;
 
     // Operator totals map
-    const operatorMap: Record<string, { totalNet: number; count: number; machine: string }> = {};
+    const operatorMap: Record<string, { totalNet: number; count: number; machine: string; entryPenalties: OperatorPenalty[] }> = {};
 
     // Machine totals map
     const machineMonthMap: Record<string, number> = {
@@ -363,19 +387,90 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       if (e.operator && e.operator.trim()) {
         const opName = e.operator.trim();
         if (!operatorMap[opName]) {
-          operatorMap[opName] = { totalNet: 0, count: 0, machine: e.machine || 'Extrusão' };
+          operatorMap[opName] = { totalNet: 0, count: 0, machine: e.machine || 'Extrusão', entryPenalties: [] };
         }
         operatorMap[opName].totalNet += net;
         operatorMap[opName].count += 1;
+        if (e.hasPenalty) {
+          operatorMap[opName].entryPenalties.push({
+            id: e.id || `entry-pen-${Math.random()}`,
+            operator: opName,
+            date: e.date,
+            infractionType: e.infractionType || 'Infração de Turno',
+            penaltyType: (e.penaltyType || 'deduction_kg') as any,
+            deductionValue: e.deductionValue || 0,
+            reason: e.penaltyReason || '',
+            createdAt: e.updatedAt || new Date().toISOString()
+          });
+        }
       }
     });
 
-    // Top Operators
-    const topOperators = Object.entries(operatorMap)
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.totalNet - a.totalNet);
+    // Top Operators with Penalties Deductions & Disqualifications
+    const operatorRankingList = Object.entries(operatorMap).map(([name, data]) => {
+      const opPenaltiesFromEntries = data.entryPenalties || [];
+      const opPenaltiesFromStore = (operatorPenalties || []).filter((p) => {
+        if (!p || !p.operator) return false;
+        const matchName = p.operator.trim().toLowerCase() === name.trim().toLowerCase();
+        const matchMonth = p.date ? p.date.startsWith(dashboardMonth) : true;
+        return matchName && matchMonth;
+      });
 
-    const bestOperator = topOperators[0] || { name: 'Sem registros', totalNet: 0, machine: '-' };
+      const opPenalties = [...opPenaltiesFromEntries, ...opPenaltiesFromStore];
+
+      let totalKgDeduction = 0;
+      let totalPercentDeduction = 0;
+      let isDisqualified = false;
+
+      opPenalties.forEach((p) => {
+        if (p.penaltyType === 'deduction_kg') {
+          totalKgDeduction += Number(p.deductionValue) || 0;
+        } else if (p.penaltyType === 'deduction_percent') {
+          totalPercentDeduction += Number(p.deductionValue) || 0;
+        } else if (p.penaltyType === 'disqualify') {
+          isDisqualified = true;
+        }
+      });
+
+      const rawTotalNet = data.totalNet;
+      let adjustedTotalNet = Math.max(0, rawTotalNet - totalKgDeduction);
+      if (totalPercentDeduction > 0) {
+        adjustedTotalNet = Math.max(0, adjustedTotalNet * (1 - totalPercentDeduction / 100));
+      }
+
+      return {
+        name,
+        rawTotalNet,
+        adjustedTotalNet,
+        totalNet: isDisqualified ? 0 : adjustedTotalNet,
+        count: data.count,
+        machine: data.machine,
+        penalties: opPenalties,
+        totalKgDeduction,
+        totalPercentDeduction,
+        isDisqualified,
+        penaltiesCount: opPenalties.length,
+      };
+    });
+
+    const topOperators = operatorRankingList.sort((a, b) => {
+      if (a.isDisqualified && !b.isDisqualified) return 1;
+      if (!a.isDisqualified && b.isDisqualified) return -1;
+      return b.adjustedTotalNet - a.adjustedTotalNet;
+    });
+
+    const bestOperator = topOperators[0] || {
+      name: 'Sem registros',
+      totalNet: 0,
+      rawTotalNet: 0,
+      adjustedTotalNet: 0,
+      machine: '-',
+      penalties: [],
+      totalKgDeduction: 0,
+      totalPercentDeduction: 0,
+      isDisqualified: false,
+      penaltiesCount: 0,
+    };
 
     // Projection & Daily Goal
     const today = new Date();
@@ -1201,7 +1296,9 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                               Melhor Operador do Mês
                             </h2>
                           </div>
-                          <span className="text-2xl">🥇</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-2xl">🥇</span>
+                          </div>
                         </div>
 
                         <div className="my-auto flex items-center gap-4">
@@ -1218,13 +1315,22 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                               Máquina: {metrics.bestOperator.machine || 'Extrusão'}
                             </p>
                             <div className="mt-1 text-2xl lg:text-3xl font-mono font-black text-emerald-600">
-                              {renderWeight(metrics.bestOperator.totalNet)}
+                              {renderWeight(metrics.bestOperator.adjustedTotalNet ?? metrics.bestOperator.totalNet)}
                             </div>
+                            {metrics.bestOperator.penaltiesCount > 0 && (
+                              <div className="mt-0.5 text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                <span>Real: {renderWeight(metrics.bestOperator.rawTotalNet)}</span>
+                                <span className="text-rose-600 font-black">(-{metrics.bestOperator.totalKgDeduction} Kg)</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="bg-amber-100/90 border border-amber-300 rounded-xl p-2 text-center text-[11px] md:text-xs font-black text-amber-900 tracking-wider uppercase">
-                          Líder em Produtividade da Extrusão
+                        <div className="bg-amber-100/90 border border-amber-300 rounded-xl p-2 text-center text-[11px] md:text-xs font-black text-amber-900 tracking-wider uppercase flex items-center justify-between">
+                          <span>Líder em Produtividade</span>
+                          {metrics.bestOperator.penaltiesCount > 0 && (
+                            <span className="text-rose-700 font-extrabold text-[10px]">⚠️ {metrics.bestOperator.penaltiesCount} Infração</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1765,13 +1871,15 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
               {/* SLIDE 4: RANKING DE OPERADORES DE EXTRUSÃO */}
               {currentSlide === 4 && (
                 <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
-                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0">
+                  <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2 shrink-0 flex-wrap gap-2">
                     <h2 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
                       <Award className="w-7 h-7 text-amber-500" /> Ranking de Melhores Operadores do Mês
                     </h2>
-                    <span className="text-xs md:text-sm font-mono font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                      Líderes de Produtividade
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs md:text-sm font-mono font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                        Líderes de Produtividade
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 flex-1 min-h-0 items-center">
@@ -1783,29 +1891,52 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                         <div
                           key={index}
                           className={`bg-white rounded-3xl p-4 lg:p-5 border-2 shadow-md flex items-center gap-4 relative overflow-hidden transition-all ${
-                            index === 0
+                            op.isDisqualified
+                              ? 'border-rose-300 bg-rose-50/40'
+                              : index === 0
                               ? 'border-amber-400 bg-gradient-to-br from-amber-50/80 via-white to-amber-100/40 shadow-lg'
                               : isTop3
                               ? 'border-slate-300'
                               : 'border-slate-200'
                           }`}
                         >
-                          {index === 0 && <ContinuousConfettiOverlay />}
+                          {index === 0 && !op.isDisqualified && <ContinuousConfettiOverlay />}
                           <div className="relative z-10 flex items-center gap-4 w-full">
                             <div className={`text-2xl lg:text-3xl font-black w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center rounded-2xl shrink-0 border ${
-                              index === 0
+                              op.isDisqualified
+                                ? 'bg-rose-100 text-rose-700 border-rose-200'
+                                : index === 0
                                 ? 'bg-amber-400 text-slate-900 border-amber-300 shadow-md'
                                 : 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}>
-                              {medal}
+                              {op.isDisqualified ? '⛔' : medal}
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <h3 className="text-lg md:text-xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
-                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">{op.machine}</p>
-                              <div className="text-xl lg:text-2xl font-mono font-black text-emerald-600 mt-1">
-                                {renderWeight(op.totalNet)}
+                              <div className="flex items-center justify-between gap-1">
+                                <h3 className="text-lg md:text-xl font-black text-slate-900 truncate tracking-tight">{op.name}</h3>
+                                {op.penaltiesCount > 0 && (
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${op.isDisqualified ? 'bg-rose-600 text-white' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>
+                                    {op.isDisqualified ? 'Desqualificado' : `⚠️ -${op.totalKgDeduction > 0 ? op.totalKgDeduction + 'kg' : op.totalPercentDeduction + '%'}`}
+                                  </span>
+                                )}
                               </div>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">{op.machine}</p>
+                              
+                              <div className="text-xl lg:text-2xl font-mono font-black text-emerald-600 mt-1 flex items-baseline justify-between">
+                                <span>{renderWeight(op.adjustedTotalNet ?? op.totalNet)}</span>
+                                {op.rawTotalNet !== op.adjustedTotalNet && !op.isDisqualified && (
+                                  <span className="text-[10px] font-bold text-slate-400 line-through">
+                                    {renderWeight(op.rawTotalNet)}
+                                  </span>
+                                )}
+                              </div>
+
+                              {op.penalties && op.penalties.length > 0 && (
+                                <p className="text-[10px] text-rose-700 font-bold truncate mt-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                                  {op.penalties[0].infractionType}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>

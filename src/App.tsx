@@ -20,7 +20,7 @@ import { db, auth, messaging, OperationType, handleFirestoreError, seedInitialDa
 import { getToken, onMessage } from 'firebase/messaging';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession, AccessLog } from './types';
+import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession, AccessLog, OperatorPenalty } from './types';
 import * as XLSX from 'xlsx';
 
 import PdfChoiceModal from './components/PdfChoiceModal';
@@ -921,6 +921,46 @@ export const App: React.FC = () => {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [personnelLogs, setPersonnelLogs] = useState<PersonnelLog[]>([]);
   const [availableShifts, setAvailableShifts] = useState<Shift[]>([]);
+  const [operatorPenalties, setOperatorPenalties] = useState<OperatorPenalty[]>(() => {
+    try {
+      const saved = localStorage.getItem('manupackaging_operator_penalties');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleAddPenalty = async (penalty: Omit<OperatorPenalty, 'id' | 'createdAt'>) => {
+    const id = 'pen_' + Date.now();
+    const newPen: OperatorPenalty = {
+      ...penalty,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      await setDoc(doc(db, 'operator_penalties', id), newPen);
+    } catch (e) {
+      console.warn('Firestore offline, saving penalty locally', e);
+    }
+    setOperatorPenalties((prev) => {
+      const updated = [...prev, newPen];
+      try { localStorage.setItem('manupackaging_operator_penalties', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const handleDeletePenalty = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'operator_penalties', id));
+    } catch (e) {
+      console.warn('Firestore offline, deleting penalty locally', e);
+    }
+    setOperatorPenalties((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      try { localStorage.setItem('manupackaging_operator_penalties', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -1778,6 +1818,17 @@ export const App: React.FC = () => {
       console.warn('Erro ao escutar access_logs:', err);
     });
 
+    const unsubPenalties = onSnapshot(collection(db, 'operator_penalties'), (snap) => {
+      const data = snap.docs.map(docRef => ({
+        ...docRef.data(),
+        id: docRef.id
+      })) as OperatorPenalty[];
+      setOperatorPenalties(data);
+      try { localStorage.setItem('manupackaging_operator_penalties', JSON.stringify(data)); } catch {}
+    }, (err) => {
+      console.warn('Erro ao escutar operator_penalties:', err);
+    });
+
     return () => {
       unsubProduction();
       unsubEmployees();
@@ -1793,6 +1844,7 @@ export const App: React.FC = () => {
       unsubVacations();
       unsubActiveSessions();
       unsubAccessLogs();
+      unsubPenalties();
     };
   }, [currentUser]);
 
@@ -10977,7 +11029,7 @@ Produção total:
         )}
 
         {activeTab === 'extrusion' && extrusionSubTab === 'reports' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="space-y-6 animate-in fade-in duration-300 select-none cursor-default">
             <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -11002,22 +11054,26 @@ Produção total:
             </div>
             <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse select-none cursor-default">
                         <thead className="bg-slate-50 border-b border-slate-100 whitespace-nowrap">
                             <tr>
                               <th className="px-4 py-5 text-center">
-                                <input 
-                                  type="checkbox" 
-                                  checked={selectedEntries.length === filteredReportData.length && filteredReportData.length > 0}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedEntries(filteredReportData.map(e => e.id));
-                                    } else {
-                                      setSelectedEntries([]);
-                                    }
-                                  }}
-                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                />
+                                <div className="flex items-center justify-center gap-2">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={selectedEntries.length === filteredReportData.length && filteredReportData.length > 0}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedEntries(filteredReportData.map(e => e.id));
+                                      } else {
+                                        setSelectedEntries([]);
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    title="Selecionar Todos"
+                                  />
+                                  {canEditProduction && <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Editar</span>}
+                                </div>
                               </th>
                               <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
                                 <span className="flex items-center gap-1 select-none">
@@ -11204,18 +11260,30 @@ Produção total:
                               return (
                                 <tr key={entry.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedEntries.includes(entry.id) ? 'bg-blue-50/30' : ''}`}>
                                     <td className="px-4 py-3 text-center">
-                                      <input 
-                                        type="checkbox" 
-                                        checked={selectedEntries.includes(entry.id)}
-                                        onChange={() => {
-                                          if (selectedEntries.includes(entry.id)) {
-                                            setSelectedEntries(selectedEntries.filter(id => id !== entry.id));
-                                          } else {
-                                            setSelectedEntries([...selectedEntries, entry.id]);
-                                          }
-                                        }}
-                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                      />
+                                      <div className="flex items-center justify-center gap-2">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={selectedEntries.includes(entry.id)}
+                                          onChange={() => {
+                                            if (selectedEntries.includes(entry.id)) {
+                                              setSelectedEntries(selectedEntries.filter(id => id !== entry.id));
+                                            } else {
+                                              setSelectedEntries([...selectedEntries, entry.id]);
+                                            }
+                                          }}
+                                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                                        />
+                                        {canEditProduction && (
+                                          <button 
+                                            onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }} 
+                                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+                                            title="Editar este dia"
+                                          >
+                                            <Edit2 size={12}/>
+                                            <span>Editar</span>
+                                          </button>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-4 py-3 font-bold text-slate-700">{entry.date.split('-').reverse().join('/')}</td>
                                     <td className="px-4 py-3 font-bold uppercase">
@@ -11284,8 +11352,8 @@ Produção total:
                                     <td className="px-4 py-3 text-right text-slate-600">{entry.outrosMin}</td>
                                     <td className="px-4 py-3 text-center">
                                           {canEditProduction && (
-                                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              <button onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={13}/></button>
+                                            <div className="flex items-center justify-center gap-1">
+                                              <button onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-100 bg-blue-50/80 rounded-lg border border-blue-100" title="Editar Lançamento"><Edit2 size={13}/></button>
                                               <button onClick={() => { 
                                                 openConfirm(
                                                   'Confirmar Exclusão',
@@ -13876,7 +13944,7 @@ Produção total:
             </div>
 
             {/* Painel de Filtros e Tabela */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6 select-none cursor-default">
               {/* Filtros e Controles */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-50 pb-4">
                 <div>
@@ -13945,23 +14013,27 @@ Produção total:
 
               {/* Tabela Responsiva */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[700px] select-none cursor-default">
                   <thead>
                     <tr className="border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
                       {canEditProduction && (
-                        <th className="py-3 px-4 w-10 text-center">
-                          <input
-                            type="checkbox"
-                            checked={filteredRibbonEntries.length > 0 && selectedRibbonIds.length === filteredRibbonEntries.length}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedRibbonIds(filteredRibbonEntries.map(e => e.id));
-                              } else {
-                                setSelectedRibbonIds([]);
-                              }
-                            }}
-                            className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
-                          />
+                        <th className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={filteredRibbonEntries.length > 0 && selectedRibbonIds.length === filteredRibbonEntries.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRibbonIds(filteredRibbonEntries.map(e => e.id));
+                                } else {
+                                  setSelectedRibbonIds([]);
+                                }
+                              }}
+                              className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                              title="Selecionar Todos"
+                            />
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Editar</span>
+                          </div>
                         </th>
                       )}
                       <th className="py-3 px-4">Data</th>
@@ -13997,19 +14069,30 @@ Produção total:
                         return (
                           <tr key={entry.id} className={`hover:bg-slate-50/50 transition-all font-mono ${selectedRibbonIds.includes(entry.id) ? 'bg-blue-50/30' : ''}`}>
                             {canEditProduction && (
-                              <td className="py-3.5 px-4 w-10 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedRibbonIds.includes(entry.id)}
-                                  onChange={() => {
-                                    if (selectedRibbonIds.includes(entry.id)) {
-                                      setSelectedRibbonIds(selectedRibbonIds.filter(id => id !== entry.id));
-                                    } else {
-                                      setSelectedRibbonIds([...selectedRibbonIds, entry.id]);
-                                    }
-                                  }}
-                                  className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer font-sans"
-                                />
+                              <td className="py-3.5 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedRibbonIds.includes(entry.id)}
+                                    onChange={() => {
+                                      if (selectedRibbonIds.includes(entry.id)) {
+                                        setSelectedRibbonIds(selectedRibbonIds.filter(id => id !== entry.id));
+                                      } else {
+                                        setSelectedRibbonIds([...selectedRibbonIds, entry.id]);
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer font-sans shrink-0"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditRibbonEntry(entry)}
+                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+                                    title="Editar Lançamento"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Editar</span>
+                                  </button>
+                                </div>
                               </td>
                             )}
                             <td className="py-3.5 px-4 font-sans font-bold text-slate-800">
@@ -14595,6 +14678,10 @@ Produção total:
             systemName={systemName}
             systemLogo={systemLogo || undefined}
             onClose={() => setActiveTab('home')}
+            operatorPenalties={operatorPenalties}
+            onAddPenalty={handleAddPenalty}
+            onDeletePenalty={handleDeletePenalty}
+            employees={employees}
           />
         )}
 

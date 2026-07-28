@@ -44,6 +44,11 @@ export interface ProductionEntry {
     tubetes: number;
     tubetesEcoB: number;
   }>;
+  hasPenalty?: boolean;
+  infractionType?: string;
+  penaltyType?: 'deduction_kg' | 'deduction_percent' | 'disqualify';
+  deductionValue?: number;
+  penaltyReason?: string;
 }
 
 export interface SummaryStats {
@@ -324,6 +329,20 @@ export interface StopItem {
 
 export type MaintenancePriority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
 export type MaintenanceStatus = 'Pendente' | 'Em Andamento' | 'Resolvido';
+
+export type PenaltyType = 'deduction_kg' | 'deduction_percent' | 'disqualify';
+
+export interface OperatorPenalty {
+  id: string;
+  operator: string;
+  date: string; // YYYY-MM or YYYY-MM-DD
+  infractionType: string;
+  penaltyType: PenaltyType;
+  deductionValue: number; // valor em kg ou em % (0 se disqualify)
+  reason: string;
+  registeredBy?: string;
+  createdAt: string;
+}
 
 export interface MaintenanceIssue {
   id: string;
