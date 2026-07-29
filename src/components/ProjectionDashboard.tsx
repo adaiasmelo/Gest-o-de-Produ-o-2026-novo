@@ -12,7 +12,10 @@ import {
   ComposedChart, Line
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { ProductionEntry, RibbonCuttingEntry, Collaborator, OperatorPenalty, Employee } from '../types';
+import { ProductionEntry, RibbonCuttingEntry, Collaborator, OperatorPenalty, Employee, CompanyNotice } from '../types';
+import { CompanyNoticeModal } from './CompanyNoticeModal';
+import { WeeklyProductionSummaryModal } from './WeeklyProductionSummaryModal';
+import { Plus, Megaphone, CheckCircle2, FileText, Camera, Upload, Trash2, Presentation } from 'lucide-react';
 
 interface ProjectionDashboardProps {
   productionData: ProductionEntry[];
@@ -27,6 +30,9 @@ interface ProjectionDashboardProps {
   onAddPenalty?: (penalty: Omit<OperatorPenalty, 'id' | 'createdAt'>) => Promise<void> | void;
   onDeletePenalty?: (id: string) => Promise<void> | void;
   employees?: Employee[];
+  companyNotices?: CompanyNotice[];
+  onSaveNotice?: (notice: CompanyNotice) => Promise<void> | void;
+  onDeleteNotice?: (id: string) => Promise<void> | void;
 }
 
 const ContinuousConfettiOverlay: React.FC = () => {
@@ -140,6 +146,9 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   onAddPenalty = () => {},
   onDeletePenalty = () => {},
   employees = [],
+  companyNotices = [],
+  onSaveNotice = async (_notice: CompanyNotice) => {},
+  onDeleteNotice = async (_id: string) => {},
 }) => {
   // States for controls
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -150,7 +159,17 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   const [viewMode, setViewMode] = useState<'slides' | 'grid'>('slides');
   const [comparisonView, setComparisonView] = useState<'daily' | 'monthly'>('daily');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [noticeModalCategory, setNoticeModalCategory] = useState<'rh' | 'safety' | null>(null);
+  const [isWeeklySummaryOpen, setIsWeeklySummaryOpen] = useState<boolean>(false);
   const historyScrollRef = useRef<HTMLDivElement>(null);
+
+  const rhNotices = useMemo(() => {
+    return (companyNotices || []).filter((n) => n.category === 'rh');
+  }, [companyNotices]);
+
+  const safetyNotices = useMemo(() => {
+    return (companyNotices || []).filter((n) => n.category === 'safety');
+  }, [companyNotices]);
 
   // List of all operators for penalties modal
   const allOperatorsList = useMemo(() => {
@@ -223,7 +242,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          setCurrentSlide((slide) => (slide + 1) % 5);
+          setCurrentSlide((slide) => (slide + 1) % 7);
           return slideDuration;
         }
         return prev - 1;
@@ -1013,6 +1032,8 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
     'Histórico de parada de máquina',
     'Eco B vs Tubetes Eco B',
     'Ranking de Operadores',
+    'Avisos de RH',
+    'Avisos de Segurança (SST)',
   ];
 
   return (
@@ -1112,6 +1133,14 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
           {/* Control Buttons: Pause, Fullscreen, Exit */}
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setIsWeeklySummaryOpen(true)}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-blue-400/30 active:scale-95"
+              title="Abrir Resumo Semanal de Produção para Reunião"
+            >
+              <Presentation className="w-5 h-5 text-amber-300 animate-pulse" />
+              <span className="hidden md:inline">Resumo Semanal (Reunião)</span>
+            </button>
             <button
               onClick={() => setIsAutoPlay(!isAutoPlay)}
               className={`p-3 rounded-xl transition-all shadow-sm ${
@@ -1945,6 +1974,250 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* SLIDE 5: AVISOS DE RECURSOS HUMANOS (RH) */}
+              {currentSlide === 5 && (
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
+                  <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border-2 border-blue-200 shadow-sm shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-md">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                          Recursos Humanos • Avisos & Comunicados
+                        </h2>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                          Informações Institucionais e Gestão de Pessoas
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setNoticeModalCategory('rh')}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition-all active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Gerenciar Avisos de RH</span>
+                    </button>
+                  </div>
+
+                  {/* RH Notices Display Container */}
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    {rhNotices.length === 0 ? (
+                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-blue-200 p-8 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner">
+                          <Users className="w-8 h-8" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de RH no momento</h3>
+                          <p className="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
+                            Clique no botão acima "Gerenciar Avisos de RH" para publicar novos comunicados para a equipe.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setNoticeModalCategory('rh')}
+                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Adicionar Primeiro Aviso</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch overflow-hidden">
+                        {rhNotices.map((notice, idx) => (
+                          <div
+                            key={notice.id || idx}
+                            className="bg-white rounded-3xl border-2 border-slate-200 shadow-md p-5 lg:p-6 flex flex-col justify-between h-full min-h-0 overflow-hidden relative group hover:border-blue-300 transition-all"
+                          >
+                            {/* Notice Header Badge & Date */}
+                            <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                              <span className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-widest border shadow-xs ${
+                                notice.priority === 'high'
+                                  ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                  : notice.priority === 'medium'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                  : 'bg-blue-100 text-blue-800 border-blue-300'
+                              }`}>
+                                {notice.badgeText || 'COMUNICADO RH'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {notice.date && (
+                                  <span className="text-xs font-mono font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
+                                    {notice.date}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => onDeleteNotice(notice.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Excluir aviso"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Title & Subtitle */}
+                            <div className="shrink-0 mb-3">
+                              <h3 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                                {notice.title}
+                              </h3>
+                              {notice.subtitle && (
+                                <p className="text-xs md:text-sm font-extrabold text-blue-600 uppercase tracking-wider mt-1">
+                                  {notice.subtitle}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Image Banner */}
+                            {notice.imageUrl && (
+                              <div className="flex-1 min-h-0 my-2 rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 relative group-hover:shadow-lg transition-all">
+                                <img
+                                  src={notice.imageUrl}
+                                  alt={notice.title}
+                                  className="w-full h-full object-cover rounded-2xl"
+                                />
+                                {notice.imageCaption && (
+                                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent p-3 text-white text-xs font-bold truncate">
+                                    {notice.imageCaption}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Description Text */}
+                            <div className="shrink-0 pt-3 border-t border-slate-100">
+                              <p className="text-sm md:text-base lg:text-lg font-medium text-slate-700 leading-relaxed line-clamp-4">
+                                {notice.description}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 6: AVISOS DE SEGURANÇA DO TRABALHO (SST & CIPA) */}
+              {currentSlide === 6 && (
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
+                  <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border-2 border-emerald-300 shadow-sm shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-md">
+                        <ShieldAlert className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                          Segurança do Trabalho • SST & CIPA
+                        </h2>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                          Prevenção de Acidentes, EPIs e Saúde Ocupacional
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setNoticeModalCategory('safety')}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition-all active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Gerenciar Avisos de Segurança</span>
+                    </button>
+                  </div>
+
+                  {/* Safety Notices Display Container */}
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    {safetyNotices.length === 0 ? (
+                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-8 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center shadow-inner">
+                          <ShieldAlert className="w-8 h-8" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de Segurança no momento</h3>
+                          <p className="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
+                            Clique no botão acima "Gerenciar Avisos de Segurança" para publicar alertas de segurança e SST.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setNoticeModalCategory('safety')}
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Adicionar Primeiro Aviso</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch overflow-hidden">
+                        {safetyNotices.map((notice, idx) => (
+                          <div
+                            key={notice.id || idx}
+                            className="bg-white rounded-3xl border-2 border-emerald-200 shadow-md p-5 lg:p-6 flex flex-col justify-between h-full min-h-0 overflow-hidden relative group hover:border-emerald-400 transition-all"
+                          >
+                            {/* Notice Header Badge & Date */}
+                            <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                              <span className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-widest border shadow-xs ${
+                                notice.priority === 'high'
+                                  ? 'bg-rose-600 text-white border-rose-700'
+                                  : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                              }`}>
+                                {notice.badgeText || 'SEGURANÇA DO TRABALHO'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {notice.date && (
+                                  <span className="text-xs font-mono font-black text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                                    {notice.date}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => onDeleteNotice(notice.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Excluir aviso"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Title & Subtitle */}
+                            <div className="shrink-0 mb-3">
+                              <h3 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                                {notice.title}
+                              </h3>
+                              {notice.subtitle && (
+                                <p className="text-xs md:text-sm font-black text-emerald-700 uppercase tracking-wider mt-1">
+                                  {notice.subtitle}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Image Banner */}
+                            {notice.imageUrl && (
+                              <div className="flex-1 min-h-0 my-2 rounded-2xl overflow-hidden border border-emerald-200 bg-slate-950 relative group-hover:shadow-lg transition-all">
+                                <img
+                                  src={notice.imageUrl}
+                                  alt={notice.title}
+                                  className="w-full h-full object-cover rounded-2xl"
+                                />
+                                {notice.imageCaption && (
+                                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent p-3 text-white text-xs font-bold truncate">
+                                    {notice.imageCaption}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Description Text */}
+                            <div className="shrink-0 pt-3 border-t border-slate-100">
+                              <p className="text-sm md:text-base lg:text-lg font-medium text-slate-800 leading-relaxed line-clamp-4">
+                                {notice.description}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         ) : (
@@ -2044,6 +2317,27 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
           </div>
         )}
       </main>
+
+      {/* Modal de Gestão de Avisos de RH / Segurança */}
+      {noticeModalCategory && (
+        <CompanyNoticeModal
+          isOpen={!!noticeModalCategory}
+          onClose={() => setNoticeModalCategory(null)}
+          category={noticeModalCategory}
+          companyNotices={companyNotices}
+          onSaveNotice={onSaveNotice}
+          onDeleteNotice={onDeleteNotice}
+        />
+      )}
+
+      {/* Weekly Production Summary Modal */}
+      <WeeklyProductionSummaryModal
+        isOpen={isWeeklySummaryOpen}
+        onClose={() => setIsWeeklySummaryOpen(false)}
+        productionData={productionData}
+        ribbonData={ribbonEntries}
+        employees={employees}
+      />
 
       {/* Footer Status Bar */}
       <footer className="bg-white border-t-2 border-slate-200 px-6 py-3 flex items-center justify-between text-xs md:text-sm font-extrabold text-slate-600 shrink-0 shadow-sm">

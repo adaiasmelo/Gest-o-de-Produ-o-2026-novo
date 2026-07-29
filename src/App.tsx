@@ -7,7 +7,7 @@ import {
   LogOut, Search, Activity, Package, ChevronRight, TrendingDown, Upload, Info,
   UserPlus, Download, AlertCircle, FileSpreadsheet, Scale, FileText, Menu, Fingerprint, Smartphone, Bell, Volume2, Share, ExternalLink, Mail, Copy,
   Home as HomeIcon, WifiOff, Image as ImageIcon, LayoutDashboard, BarChart3, ChevronDown,
-  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils, Tv
+  Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils, Tv, Presentation
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -20,11 +20,13 @@ import { db, auth, messaging, OperationType, handleFirestoreError, seedInitialDa
 import { getToken, onMessage } from 'firebase/messaging';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession, AccessLog, OperatorPenalty } from './types';
+import { ProductionEntry, Shift, Employee, Collaborator, PersonnelLog, SystemUser, UserPermissions, TrainingRecord, TrainingTemplate, StockItem, StockEntry, RibbonCuttingEntry, StopItem, OperatorTrainingSheet, Vacation, ActiveSession, AccessLog, OperatorPenalty, CompanyNotice } from './types';
+import { DEFAULT_COMPANY_NOTICES } from './data/defaultNotices';
 import * as XLSX from 'xlsx';
 
 import PdfChoiceModal from './components/PdfChoiceModal';
 import { ActiveUsersModal } from './components/ActiveUsersModal';
+import { WeeklyProductionSummaryModal } from './components/WeeklyProductionSummaryModal';
 import { IMPORTED_COLLABORATORS } from './constants/importedCollaborators';
 import { INITIAL_DATA, GOAL_VALUE, DEFAULT_OPERATORS, INITIAL_EMPLOYEES, INITIAL_LOGS } from './constants';
 import { isBiometricAvailable, registerBiometrics, authenticateBiometrics } from './services/biometricService';
@@ -930,6 +932,57 @@ export const App: React.FC = () => {
     }
   });
 
+  const [companyNotices, setCompanyNotices] = useState<CompanyNotice[]>(() => {
+    try {
+      const saved = localStorage.getItem('manupackaging_company_notices');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return DEFAULT_COMPANY_NOTICES;
+    } catch {
+      return DEFAULT_COMPANY_NOTICES;
+    }
+  });
+
+  const handleSaveNotice = async (notice: CompanyNotice) => {
+    try {
+      await setDoc(doc(db, 'company_notices', notice.id), notice);
+    } catch (e) {
+      console.warn('Firestore offline, saving notice locally', e);
+    }
+    setCompanyNotices((prev) => {
+      const idx = prev.findIndex((n) => n.id === notice.id);
+      let updated: CompanyNotice[];
+      if (idx >= 0) {
+        updated = [...prev];
+        updated[idx] = notice;
+      } else {
+        updated = [notice, ...prev];
+      }
+      try {
+        localStorage.setItem('manupackaging_company_notices', JSON.stringify(updated));
+        localStorage.setItem('manupackaging_notices_modified', 'true');
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleDeleteNotice = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'company_notices', id));
+    } catch (e) {
+      console.warn('Firestore offline, deleting notice locally', e);
+    }
+    setCompanyNotices((prev) => {
+      const updated = prev.filter((n) => n.id !== id);
+      try {
+        localStorage.setItem('manupackaging_company_notices', JSON.stringify(updated));
+        localStorage.setItem('manupackaging_notices_modified', 'true');
+      } catch {}
+      return updated;
+    });
+  };
+
   const handleAddPenalty = async (penalty: Omit<OperatorPenalty, 'id' | 'createdAt'>) => {
     const id = 'pen_' + Date.now();
     const newPen: OperatorPenalty = {
@@ -1036,6 +1089,7 @@ export const App: React.FC = () => {
   const [isExtraMenuOpen, setIsExtraMenuOpen] = useState(false);
   const [employeeDetailData, setEmployeeDetailData] = useState<any>(null);
   const [fullscreenChart, setFullscreenChart] = useState<string | null>(null);
+  const [isWeeklySummaryOpen, setIsWeeklySummaryOpen] = useState<boolean>(false);
   
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -1829,6 +1883,28 @@ export const App: React.FC = () => {
       console.warn('Erro ao escutar operator_penalties:', err);
     });
 
+    const unsubNotices = onSnapshot(collection(db, 'company_notices'), (snap) => {
+      if (snap.docs.length > 0) {
+        const data = snap.docs.map(docRef => ({
+          ...docRef.data(),
+          id: docRef.id
+        })) as CompanyNotice[];
+        setCompanyNotices(data);
+        try { localStorage.setItem('manupackaging_company_notices', JSON.stringify(data)); } catch {}
+      } else {
+        const isModified = localStorage.getItem('manupackaging_notices_modified') === 'true';
+        if (isModified) {
+          setCompanyNotices([]);
+          try { localStorage.setItem('manupackaging_company_notices', JSON.stringify([])); } catch {}
+        } else {
+          setCompanyNotices(DEFAULT_COMPANY_NOTICES);
+          try { localStorage.setItem('manupackaging_company_notices', JSON.stringify(DEFAULT_COMPANY_NOTICES)); } catch {}
+        }
+      }
+    }, (err) => {
+      console.warn('Erro ao escutar company_notices:', err);
+    });
+
     return () => {
       unsubProduction();
       unsubEmployees();
@@ -1845,6 +1921,7 @@ export const App: React.FC = () => {
       unsubActiveSessions();
       unsubAccessLogs();
       unsubPenalties();
+      unsubNotices();
     };
   }, [currentUser]);
 
@@ -8294,10 +8371,19 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
 
                 <button 
                   onClick={() => setIsTrainingModalOpen(true)}
-                  className="bg-white p-6 rounded-[2.5rem] border border-slate-100 text-slate-800 flex flex-col items-center gap-4 shadow-sm active:scale-95 transition-all group col-span-2 lg:col-span-1"
+                  className="bg-white p-6 rounded-[2.5rem] border border-slate-100 text-slate-800 flex flex-col items-center gap-4 shadow-sm active:scale-95 transition-all group"
                 >
                    <div className="w-14 h-14 bg-slate-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><FileText size={32} /></div>
                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Treinamento / DDP</span>
+                </button>
+
+                <button 
+                  onClick={() => setIsWeeklySummaryOpen(true)}
+                  className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2.5rem] text-white flex flex-col items-center gap-4 shadow-xl shadow-blue-200/50 border border-blue-400/30 active:scale-95 transition-all group cursor-pointer"
+                  title="Abrir Resumo Semanal de Produção para Reunião de Resultados"
+                >
+                   <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Presentation size={32} className="text-amber-300 animate-pulse" /></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-center">Resumo Semanal (Reunião)</span>
                 </button>
              </div>
 
@@ -9986,15 +10072,26 @@ Produção total:
                         </div>
                       </div>
 
-                      {isAnyFilterActive && (
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
                         <button 
-                          onClick={clearBiFilters}
-                          className="px-4 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all self-start sm:self-auto active:scale-95"
+                          onClick={() => setIsWeeklySummaryOpen(true)}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/30 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                          title="Gerar Resumo Geral Semanal para Reunião de Resultados"
                         >
-                          <RotateCcw size={12} className="animate-spin-slow" />
-                          Limpar Filtros Cruzados
+                          <Tv size={13} className="text-amber-300 animate-pulse" />
+                          <span>Resumo Semanal (Reunião)</span>
                         </button>
-                      )}
+
+                        {isAnyFilterActive && (
+                          <button 
+                            onClick={clearBiFilters}
+                            className="px-4 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all active:scale-95"
+                          >
+                            <RotateCcw size={12} className="animate-spin-slow" />
+                            Limpar Filtros
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -14682,6 +14779,9 @@ Produção total:
             onAddPenalty={handleAddPenalty}
             onDeletePenalty={handleDeletePenalty}
             employees={employees}
+            companyNotices={companyNotices}
+            onSaveNotice={handleSaveNotice}
+            onDeleteNotice={handleDeleteNotice}
           />
         )}
 
@@ -15197,6 +15297,13 @@ Produção total:
           }}
         />
       )}
+      <WeeklyProductionSummaryModal
+        isOpen={isWeeklySummaryOpen}
+        onClose={() => setIsWeeklySummaryOpen(false)}
+        productionData={productionData}
+        ribbonData={ribbonEntries}
+        employees={employees}
+      />
       {isCollaboratorModalOpen && (
         <div className="fixed inset-0 z-[300]">
           <CollaboratorModal

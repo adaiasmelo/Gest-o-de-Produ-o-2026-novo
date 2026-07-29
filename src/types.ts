@@ -344,6 +344,21 @@ export interface OperatorPenalty {
   createdAt: string;
 }
 
+export interface CompanyNotice {
+  id: string;
+  category: 'rh' | 'safety';
+  title: string;
+  subtitle?: string;
+  description: string;
+  imageUrl?: string;
+  imageCaption?: string;
+  priority?: 'high' | 'medium' | 'info';
+  badgeText?: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface MaintenanceIssue {
   id: string;
   title?: string;
