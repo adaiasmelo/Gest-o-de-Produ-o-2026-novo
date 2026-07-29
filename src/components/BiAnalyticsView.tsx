@@ -16,6 +16,8 @@ interface BiAnalyticsViewProps {
   productionData: any[];
   goals: Record<string, number>;
   employees?: Employee[];
+  onOpenDowntimeAnalytics?: () => void;
+  onOpenDowntimeReasons?: () => void;
 }
 
 // Helper formats
@@ -52,7 +54,13 @@ const translateMonthYear = (monthStr: string) => {
   return `${monthsPt[monthIdx] || month} de ${year}`;
 };
 
-export const BiAnalyticsView: React.FC<BiAnalyticsViewProps> = ({ productionData, goals, employees }) => {
+export const BiAnalyticsView: React.FC<BiAnalyticsViewProps> = ({ 
+  productionData, 
+  goals, 
+  employees,
+  onOpenDowntimeAnalytics,
+  onOpenDowntimeReasons
+}) => {
   // 100% Consistent Filter replicating App.tsx logic for data validity
   const processedDataFiltered = useMemo(() => {
     if (!Array.isArray(productionData)) return [];
@@ -1374,6 +1382,40 @@ export const BiAnalyticsView: React.FC<BiAnalyticsViewProps> = ({ productionData
             exit={{ opacity: 0, y: -10 }} 
             className="space-y-6"
           >
+            {/* Banner to open full Downtime BI Analysis */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-6 rounded-3xl border border-blue-500/30 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-600 text-white text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full">Módulo Inteligência BI</span>
+                  <h3 className="text-lg font-black uppercase tracking-tight text-white">Análise Detalhada de Motivos & Recorrência de Paradas</h3>
+                </div>
+                <p className="text-xs text-slate-300 font-medium">
+                  Consulte rankings dos motivos mais recorrentes, tempo perdido por equipamento/turno/período e histórico detalhado por lançamento.
+                </p>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                {onOpenDowntimeReasons && (
+                  <button
+                    type="button"
+                    onClick={onOpenDowntimeReasons}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-xs font-black uppercase border border-slate-700 transition-all flex items-center gap-1.5 shadow-md"
+                  >
+                    <Sliders size={16} className="text-blue-400" /> Gerenciar Motivos
+                  </button>
+                )}
+                {onOpenDowntimeAnalytics && (
+                  <button
+                    type="button"
+                    onClick={onOpenDowntimeAnalytics}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase shadow-lg shadow-blue-600/30 transition-all flex items-center gap-2"
+                  >
+                    <BarChart3 size={18} /> Abrir Painel BI de Paradas
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Stoppage profiles comparisons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Stacked Bar Charts of Stoppage profiles */}

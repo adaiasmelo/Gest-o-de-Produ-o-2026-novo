@@ -1134,14 +1134,6 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
           {/* Control Buttons: Pause, Fullscreen, Exit */}
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
             <button
-              onClick={() => setIsWeeklySummaryOpen(true)}
-              className="px-3.5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 border border-blue-400/30 active:scale-95"
-              title="Abrir Resumo Semanal de Produção para Reunião"
-            >
-              <Presentation className="w-5 h-5 text-amber-300 animate-pulse" />
-              <span className="hidden md:inline">Resumo Semanal (Reunião)</span>
-            </button>
-            <button
               onClick={() => setIsAutoPlay(!isAutoPlay)}
               className={`p-3 rounded-xl transition-all shadow-sm ${
                 isAutoPlay ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'

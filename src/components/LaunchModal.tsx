@@ -1,8 +1,246 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Camera, Loader2, Search, Plus, ShieldAlert, AlertTriangle } from 'lucide-react';
-import { ProductionEntry, Shift, Collaborator, Employee } from '../types';
+import { ProductionEntry, RibbonCuttingEntry, Shift, Collaborator, Employee } from '../types';
 import { extractProductionData } from '../services/aiService';
+import { extractDowntimeMotives, ECO_B_REASONS_PRESETS } from '../constants/downtimeReasons';
+
+const toggleEcoBReason = (currentText: string, reasonToToggle: string): string => {
+  if (!currentText || !currentText.trim()) {
+    return reasonToToggle;
+  }
+  
+  let parts = currentText.split(/ • |;|,/).map(p => p.trim()).filter(Boolean);
+  const existingIdx = parts.findIndex(p => p.toLowerCase() === reasonToToggle.toLowerCase());
+  
+  if (existingIdx >= 0) {
+    parts.splice(existingIdx, 1);
+  } else {
+    parts.push(reasonToToggle);
+  }
+  
+  return parts.join(' • ');
+};
+
+const isEcoBReasonSelected = (currentText: string, reason: string): boolean => {
+  if (!currentText) return false;
+  const parts = currentText.split(/ • |;|,/).map(p => p.trim().toLowerCase());
+  return parts.includes(reason.toLowerCase());
+};
+
+interface EcoBReasonCardProps {
+  label: string;
+  weightName: 'ecoBP' | 'ecoBM';
+  motivoName: 'ecoBPMotivo' | 'ecoBMMotivo';
+  weightValue: number;
+  motivoValue: string;
+  categoryGroups?: { groupName: string; reasons: string[] }[];
+  onWeightChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onMotivoChange: (fieldName: 'ecoBPMotivo' | 'ecoBMMotivo', newValue: string) => void;
+}
+
+const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
+  label,
+  weightName,
+  motivoName,
+  weightValue,
+  motivoValue,
+  categoryGroups,
+  onWeightChange,
+  onMotivoChange,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const selectedReasons = useMemo(() => {
+    if (!motivoValue) return [];
+    return motivoValue.split(/ • |;|,/).map(p => p.trim()).filter(Boolean);
+  }, [motivoValue]);
+
+  const totalReasonsCount = useMemo(() => {
+    if (categoryGroups && categoryGroups.length > 0) {
+      return categoryGroups.reduce((acc, g) => acc + g.reasons.length, 0);
+    }
+    return ECO_B_REASONS_PRESETS.length;
+  }, [categoryGroups]);
+
+  return (
+    <div className="bg-white p-3 rounded-2xl border border-orange-200/70 space-y-3 shadow-2xs">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] font-black text-orange-600 uppercase tracking-wider">{label}</label>
+          {selectedReasons.length > 0 && (
+            <span className="text-[9px] font-black bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full border border-orange-200">
+              {selectedReasons.length} {selectedReasons.length === 1 ? 'motivo' : 'motivos'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            name={weightName}
+            value={weightValue || ''}
+            onChange={onWeightChange}
+            className="w-24 bg-slate-50 border border-orange-200 rounded-lg px-2 py-1 text-xs font-black text-slate-800 text-right focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none"
+            placeholder="0"
+          />
+          <span className="text-xs font-bold text-slate-400">Kg</span>
+        </div>
+      </div>
+
+      {weightValue > 0 && (
+        <div className="pt-2 border-t border-dashed border-orange-150 space-y-2.5">
+          {/* Quick Dropdown Picker */}
+          <div className="flex items-center gap-2">
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  onMotivoChange(motivoName, toggleEcoBReason(motivoValue, e.target.value));
+                  e.target.value = '';
+                }
+              }}
+              className="w-full bg-orange-50/60 text-slate-800 border border-orange-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer shadow-2xs"
+            >
+              <option value="">📋 Adicionar motivo padronizado de Eco B...</option>
+              {categoryGroups && categoryGroups.length > 0 ? (
+                categoryGroups.map((group, gIdx) => (
+                  <optgroup key={gIdx} label={group.groupName}>
+                    {group.reasons.map((reason, rIdx) => {
+                      const selected = isEcoBReasonSelected(motivoValue, reason);
+                      return (
+                        <option key={rIdx} value={reason}>
+                          {selected ? '✓ ' : '+ '}{reason}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                ))
+              ) : (
+                ECO_B_REASONS_PRESETS.map((reason, idx) => {
+                  const selected = isEcoBReasonSelected(motivoValue, reason);
+                  return (
+                    <option key={idx} value={reason}>
+                      {selected ? '✓ ' : '+ '}{reason}
+                    </option>
+                  );
+                })
+              )}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer"
+            >
+              {isExpanded ? 'Ocultar' : `Opções (${totalReasonsCount})`}
+            </button>
+          </div>
+
+          {/* Interactive Multi-Select Pills */}
+          {isExpanded && (
+            <div className="p-3 bg-slate-50 border border-orange-200/80 rounded-xl space-y-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                <span>⚡ Seleção Múltipla de Motivos de Eco B:</span>
+                <span className="text-[9px] text-orange-600 font-bold">Clique para marcar/desmarcar</span>
+              </p>
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                {categoryGroups && categoryGroups.length > 0 ? (
+                  categoryGroups.map((group, gIdx) => (
+                    <div key={gIdx} className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">{group.groupName}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.reasons.map((reason, rIdx) => {
+                          const active = isEcoBReasonSelected(motivoValue, reason);
+                          return (
+                            <button
+                              key={rIdx}
+                              type="button"
+                              onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                                active
+                                  ? 'bg-orange-600 text-white font-extrabold shadow-2xs border border-orange-600'
+                                  : 'bg-white text-slate-700 hover:bg-orange-100/70 border border-slate-200'
+                              }`}
+                            >
+                              <span className="text-xs font-black">{active ? '✓' : '＋'}</span>
+                              <span>{reason}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ECO_B_REASONS_PRESETS.map((reason, idx) => {
+                      const active = isEcoBReasonSelected(motivoValue, reason);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                            active
+                              ? 'bg-orange-600 text-white font-extrabold shadow-2xs border border-orange-600'
+                              : 'bg-white text-slate-700 hover:bg-orange-100/70 border border-slate-200'
+                          }`}
+                        >
+                          <span className="text-xs font-black">{active ? '✓' : '＋'}</span>
+                          <span>{reason}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Selected Active Badges Chips */}
+          {selectedReasons.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {selectedReasons.map((reason, rIdx) => (
+                <span
+                  key={rIdx}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-200 shadow-2xs"
+                >
+                  <span>{reason}</span>
+                  <button
+                    type="button"
+                    onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
+                    className="hover:text-red-600 font-extrabold ml-0.5 text-xs cursor-pointer"
+                    title="Remover motivo"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => onMotivoChange(motivoName, '')}
+                className="text-[9px] font-bold text-red-500 hover:underline px-1 py-0.5 cursor-pointer"
+              >
+                Limpar todos
+              </button>
+            </div>
+          )}
+
+          {/* Custom Editable Text Box */}
+          <div>
+            <input
+              type="text"
+              name={motivoName}
+              value={motivoValue || ''}
+              onChange={(e) => onMotivoChange(motivoName, e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none"
+              placeholder="Justificar perda de Eco B (digite ou selecione acima)..."
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface LaunchModalProps {
   isOpen: boolean;
@@ -14,6 +252,8 @@ interface LaunchModalProps {
   availableShifts: Shift[];
   initialData?: ProductionEntry | null;
   dashboardMonth?: string;
+  productionEntries?: ProductionEntry[];
+  ribbonEntries?: RibbonCuttingEntry[];
 }
 
 interface StopItem {
@@ -21,6 +261,7 @@ interface StopItem {
   de: string;
   ate: string;
   motivo: string;
+  explicacao?: string;
 }
 
 const getYesterdayStr = () => {
@@ -84,7 +325,22 @@ const PRESET_INFRACTIONS = [
   '📝 Outra Infração Personalizada...',
 ];
 
-const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, collaborators, employees, activeMachines, availableShifts, initialData, dashboardMonth }) => {
+const LaunchModal: React.FC<LaunchModalProps> = ({ 
+  isOpen, onClose, onSave, collaborators, employees, activeMachines, availableShifts, initialData, dashboardMonth,
+  productionEntries = [], ribbonEntries = []
+}) => {
+  const [downtimeVersion, setDowntimeVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setDowntimeVersion(v => v + 1);
+    window.addEventListener('downtime_reasons_updated', handleUpdate);
+    return () => window.removeEventListener('downtime_reasons_updated', handleUpdate);
+  }, []);
+
+  const downtimeSuggestions = useMemo(() => {
+    return extractDowntimeMotives(productionEntries, ribbonEntries);
+  }, [productionEntries, ribbonEntries, downtimeVersion]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -281,7 +537,8 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
             id: item.id || `stop-${idx}-${Date.now()}-${Math.random()}`,
             de: item.de || '',
             ate: item.ate || '',
-            motivo: item.motivo || ''
+            motivo: item.motivo || '',
+            explicacao: item.explicacao || item.observacao || ''
           }));
         }
       }
@@ -289,7 +546,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
       // continua no fallback
     }
     if (min > 0 || motivo) {
-      return [{ id: `stop-legacy-${Date.now()}-${Math.random()}`, de: '', ate: '', motivo: motivo || '' }];
+      return [{ id: `stop-legacy-${Date.now()}-${Math.random()}`, de: '', ate: '', motivo: motivo || '', explicacao: '' }];
     }
     return [];
   };
@@ -299,7 +556,8 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
       id: `stop-${Date.now()}-${Math.random()}`,
       de: '',
       ate: '',
-      motivo: ''
+      motivo: '',
+      explicacao: ''
     };
     if (type === 'manutencao') {
       setManutencaoStops(prev => [...prev, newItem]);
@@ -702,6 +960,21 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
     
     setFormData(prev => {
       const next = { ...prev, [name]: val };
+      if (pendingEntries.length > 0) {
+        const newPending = [...pendingEntries];
+        newPending[currentIndex] = next;
+        setPendingEntries(newPending);
+      }
+      return next;
+    });
+  };
+
+  const handleMotivoChange = (fieldName: 'ecoBPMotivo' | 'ecoBMMotivo', newValue: string) => {
+    setFormData(prev => {
+      const next = {
+        ...prev,
+        [fieldName]: newValue
+      };
       if (pendingEntries.length > 0) {
         const newPending = [...pendingEntries];
         newPending[currentIndex] = next;
@@ -1209,32 +1482,30 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
 
                   <div className="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl space-y-3">
                     <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={14} /> Reciclagem (Kg)</div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {/* Eco B (P) */}
-                      <div className="bg-white p-2.5 rounded-xl border border-orange-200/60 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <label className="text-[10px] font-black text-orange-600 uppercase">Eco B (P)</label>
-                          <input type="number" name="ecoBP" value={formData.ecoBP || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-orange-200 rounded-lg px-2 py-1 text-xs font-bold text-right" placeholder="0" />
-                        </div>
-                        {formData.ecoBP > 0 && (
-                          <div className="pt-1.5 border-t border-dashed border-slate-150">
-                            <input type="text" name="ecoBPMotivo" value={formData.ecoBPMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-slate-400 focus:bg-white" placeholder="Justificar perda de Eco B(P)..." />
-                          </div>
-                        )}
-                      </div>
+                      <EcoBReasonCard
+                        label="Eco B (P)"
+                        weightName="ecoBP"
+                        motivoName="ecoBPMotivo"
+                        weightValue={formData.ecoBP || 0}
+                        motivoValue={formData.ecoBPMotivo || ''}
+                        categoryGroups={downtimeSuggestions.allGroups}
+                        onWeightChange={handleChange}
+                        onMotivoChange={handleMotivoChange}
+                      />
 
                       {/* Eco B (M) */}
-                      <div className="bg-white p-2.5 rounded-xl border border-orange-200/60 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <label className="text-[10px] font-black text-orange-600 uppercase">Eco B (M)</label>
-                          <input type="number" name="ecoBM" value={formData.ecoBM || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-orange-200 rounded-lg px-2 py-1 text-xs font-bold text-right" placeholder="0" />
-                        </div>
-                        {formData.ecoBM > 0 && (
-                          <div className="pt-1.5 border-t border-dashed border-slate-150">
-                            <input type="text" name="ecoBMMotivo" value={formData.ecoBMMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-slate-400 focus:bg-white" placeholder="Justificar perda de Eco B(M)..." />
-                          </div>
-                        )}
-                      </div>
+                      <EcoBReasonCard
+                        label="Eco B (M)"
+                        weightName="ecoBM"
+                        motivoName="ecoBMMotivo"
+                        weightValue={formData.ecoBM || 0}
+                        motivoValue={formData.ecoBMMotivo || ''}
+                        categoryGroups={downtimeSuggestions.allGroups}
+                        onWeightChange={handleChange}
+                        onMotivoChange={handleMotivoChange}
+                      />
                     </div>
                   </div>
 
@@ -1299,6 +1570,24 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
               <div className="flex items-center gap-2 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-2">
                 <Clock size={14} /> Tempos de Parada
               </div>
+
+              {/* Datalists de sugestões extraídas do banco */}
+              <datalist id="datalist-manutencao-reasons">
+                {downtimeSuggestions.manutencao.map((r, i) => (
+                  <option key={i} value={r} />
+                ))}
+              </datalist>
+              <datalist id="datalist-processo-reasons">
+                {downtimeSuggestions.processo.map((r, i) => (
+                  <option key={i} value={r} />
+                ))}
+              </datalist>
+              <datalist id="datalist-outros-reasons">
+                {downtimeSuggestions.outros.map((r, i) => (
+                  <option key={i} value={r} />
+                ))}
+              </datalist>
+
               <div className="space-y-4">
                 
                 {/* Seção Manutenção */}
@@ -1319,44 +1608,71 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
                   {manutencaoStops.length === 0 ? (
                     <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {manutencaoStops.map((stop) => {
                         const min = getDiffMinutes(stop.de, stop.ate);
                         return (
-                          <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                            <div className="col-span-5 flex items-center gap-1">
-                              <input
-                                type="time"
-                                value={stop.de}
-                                onChange={(e) => handleUpdateStop('manutencao', stop.id, 'de', e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              <span className="text-[10px] font-black text-slate-400">às</span>
-                              <input
-                                type="time"
-                                value={stop.ate}
-                                onChange={(e) => handleUpdateStop('manutencao', stop.id, 'ate', e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
+                          <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 flex-1">
+                                <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                <input
+                                  type="time"
+                                  value={stop.de}
+                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'de', e.target.value)}
+                                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <span className="text-[10px] font-black text-slate-400">às</span>
+                                <input
+                                  type="time"
+                                  value={stop.ate}
+                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'ate', e.target.value)}
+                                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                  {min > 0 ? `${min} min` : '0 min'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStop('manutencao', stop.id)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                  title="Remover parada"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </div>
-                            <div className="col-span-5">
-                              <input
-                                type="text"
-                                value={stop.motivo}
-                                onChange={(e) => handleUpdateStop('manutencao', stop.id, 'motivo', e.target.value)}
-                                placeholder="Motivo da parada..."
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            </div>
-                            <div className="col-span-2 flex items-center justify-between pl-1">
-                              <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveStop('manutencao', stop.id)}
-                                className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                              >
-                                <Trash2 size={12} />
-                              </button>
+
+                            <div className="space-y-1.5">
+                              <div>
+                                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                <select
+                                  value={stop.motivo}
+                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'motivo', e.target.value)}
+                                  className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                >
+                                  <option value="">📋 Selecionar motivo padronizado...</option>
+                                  {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                    <optgroup key={gIdx} label={group.groupName}>
+                                      {group.reasons.map((mReason, idx) => (
+                                        <option key={idx} value={mReason}>{mReason}</option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <input
+                                  type="text"
+                                  value={stop.explicacao || ''}
+                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'explicacao', e.target.value)}
+                                  placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                />
+                              </div>
                             </div>
                           </div>
                         );
@@ -1389,44 +1705,71 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
                       {processoStops.length === 0 ? (
                         <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {processoStops.map((stop) => {
                             const min = getDiffMinutes(stop.de, stop.ate);
                             return (
-                              <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                                <div className="col-span-5 flex items-center gap-1">
-                                  <input
-                                    type="time"
-                                    value={stop.de}
-                                    onChange={(e) => handleUpdateStop('processo', stop.id, 'de', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                  <span className="text-[10px] font-black text-slate-400">às</span>
-                                  <input
-                                    type="time"
-                                    value={stop.ate}
-                                    onChange={(e) => handleUpdateStop('processo', stop.id, 'ate', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
+                              <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 flex-1">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                    <input
+                                      type="time"
+                                      value={stop.de}
+                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'de', e.target.value)}
+                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <span className="text-[10px] font-black text-slate-400">às</span>
+                                    <input
+                                      type="time"
+                                      value={stop.ate}
+                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'ate', e.target.value)}
+                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                      {min > 0 ? `${min} min` : '0 min'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveStop('processo', stop.id)}
+                                      className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                      title="Remover parada"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="col-span-5">
-                                  <input
-                                    type="text"
-                                    value={stop.motivo}
-                                    onChange={(e) => handleUpdateStop('processo', stop.id, 'motivo', e.target.value)}
-                                    placeholder="Motivo da parada..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-                                <div className="col-span-2 flex items-center justify-between pl-1">
-                                  <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveStop('processo', stop.id)}
-                                    className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
+
+                                <div className="space-y-1.5">
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                    <select
+                                      value={stop.motivo}
+                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'motivo', e.target.value)}
+                                      className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                    >
+                                      <option value="">📋 Selecionar motivo padronizado...</option>
+                                      {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                        <optgroup key={gIdx} label={group.groupName}>
+                                          {group.reasons.map((mReason, idx) => (
+                                            <option key={idx} value={mReason}>{mReason}</option>
+                                          ))}
+                                        </optgroup>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={stop.explicacao || ''}
+                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'explicacao', e.target.value)}
+                                      placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1457,44 +1800,71 @@ const LaunchModal: React.FC<LaunchModalProps> = ({ isOpen, onClose, onSave, coll
                       {outrosStops.length === 0 ? (
                         <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {outrosStops.map((stop) => {
                             const min = getDiffMinutes(stop.de, stop.ate);
                             return (
-                              <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                                <div className="col-span-5 flex items-center gap-1">
-                                  <input
-                                    type="time"
-                                    value={stop.de}
-                                    onChange={(e) => handleUpdateStop('outros', stop.id, 'de', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                  <span className="text-[10px] font-black text-slate-400">às</span>
-                                  <input
-                                    type="time"
-                                    value={stop.ate}
-                                    onChange={(e) => handleUpdateStop('outros', stop.id, 'ate', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
+                              <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 flex-1">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                    <input
+                                      type="time"
+                                      value={stop.de}
+                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'de', e.target.value)}
+                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <span className="text-[10px] font-black text-slate-400">às</span>
+                                    <input
+                                      type="time"
+                                      value={stop.ate}
+                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'ate', e.target.value)}
+                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                      {min > 0 ? `${min} min` : '0 min'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveStop('outros', stop.id)}
+                                      className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                      title="Remover parada"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="col-span-5">
-                                  <input
-                                    type="text"
-                                    value={stop.motivo}
-                                    onChange={(e) => handleUpdateStop('outros', stop.id, 'motivo', e.target.value)}
-                                    placeholder="Motivo da parada..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-                                <div className="col-span-2 flex items-center justify-between pl-1">
-                                  <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveStop('outros', stop.id)}
-                                    className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
+
+                                <div className="space-y-1.5">
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                    <select
+                                      value={stop.motivo}
+                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'motivo', e.target.value)}
+                                      className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                    >
+                                      <option value="">📋 Selecionar motivo padronizado...</option>
+                                      {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                        <optgroup key={gIdx} label={group.groupName}>
+                                          {group.reasons.map((mReason, idx) => (
+                                            <option key={idx} value={mReason}>{mReason}</option>
+                                          ))}
+                                        </optgroup>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={stop.explicacao || ''}
+                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'explicacao', e.target.value)}
+                                      placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             );

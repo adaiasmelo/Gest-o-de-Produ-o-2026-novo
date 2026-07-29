@@ -325,6 +325,7 @@ export interface StopItem {
   de: string;
   ate: string;
   motivo: string;
+  explicacao?: string;
 }
 
 export type MaintenancePriority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';

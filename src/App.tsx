@@ -29,6 +29,7 @@ import { ActiveUsersModal } from './components/ActiveUsersModal';
 import { WeeklyProductionSummaryModal } from './components/WeeklyProductionSummaryModal';
 import { IMPORTED_COLLABORATORS } from './constants/importedCollaborators';
 import { INITIAL_DATA, GOAL_VALUE, DEFAULT_OPERATORS, INITIAL_EMPLOYEES, INITIAL_LOGS } from './constants';
+import { extractDowntimeMotives } from './constants/downtimeReasons';
 import { isBiometricAvailable, registerBiometrics, authenticateBiometrics } from './services/biometricService';
 import LaunchModal from './components/LaunchModal';
 import EmployeeModal from './components/EmployeeModal';
@@ -46,6 +47,8 @@ import { VacationPlanning } from './components/VacationPlanning';
 import { OperationalTraining } from './components/OperationalTraining';
 import { LunchSchedule } from './components/LunchSchedule';
 import { ProjectionDashboard } from './components/ProjectionDashboard';
+import { DowntimeReasonsModal } from './components/DowntimeReasonsModal';
+import { DowntimeAnalyticsModal } from './components/DowntimeAnalyticsModal';
 
 
 const TRAINING_MODULES = [
@@ -568,10 +571,15 @@ const formatStoppageMotiveClean = (motivoRaw: string | undefined): string => {
         const de = (item.de || '').trim();
         const ate = (item.ate || '').trim();
         const motivo = (item.motivo || '').trim();
-        if (de && ate) {
-          return `${de} às ${ate}${motivo ? `: ${motivo}` : ''}`;
+        const explicacao = (item.explicacao || item.observacao || '').trim();
+        let fullDesc = motivo;
+        if (explicacao) {
+          fullDesc = motivo ? `${motivo} (${explicacao})` : explicacao;
         }
-        return motivo || '';
+        if (de && ate) {
+          return `${de} às ${ate}${fullDesc ? `: ${fullDesc}` : ''}`;
+        }
+        return fullDesc || '';
       }).filter(Boolean).join('; ');
     }
   } catch (e) {
@@ -756,6 +764,15 @@ export const App: React.FC = () => {
   const [systemLogo, setSystemLogo] = useState<string | null>(() => localStorage.getItem('manupackaging_system_logo'));
   const [systemCoverImage, setSystemCoverImage] = useState<string | null>(() => localStorage.getItem('manupackaging_system_cover'));
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
+  const [isDowntimeReasonsModalOpen, setIsDowntimeReasonsModalOpen] = useState(false);
+  const [isDowntimeAnalyticsModalOpen, setIsDowntimeAnalyticsModalOpen] = useState(false);
+  const [downtimeReasonsVersion, setDowntimeReasonsVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setDowntimeReasonsVersion(v => v + 1);
+    window.addEventListener('downtime_reasons_updated', handleUpdate);
+    return () => window.removeEventListener('downtime_reasons_updated', handleUpdate);
+  }, []);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -875,6 +892,10 @@ export const App: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+
+  const downtimeSuggestions = useMemo(() => {
+    return extractDowntimeMotives(productionData, ribbonEntries);
+  }, [productionData, ribbonEntries, downtimeReasonsVersion]);
 
   const [filterOperator, setFilterOperator] = useState('Todos');
   const [filterDay, setFilterDay] = useState('');
@@ -2768,7 +2789,8 @@ export const App: React.FC = () => {
             id: item.id || `stop-${idx}-${Date.now()}-${Math.random()}`,
             de: item.de || '',
             ate: item.ate || '',
-            motivo: item.motivo || ''
+            motivo: item.motivo || '',
+            explicacao: item.explicacao || item.observacao || ''
           }));
         }
       }
@@ -2776,7 +2798,7 @@ export const App: React.FC = () => {
       // continua no fallback
     }
     if (min > 0 || motivo) {
-      return [{ id: `stop-legacy-${Date.now()}-${Math.random()}`, de: '', ate: '', motivo: motivo || '' }];
+      return [{ id: `stop-legacy-${Date.now()}-${Math.random()}`, de: '', ate: '', motivo: motivo || '', explicacao: '' }];
     }
     return [];
   };
@@ -3305,7 +3327,8 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       id: `stop-${Date.now()}-${Math.random()}`,
       de: '',
       ate: '',
-      motivo: ''
+      motivo: '',
+      explicacao: ''
     };
     if (type === 'manutencao') {
       setRibbonManutencaoStops(prev => [...prev, newItem]);
@@ -8385,6 +8408,15 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                    <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Presentation size={32} className="text-amber-300 animate-pulse" /></div>
                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Resumo Semanal (Reunião)</span>
                 </button>
+
+                <button 
+                  onClick={() => setIsDowntimeAnalyticsModalOpen(true)}
+                  className="bg-gradient-to-br from-slate-900 to-blue-950 p-6 rounded-[2.5rem] text-white flex flex-col items-center gap-4 shadow-xl shadow-slate-900/20 border border-blue-500/30 active:scale-95 transition-all group cursor-pointer"
+                  title="Abrir Módulo BI de Análise Detalhada de Paradas de Máquina"
+                >
+                   <div className="w-14 h-14 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><BarChart3 size={32} /></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-center">Análise BI de Paradas</span>
+                </button>
              </div>
 
              <div className="bg-slate-900 p-8 rounded-[3rem] text-white overflow-hidden relative group">
@@ -11039,6 +11071,8 @@ Produção total:
             productionData={productionData}
             goals={goals}
             employees={employees}
+            onOpenDowntimeAnalytics={() => setIsDowntimeAnalyticsModalOpen(true)}
+            onOpenDowntimeReasons={() => setIsDowntimeReasonsModalOpen(true)}
           />
         )}
 
@@ -13306,44 +13340,71 @@ Produção total:
                           {ribbonManutencaoStops.length === 0 ? (
                             <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {ribbonManutencaoStops.map((stop) => {
                                 const min = getDiffMinutes(stop.de, stop.ate);
                                 return (
-                                  <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                                    <div className="col-span-5 flex items-center gap-1">
-                                      <input
-                                        type="time"
-                                        value={stop.de}
-                                        onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'de', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                      <span className="text-[10px] font-black text-slate-400">às</span>
-                                      <input
-                                        type="time"
-                                        value={stop.ate}
-                                        onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'ate', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
+                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 flex-1">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                        <input
+                                          type="time"
+                                          value={stop.de}
+                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'de', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                        <span className="text-[10px] font-black text-slate-400">às</span>
+                                        <input
+                                          type="time"
+                                          value={stop.ate}
+                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'ate', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                          {min > 0 ? `${min} min` : '0 min'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveRibbonStop('manutencao', stop.id)}
+                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                          title="Remover parada"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <div className="col-span-5">
-                                      <input
-                                        type="text"
-                                        value={stop.motivo}
-                                        onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'motivo', e.target.value)}
-                                        placeholder="Motivo da parada..."
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                    </div>
-                                    <div className="col-span-2 flex items-center justify-between pl-1">
-                                      <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveRibbonStop('manutencao', stop.id)}
-                                        className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
+
+                                    <div className="space-y-1.5">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                        <select
+                                          value={stop.motivo}
+                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'motivo', e.target.value)}
+                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                        >
+                                          <option value="">📋 Selecionar motivo padronizado...</option>
+                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                            <optgroup key={gIdx} label={group.groupName}>
+                                              {group.reasons.map((mReason, idx) => (
+                                                <option key={idx} value={mReason}>{mReason}</option>
+                                              ))}
+                                            </optgroup>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={stop.explicacao || ''}
+                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'explicacao', e.target.value)}
+                                          placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -13374,44 +13435,71 @@ Produção total:
                           {ribbonProcessoStops.length === 0 ? (
                             <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {ribbonProcessoStops.map((stop) => {
                                 const min = getDiffMinutes(stop.de, stop.ate);
                                 return (
-                                  <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                                    <div className="col-span-5 flex items-center gap-1">
-                                      <input
-                                        type="time"
-                                        value={stop.de}
-                                        onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'de', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                      <span className="text-[10px] font-black text-slate-400">às</span>
-                                      <input
-                                        type="time"
-                                        value={stop.ate}
-                                        onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'ate', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
+                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 flex-1">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                        <input
+                                          type="time"
+                                          value={stop.de}
+                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'de', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                        <span className="text-[10px] font-black text-slate-400">às</span>
+                                        <input
+                                          type="time"
+                                          value={stop.ate}
+                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'ate', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                          {min > 0 ? `${min} min` : '0 min'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveRibbonStop('processo', stop.id)}
+                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                          title="Remover parada"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <div className="col-span-5">
-                                      <input
-                                        type="text"
-                                        value={stop.motivo}
-                                        onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'motivo', e.target.value)}
-                                        placeholder="Motivo da parada..."
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                    </div>
-                                    <div className="col-span-2 flex items-center justify-between pl-1">
-                                      <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveRibbonStop('processo', stop.id)}
-                                        className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
+
+                                    <div className="space-y-1.5">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                        <select
+                                          value={stop.motivo}
+                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'motivo', e.target.value)}
+                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                        >
+                                          <option value="">📋 Selecionar motivo padronizado...</option>
+                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                            <optgroup key={gIdx} label={group.groupName}>
+                                              {group.reasons.map((mReason, idx) => (
+                                                <option key={idx} value={mReason}>{mReason}</option>
+                                              ))}
+                                            </optgroup>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={stop.explicacao || ''}
+                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'explicacao', e.target.value)}
+                                          placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -13442,44 +13530,71 @@ Produção total:
                           {ribbonOutrosStops.length === 0 ? (
                             <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {ribbonOutrosStops.map((stop) => {
                                 const min = getDiffMinutes(stop.de, stop.ate);
                                 return (
-                                  <div key={stop.id} className="grid grid-cols-12 gap-1.5 items-center">
-                                    <div className="col-span-5 flex items-center gap-1">
-                                      <input
-                                        type="time"
-                                        value={stop.de}
-                                        onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'de', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                      <span className="text-[10px] font-black text-slate-400">às</span>
-                                      <input
-                                        type="time"
-                                        value={stop.ate}
-                                        onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'ate', e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
+                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 flex-1">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
+                                        <input
+                                          type="time"
+                                          value={stop.de}
+                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'de', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                        <span className="text-[10px] font-black text-slate-400">às</span>
+                                        <input
+                                          type="time"
+                                          value={stop.ate}
+                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'ate', e.target.value)}
+                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                          {min > 0 ? `${min} min` : '0 min'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveRibbonStop('outros', stop.id)}
+                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                          title="Remover parada"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <div className="col-span-5">
-                                      <input
-                                        type="text"
-                                        value={stop.motivo}
-                                        onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'motivo', e.target.value)}
-                                        placeholder="Motivo da parada..."
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                      />
-                                    </div>
-                                    <div className="col-span-2 flex items-center justify-between pl-1">
-                                      <span className="text-[9px] font-black text-slate-500">{min > 0 ? `${min}m` : '0m'}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveRibbonStop('outros', stop.id)}
-                                        className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
+
+                                    <div className="space-y-1.5">
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
+                                        <select
+                                          value={stop.motivo}
+                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'motivo', e.target.value)}
+                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                                        >
+                                          <option value="">📋 Selecionar motivo padronizado...</option>
+                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
+                                            <optgroup key={gIdx} label={group.groupName}>
+                                              {group.reasons.map((mReason, idx) => (
+                                                <option key={idx} value={mReason}>{mReason}</option>
+                                              ))}
+                                            </optgroup>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={stop.explicacao || ''}
+                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'explicacao', e.target.value)}
+                                          placeholder="Explicação / Detalhamento do problema (opcional)..."
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -14922,6 +15037,8 @@ Produção total:
         ribbonGoals={ribbonGoals}
         setRibbonGoals={setRibbonGoals}
         setIsUserManagementOpen={setIsUserManagementOpen}
+        setIsDowntimeReasonsModalOpen={setIsDowntimeReasonsModalOpen}
+        setIsDowntimeAnalyticsModalOpen={setIsDowntimeAnalyticsModalOpen}
         setIsOperatorModalOpen={setIsOperatorModalOpen}
         setIsRoleModalOpen={setIsRoleModalOpen}
         setIsShiftModalOpen={setIsShiftModalOpen}
@@ -15016,7 +15133,7 @@ Produção total:
           alert("Ocorreu um erro ao salvar o lançamento.");
         }
         setEditingEntry(null);
-      }} collaborators={collaborators} employees={employees} activeMachines={activeMachines} availableShifts={availableShifts} initialData={editingEntry} dashboardMonth={dashboardMonth} />
+      }} collaborators={collaborators} employees={employees} activeMachines={activeMachines} availableShifts={availableShifts} initialData={editingEntry} dashboardMonth={dashboardMonth} productionEntries={productionData} ribbonEntries={ribbonEntries} />
       
       <EmployeeModal isOpen={isEmployeeModalOpen} onClose={() => { setIsEmployeeModalOpen(false); setSelectedEmployee(null); setSelectedSlot(null); }} onSave={async (data, action, details) => {
           try {
@@ -15303,6 +15420,16 @@ Produção total:
         productionData={productionData}
         ribbonData={ribbonEntries}
         employees={employees}
+      />
+      <DowntimeReasonsModal
+        isOpen={isDowntimeReasonsModalOpen}
+        onClose={() => setIsDowntimeReasonsModalOpen(false)}
+      />
+      <DowntimeAnalyticsModal
+        isOpen={isDowntimeAnalyticsModalOpen}
+        onClose={() => setIsDowntimeAnalyticsModalOpen(false)}
+        productionData={productionData}
+        ribbonEntries={ribbonEntries}
       />
       {isCollaboratorModalOpen && (
         <div className="fixed inset-0 z-[300]">
@@ -16175,6 +16302,8 @@ const SettingsModal: React.FC<{
   ribbonGoals: Record<string, number>;
   setRibbonGoals: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   setIsUserManagementOpen: (open: boolean) => void;
+  setIsDowntimeReasonsModalOpen?: (open: boolean) => void;
+  setIsDowntimeAnalyticsModalOpen?: (open: boolean) => void;
   setIsOperatorModalOpen: (open: boolean) => void;
   setIsRoleModalOpen: (open: boolean) => void;
   setIsShiftModalOpen: (open: boolean) => void;
@@ -16205,7 +16334,7 @@ const SettingsModal: React.FC<{
   isOpen, onClose, onSave, activeTab, setActiveTab,
   filterOperator, setFilterOperator, filterDay, setFilterDay, filterStartDate, setFilterStartDate, filterEndDate, setFilterEndDate, dashboardMonth, setDashboardMonth,
   operators, goals, setGoals, ribbonGoals, setRibbonGoals,
-  setIsUserManagementOpen, setIsOperatorModalOpen, setIsRoleModalOpen, setIsShiftModalOpen, setIsPermissionModalOpen,
+  setIsUserManagementOpen, setIsDowntimeReasonsModalOpen, setIsDowntimeAnalyticsModalOpen, setIsOperatorModalOpen, setIsRoleModalOpen, setIsShiftModalOpen, setIsPermissionModalOpen,
   downloadBackup, handleRestoreData, handleSyncLocalToCloud, openConfirm, isInitializing, fileInputRef,
   systemName, setSystemName, loginSystemName, setLoginSystemName, loginSystemSubtitle, setLoginSystemSubtitle, systemLogo, setSystemLogo, systemCoverImage, setSystemCoverImage, 
   isAdminUser, isInstallable, isStandalone, isIOS, handleInstallClick, setShowInstallExperience
@@ -16609,6 +16738,17 @@ const SettingsModal: React.FC<{
                     <div className="text-left">
                       <p className="text-xs font-black uppercase text-slate-800 tracking-widest">Gerenciar Funções</p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e configure cargos/funções</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={20} className="text-slate-300" />
+               </button>
+
+               <button onClick={() => { onClose(); setIsDowntimeReasonsModalOpen?.(true); }} className="w-full group px-8 py-6 bg-white border border-slate-200 rounded-[2rem] flex items-center justify-between hover:border-blue-500 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-6">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center"><Layers size={24}/></div>
+                    <div className="text-left">
+                      <p className="text-xs font-black uppercase text-slate-800 tracking-widest">Gerenciar Motivos de Parada</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Editar, adicionar e excluir motivos padronizados</p>
                     </div>
                   </div>
                   <ChevronRight size={20} className="text-slate-300" />
