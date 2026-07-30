@@ -356,6 +356,7 @@ export function extractDowntimeMotives(
 
   const flatAll = Array.from(new Set(allGroups.flatMap(g => g.reasons)));
 
+
   return {
     manutencaoGroups,
     processoGroups,
@@ -367,3 +368,432 @@ export function extractDowntimeMotives(
     all: flatAll,
   };
 }
+
+// --------------------------------------------------------------------------
+// ESTRUTURA HIERÁRQUICA DE APONTAMENTO (ÁRVORE DE FALHAS EM 3 NÍVEIS)
+// --------------------------------------------------------------------------
+
+export interface FaultTreeDefect {
+  id: string;
+  name: string;
+}
+
+export interface FaultTreeComponent {
+  id: string;
+  name: string;
+  defects: string[];
+}
+
+export interface FaultTreeCategory {
+  id: string;
+  icon: string;
+  name: string;
+  components: FaultTreeComponent[];
+}
+
+export const FAULT_TREE_CATEGORIES: FaultTreeCategory[] = [
+  {
+    id: 'mecanica',
+    icon: '🔧',
+    name: '🔧 MECÂNICA & ESTRUTURAL',
+    components: [
+      {
+        id: 'eixo_expansivo_mec',
+        name: 'Eixo Expansivo',
+        defects: [
+          'Falha / Troca de Rolamento',
+          'Eixo caindo fora de posição',
+          'Eixo desalinhado / empenado',
+          'Danos na ponteira / Bico do Eixo',
+          'Eixo furado / danificado',
+          'Outro Defeito no Eixo Expansivo',
+        ],
+      },
+      {
+        id: 'cambio_biela',
+        name: 'Câmbio / Biela / Corrente',
+        defects: [
+          'Ajuste / Alinhamento do Câmbio',
+          'Pinça do Câmbio subindo fechada / presa',
+          'Folga / Quebra no Braço da Biela',
+          'Corrente Caricatore fora de ciclo / desalinhada',
+          'Falha na troca automática de eixos (Mec-09)',
+        ],
+      },
+      {
+        id: 'chillroll_rolos',
+        name: 'Chill Roll / Cilindros / Rolo Guia',
+        defects: [
+          'Motor do carro do Chill Roll travado',
+          'Carro extrator desalinhado',
+          'Rolo Guia superior solto / danificado',
+          'Rolo Polidor com falha / risco',
+          'Rolo da Racollta danificado / travado',
+        ],
+      },
+      {
+        id: 'moinho_exaustao',
+        name: 'Moinho / Exaustão / Granulador',
+        defects: [
+          'Desarme / Trava do Moinho',
+          'Rolamento do Granulador estourado',
+          'Esteira com vibração / quebrada',
+          'Abafador / Exaustor com defeito',
+        ],
+      },
+      {
+        id: 'transmissao_estrutural',
+        name: 'Transmissão & Estrutura Geral',
+        defects: [
+          'Correia Danificada / Troca de Correia',
+          'Ruído / Quebra de Engrenagem',
+          'Desgaste / Folga Mecânica Geral',
+          'Reaperto / Alinhamento Estrutural',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'hidraulica_pneumatica',
+    icon: '💧',
+    name: '💧 HIDRÁULICA & PNEUMÁTICA',
+    components: [
+      {
+        id: 'eixo_expansivo_pneu',
+        name: 'Eixo Expansivo',
+        defects: [
+          'Vazamento de Ar no Eixo',
+          'Válvula de acionamento do Eixo',
+          'Conexão / Engate Rápido Danificado',
+          'Pressão Insuficiente no Eixo',
+          'Outro Defeito de Ar no Eixo',
+        ],
+      },
+      {
+        id: 'refrigeracao_agua',
+        name: 'Sistemas de Refrigeração & Água',
+        defects: [
+          'Vazamento de Água / Mangueira Estourada',
+          'Água Quente / Falha no Chiller',
+          'Válvula de Controle de Vazão Travada',
+          'Vazamento de Água no Pé da Rosca',
+          'Obstrução / Sujeira no Fluxo de Água',
+        ],
+      },
+      {
+        id: 'pneumatica_geral',
+        name: 'Sistema Pneumático Geral',
+        defects: [
+          'Vazamento de Ar Comprimido na Linha',
+          'Baixa Pressão na Rede de Ar',
+          'Cilindro Pneumático Travado',
+          'Válvula Solenóide com Defeito',
+          'Reguladora de Pressão / Filtro de Ar Danificado',
+        ],
+      },
+      {
+        id: 'hidraulica_geral',
+        name: 'Sistema Hidráulico',
+        defects: [
+          'Vazamento de Óleo Hidráulico',
+          'Falha / Troca de Bomba Hidráulica',
+          'Filtro Hidráulico Obstruído',
+          'Pressão Hidráulica Fora do Padrão',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'eletrica_eletronica',
+    icon: '⚡',
+    name: '⚡ ELÉTRICA & ELETRÔNICA',
+    components: [
+      {
+        id: 'painel_comando',
+        name: 'Painel Elétrico & Comando',
+        defects: [
+          'Relé / Contadora Queimada',
+          'Disjuntor Desarmado / Queimado',
+          'Trava de Segurança / Intertravamento Elétrico',
+          'Fiação Solta / Curto-Circuito',
+        ],
+      },
+      {
+        id: 'inversores_drives',
+        name: 'Inversores & Controladores',
+        defects: [
+          'Falha / Troca de Cabo no Inversor',
+          'Erro de Parâmetro no Inversor',
+          'Sobrecarga / Alarme no Inversor',
+        ],
+      },
+      {
+        id: 'sensores_instrumentacao',
+        name: 'Sensores & Instrumentação',
+        defects: [
+          'Falha no Sensor de Nível do Silo',
+          'Sensor de Posicionamento do Eixo (Não lê ponta)',
+          'Falha no Termopar / Sensor de Temperatura',
+          'Sensor Óptico / Fotocélula Suja ou Danificada',
+        ],
+      },
+      {
+        id: 'motores_resistencias',
+        name: 'Motores & Resistências',
+        defects: [
+          'Resistência Queimada / Atuação',
+          'Superaquecimento do Motor',
+          'Motor Travado / Queimado',
+        ],
+      },
+      {
+        id: 'automacao_clp_ihm',
+        name: 'Automação, CLP & IHM',
+        defects: [
+          'Falha de Comunicação CLP',
+          'IHM Travada / Sem Resposta',
+          'Falha na Troca Automática',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'processo_extrusao',
+    icon: '🧪',
+    name: '🧪 PROCESSAMENTO & EXTRUSÃO (CAST / EREMA)',
+    components: [
+      {
+        id: 'matriz_labios',
+        name: 'Matriz Plana & Lábios',
+        defects: [
+          'Limpeza da Matriz',
+          'Ajuste de Lábios da Matriz',
+          'Remoção de Risco na Matriz',
+          'Vazamento de Polímero na Matriz',
+          'Formação de Lamaria na Matriz',
+        ],
+      },
+      {
+        id: 'canhao_rosca',
+        name: 'Canhão & Rosca Extrusora',
+        defects: [
+          'Desarme de Extrusora (A, B, C, D)',
+          'Superaquecimento na Rosca / Canhão',
+          'Rosca Seca / Falha de Alimentação',
+          'Retirada de Borra no Canhão / Resistências',
+        ],
+      },
+      {
+        id: 'troca_telas',
+        name: 'Troca-Telas & Filtros',
+        defects: [
+          'Troca das Telas / Filtros',
+          'Passagem de Buracos / Gel pós-troca',
+          'Variação de Pressão no Troca-Telas',
+        ],
+      },
+      {
+        id: 'refile_fixa_borda',
+        name: 'Refile & Fixa Borda',
+        defects: [
+          'Escape do Refile (Central / Lateral)',
+          'Entupimento do Tubo / Aspirador de Refile',
+          'Escape do Fixa Borda',
+          'Instabilidade na Cortina',
+        ],
+      },
+      {
+        id: 'filme_bobinamento',
+        name: 'Filme & Bobinamento',
+        defects: [
+          'Rompimento do Filme',
+          'Filme Não Aderindo ao Tubete',
+          'Desalinhamento de Bobinas / Rugas',
+          'Diferença de Espessura no Filme',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'materia_prima_insumos',
+    icon: '📦',
+    name: '📦 MATÉRIA-PRIMA, INSUMOS & TUBETES',
+    components: [
+      {
+        id: 'resina_reciclado',
+        name: 'Resina & Reciclado',
+        defects: [
+          'Processo Instável por Variação do Reciclado',
+          'Silo Vazio / Falha na Alimentação',
+          'Contaminação / Umidade na Matéria-Prima',
+          'Falha no Dosador de Masterbatch',
+        ],
+      },
+      {
+        id: 'tubetes_embalagem',
+        name: 'Tubetes & Embalagem',
+        defects: [
+          'Tubete Prendendo no Eixo',
+          'Falta de Cola no Tubete',
+          'Tubete Fora de Medida / Deformado',
+          'Falta de Tubete no Setor',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'utilidades_infra',
+    icon: '⚡',
+    name: '⚡ UTILIDADES & INFRAESTRUTURA',
+    components: [
+      {
+        id: 'energia_eletrica',
+        name: 'Rede Elétrica Geral',
+        defects: [
+          'Pico de Energia',
+          'Queda de Energia / Apagão Geral',
+          'Oscilação de Voltagem',
+        ],
+      },
+      {
+        id: 'sistemas_auxiliares',
+        name: 'Sistemas Industriais Auxiliares',
+        defects: [
+          'Queda na Pressão Geral de Ar Comprimido',
+          'Falha no Chiller Central / Água Gelada',
+          'Falta de Insumos da Planta',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'operacional_seguranca',
+    icon: '📋',
+    name: '📋 OPERACIONAL, SEGURANÇA & INTERVALOS',
+    components: [
+      {
+        id: 'setup_producao',
+        name: 'Ajustes & Setup de Produção',
+        defects: [
+          'Troca de Facas',
+          'Setup / Troca de Produto',
+          'Testes e Ajustes de Parâmetros',
+          'Passagem / Recebimento de Turno',
+        ],
+      },
+      {
+        id: 'limpeza_5s',
+        name: 'Limpeza & Organização (5S)',
+        defects: [
+          'Limpeza Programada de Máquina',
+          'Limpeza do Cilindro / Calha',
+        ],
+      },
+      {
+        id: 'seguranca_treino',
+        name: 'Segurança & Treinamento',
+        defects: [
+          'Botão de Emergência Acionado',
+          'Treinamento Operacional / O.P.',
+          'Atendimento Médico / Ocorrência de Segurança',
+        ],
+      },
+      {
+        id: 'intervalos_paradas',
+        name: 'Intervalos & Paradas Programadas',
+        defects: [
+          'Horário de Almoço / Lanche',
+          'Parada Programada / Aguardando Ordem de Produção',
+        ],
+      },
+    ],
+  },
+];
+
+export interface StopHierarchy {
+  category: string;
+  component: string;
+  defect: string;
+}
+
+export function parseStopItemHierarchy(
+  motivo?: string,
+  category?: string,
+  component?: string,
+  defect?: string
+): StopHierarchy {
+  if (category && component && defect) {
+    return { category, component, defect };
+  }
+
+  if (!motivo) {
+    const defaultCat = FAULT_TREE_CATEGORIES[0];
+    const defaultComp = defaultCat.components[0];
+    return {
+      category: defaultCat.name,
+      component: defaultComp.name,
+      defect: defaultComp.defects[0],
+    };
+  }
+
+  if (motivo.includes(' > ')) {
+    const parts = motivo.split(' > ').map(p => p.trim());
+    if (parts.length >= 3) {
+      return {
+        category: parts[0],
+        component: parts[1],
+        defect: parts.slice(2).join(' > '),
+      };
+    } else if (parts.length === 2) {
+      return {
+        category: category || FAULT_TREE_CATEGORIES[0].name,
+        component: parts[0],
+        defect: parts[1],
+      };
+    }
+  }
+
+  const lower = motivo.toLowerCase();
+  for (const cat of FAULT_TREE_CATEGORIES) {
+    for (const comp of cat.components) {
+      for (const d of comp.defects) {
+        if (d.toLowerCase() === lower || lower.includes(d.toLowerCase())) {
+          return {
+            category: cat.name,
+            component: comp.name,
+            defect: d,
+          };
+        }
+      }
+    }
+  }
+
+  if (lower.includes('vazamento') && lower.includes('ar')) {
+    return {
+      category: '💧 HIDRÁULICA & PNEUMÁTICA',
+      component: 'Eixo Expansivo',
+      defect: 'Vazamento de Ar no Eixo',
+    };
+  }
+  if (lower.includes('rolamento') || lower.includes('eixo')) {
+    return {
+      category: '🔧 MECÂNICA & ESTRUTURAL',
+      component: 'Eixo Expansivo',
+      defect: motivo,
+    };
+  }
+
+  return {
+    category: category || '🧪 PROCESSAMENTO & EXTRUSÃO (CAST / EREMA)',
+    component: component || 'Geral',
+    defect: defect || motivo,
+  };
+}
+
+export function formatStopItemMotivo(category: string, component: string, defect: string): string {
+  if (!category && !component && !defect) return '';
+  if (!category && !component) return defect;
+  if (!category) return `${component} > ${defect}`;
+  return `${category} > ${component} > ${defect}`;
+}
+

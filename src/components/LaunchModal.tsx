@@ -4,6 +4,7 @@ import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Came
 import { ProductionEntry, RibbonCuttingEntry, Shift, Collaborator, Employee } from '../types';
 import { extractProductionData } from '../services/aiService';
 import { extractDowntimeMotives, ECO_B_REASONS_PRESETS } from '../constants/downtimeReasons';
+import { StopItemCard } from './StopItemCard';
 
 const toggleEcoBReason = (currentText: string, reasonToToggle: string): string => {
   if (!currentText || !currentText.trim()) {
@@ -1609,74 +1610,15 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                     <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
                   ) : (
                     <div className="space-y-3">
-                      {manutencaoStops.map((stop) => {
-                        const min = getDiffMinutes(stop.de, stop.ate);
-                        return (
-                          <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 flex-1">
-                                <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
-                                <input
-                                  type="time"
-                                  value={stop.de}
-                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'de', e.target.value)}
-                                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <span className="text-[10px] font-black text-slate-400">às</span>
-                                <input
-                                  type="time"
-                                  value={stop.ate}
-                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'ate', e.target.value)}
-                                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                  {min > 0 ? `${min} min` : '0 min'}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveStop('manutencao', stop.id)}
-                                  className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                  title="Remover parada"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                <select
-                                  value={stop.motivo}
-                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'motivo', e.target.value)}
-                                  className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                >
-                                  <option value="">📋 Selecionar motivo padronizado...</option>
-                                  {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                    <optgroup key={gIdx} label={group.groupName}>
-                                      {group.reasons.map((mReason, idx) => (
-                                        <option key={idx} value={mReason}>{mReason}</option>
-                                      ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div>
-                                <input
-                                  type="text"
-                                  value={stop.explicacao || ''}
-                                  onChange={(e) => handleUpdateStop('manutencao', stop.id, 'explicacao', e.target.value)}
-                                  placeholder="Explicação / Detalhamento do problema (opcional)..."
-                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {manutencaoStops.map((stop) => (
+                        <StopItemCard
+                          key={stop.id}
+                          stop={stop}
+                          type="manutencao"
+                          onUpdate={(id, field, value) => handleUpdateStop('manutencao', id, field, value)}
+                          onRemove={(id) => handleRemoveStop('manutencao', id)}
+                        />
+                      ))}
                     </div>
                   )}
                   <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
@@ -1706,74 +1648,15 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                         <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
                       ) : (
                         <div className="space-y-3">
-                          {processoStops.map((stop) => {
-                            const min = getDiffMinutes(stop.de, stop.ate);
-                            return (
-                              <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-1.5 flex-1">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
-                                    <input
-                                      type="time"
-                                      value={stop.de}
-                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'de', e.target.value)}
-                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                    <span className="text-[10px] font-black text-slate-400">às</span>
-                                    <input
-                                      type="time"
-                                      value={stop.ate}
-                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'ate', e.target.value)}
-                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                      {min > 0 ? `${min} min` : '0 min'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveStop('processo', stop.id)}
-                                      className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                      title="Remover parada"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                    <select
-                                      value={stop.motivo}
-                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'motivo', e.target.value)}
-                                      className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                    >
-                                      <option value="">📋 Selecionar motivo padronizado...</option>
-                                      {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                        <optgroup key={gIdx} label={group.groupName}>
-                                          {group.reasons.map((mReason, idx) => (
-                                            <option key={idx} value={mReason}>{mReason}</option>
-                                          ))}
-                                        </optgroup>
-                                      ))}
-                                    </select>
-                                  </div>
-
-                                  <div>
-                                    <input
-                                      type="text"
-                                      value={stop.explicacao || ''}
-                                      onChange={(e) => handleUpdateStop('processo', stop.id, 'explicacao', e.target.value)}
-                                      placeholder="Explicação / Detalhamento do problema (opcional)..."
-                                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          {processoStops.map((stop) => (
+                            <StopItemCard
+                              key={stop.id}
+                              stop={stop}
+                              type="processo"
+                              onUpdate={(id, field, value) => handleUpdateStop('processo', id, field, value)}
+                              onRemove={(id) => handleRemoveStop('processo', id)}
+                            />
+                          ))}
                         </div>
                       )}
                       <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
@@ -1801,74 +1684,15 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                         <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
                       ) : (
                         <div className="space-y-3">
-                          {outrosStops.map((stop) => {
-                            const min = getDiffMinutes(stop.de, stop.ate);
-                            return (
-                              <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-1.5 flex-1">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase">Horário:</span>
-                                    <input
-                                      type="time"
-                                      value={stop.de}
-                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'de', e.target.value)}
-                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                    <span className="text-[10px] font-black text-slate-400">às</span>
-                                    <input
-                                      type="time"
-                                      value={stop.ate}
-                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'ate', e.target.value)}
-                                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                      {min > 0 ? `${min} min` : '0 min'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveStop('outros', stop.id)}
-                                      className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                      title="Remover parada"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <div>
-                                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                    <select
-                                      value={stop.motivo}
-                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'motivo', e.target.value)}
-                                      className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                    >
-                                      <option value="">📋 Selecionar motivo padronizado...</option>
-                                      {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                        <optgroup key={gIdx} label={group.groupName}>
-                                          {group.reasons.map((mReason, idx) => (
-                                            <option key={idx} value={mReason}>{mReason}</option>
-                                          ))}
-                                        </optgroup>
-                                      ))}
-                                    </select>
-                                  </div>
-
-                                  <div>
-                                    <input
-                                      type="text"
-                                      value={stop.explicacao || ''}
-                                      onChange={(e) => handleUpdateStop('outros', stop.id, 'explicacao', e.target.value)}
-                                      placeholder="Explicação / Detalhamento do problema (opcional)..."
-                                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          {outrosStops.map((stop) => (
+                            <StopItemCard
+                              key={stop.id}
+                              stop={stop}
+                              type="outros"
+                              onUpdate={(id, field, value) => handleUpdateStop('outros', id, field, value)}
+                              onRemove={(id) => handleRemoveStop('outros', id)}
+                            />
+                          ))}
                         </div>
                       )}
                       <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
