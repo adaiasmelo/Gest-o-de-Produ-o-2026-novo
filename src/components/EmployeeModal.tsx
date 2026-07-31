@@ -399,11 +399,11 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
                     <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-2">
                         <Trash2 size={32} />
                     </div>
-                    <h3 className="text-lg font-black text-red-700 uppercase">Excluir Definitivamente?</h3>
+                    <h3 className="text-lg font-black text-red-700 uppercase">Excluir da Tela de Pessoal?</h3>
                     <p className="text-sm text-red-600 font-medium leading-relaxed">
-                        Esta ação excluirá o colaborador <strong>{formData.name}</strong> e também removerá a vaga <strong>{formData.role}</strong> da máquina <strong>{formData.machine}</strong> permanentemente.
+                        Esta ação removerá <strong>{formData.name}</strong> apenas da tela de pessoal (máquina <strong>{formData.machine}</strong>). O cadastro do colaborador na base do sistema continuará preservado.
                     </p>
-                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Esta ação não pode ser desfeita.</p>
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Remoção somente do quadro de pessoal.</p>
                  </div>
              </div>
           )}

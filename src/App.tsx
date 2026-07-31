@@ -5,7 +5,7 @@ import {
   Plus, Settings, Cpu, ShieldCheck, Database, Target, TrendingUp, Clock, FileDown, 
   Users, HardHat, Factory, Briefcase, History, RotateCcw, X, Edit2, Trash2, 
   LogOut, Search, Activity, Package, ChevronRight, TrendingDown, Upload, Info,
-  UserPlus, Download, AlertCircle, FileSpreadsheet, Scale, FileText, Menu, Fingerprint, Smartphone, Bell, Volume2, Share, ExternalLink, Mail, Copy,
+  UserPlus, Download, AlertCircle, FileSpreadsheet, Scale, FileText, Menu, Fingerprint, Smartphone, Bell, Volume2, Share, ExternalLink, Mail, Copy, Filter,
   Home as HomeIcon, WifiOff, Image as ImageIcon, LayoutDashboard, BarChart3, ChevronDown,
   Eye, Calculator, Sparkles, Layers, Wrench, Award, Maximize2, Minimize2, Calendar, Utensils, Tv, Presentation
 } from 'lucide-react';
@@ -767,6 +767,7 @@ export const App: React.FC = () => {
   const [isDowntimeReasonsModalOpen, setIsDowntimeReasonsModalOpen] = useState(false);
   const [isDowntimeAnalyticsModalOpen, setIsDowntimeAnalyticsModalOpen] = useState(false);
   const [downtimeReasonsVersion, setDowntimeReasonsVersion] = useState(0);
+  const [stopsSearchTerm, setStopsSearchTerm] = useState<string>('');
 
   useEffect(() => {
     const handleUpdate = () => setDowntimeReasonsVersion(v => v + 1);
@@ -2259,22 +2260,15 @@ export const App: React.FC = () => {
   const syncOperatorsSetting = async (updatedEmployees?: Employee[], updatedCollaborators?: Collaborator[]) => {
     try {
       const currentEmployees = updatedEmployees || employees;
-      const currentCollaborators = updatedCollaborators || collaborators;
       const operatorNamesSet = new Set<string>();
-      
-      currentCollaborators.forEach(c => {
-        if (c.name && (c.role || '').toLowerCase().includes('operador')) {
-          operatorNamesSet.add(upgradeName(c.name));
-        }
-      });
       
       currentEmployees.forEach(e => {
         const nameNorm = (e.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
         const statusNorm = (e.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
-        if (nameNorm.includes('excluid') || statusNorm.includes('excluid')) {
+        if (nameNorm.includes('excluid') || statusNorm.includes('excluid') || nameNorm.includes('desligad') || statusNorm.includes('desligad')) {
           return;
         }
-        if (e.name && e.name !== 'Em Contratação' && (e.role || '').toLowerCase().includes('operador')) {
+        if (e.name && e.name !== 'Em Contratação' && isEmployed(e.status) && (e.role || '').toLowerCase().includes('operador')) {
           operatorNamesSet.add(upgradeName(e.name));
         }
       });
@@ -3852,13 +3846,8 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       let isNoWork = false;
       let noWorkReason = '';
       
-      const manutStopsList: { de: string; ate: string; motivo: string; min: number }[] = [];
-      const procStopsList: { de: string; ate: string; motivo: string; min: number }[] = [];
-      const outStopsList: { de: string; ate: string; motivo: string; min: number }[] = [];
-      
-      let totalM = 0;
-      let totalP = 0;
-      let totalO = 0;
+      const allStopsList: { de: string; ate: string; motivo: string; min: number }[] = [];
+      let totalStops = 0;
 
       const getDiffMin = (de: string, ate: string) => {
         if (!de || !ate) return 0;
@@ -3874,22 +3863,45 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
         }
       };
 
-      const parseStopsJSON = (raw: string | undefined): { de: string; ate: string; motivo: string }[] => {
-        if (!raw) return [];
+      const parseStopsJSON = (raw: string | undefined, defaultCategory: string, defaultMin: number): { de: string; ate: string; motivo: string }[] => {
+        if (!raw) {
+          if (defaultMin > 0) {
+            return [{ de: '', ate: '', motivo: defaultCategory }];
+          }
+          return [];
+        }
         const trimmed = raw.trim();
+        if (!trimmed) {
+          if (defaultMin > 0) {
+            return [{ de: '', ate: '', motivo: defaultCategory }];
+          }
+          return [];
+        }
         try {
           const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) {
-            return parsed.map((item: any) => ({
-              de: (item.de || '').trim(),
-              ate: (item.ate || '').trim(),
-              motivo: (item.motivo || '').trim()
-            })).filter(item => item.de || item.ate || item.motivo);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const list = parsed.map((item: any) => {
+              const de = (item.de || '').trim();
+              const ate = (item.ate || '').trim();
+              const motivoStr = (item.motivo || item.descricao || item.tipo || '').trim();
+              const expStr = (item.explicacao || item.observacao || item.justificativa || item.causa || '').trim();
+              const fullMotivo = [motivoStr, expStr].filter(Boolean).join(' - ');
+              return {
+                de,
+                ate,
+                motivo: fullMotivo || defaultCategory
+              };
+            }).filter(item => item.de || item.ate || item.motivo);
+
+            if (list.length > 0) return list;
           }
         } catch (e) {
-          if (trimmed) {
-            return [{ de: '', ate: '', motivo: trimmed }];
-          }
+          // Plain string fallback
+          return [{ de: '', ate: '', motivo: trimmed }];
+        }
+        
+        if (defaultMin > 0) {
+          return [{ de: '', ate: '', motivo: defaultCategory }];
         }
         return [];
       };
@@ -3901,83 +3913,49 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
             noWorkReason = e.noWorkReason;
           }
         }
-        
-        const mList = parseStopsJSON(e.manutencaoMotivo);
-        const pList = parseStopsJSON(e.processoMotivo);
-        const oList = parseStopsJSON(e.outrosMotivo);
 
-        mList.forEach(item => {
-          const min = getDiffMin(item.de, item.ate);
-          manutStopsList.push({ ...item, min });
-        });
-        pList.forEach(item => {
-          const min = getDiffMin(item.de, item.ate);
-          procStopsList.push({ ...item, min });
-        });
-        oList.forEach(item => {
-          const min = getDiffMin(item.de, item.ate);
-          outStopsList.push({ ...item, min });
-        });
+        const mMin = Number(e.manutencaoMin || 0);
+        const pMin = Number(e.processoMin || 0);
+        const oMin = Number(e.outrosMin || 0);
+        totalStops += (mMin + pMin + oMin);
 
-        totalM += Number(e.manutencaoMin || 0);
-        totalP += Number(e.processoMin || 0);
-        totalO += Number(e.outrosMin || 0);
+        const mList = parseStopsJSON(e.manutencaoMotivo, 'Manutenção', mMin);
+        const pList = parseStopsJSON(e.processoMotivo, 'Processo', pMin);
+        const oList = parseStopsJSON(e.outrosMotivo, 'Outros', oMin);
+
+        [...mList, ...pList, ...oList].forEach(item => {
+          const min = getDiffMin(item.de, item.ate);
+          allStopsList.push({ ...item, min });
+        });
       });
 
       if (isNoWork) {
-        return `720 min (Parada Total - Justificativa: ${noWorkReason || 'Não informado'})`;
+        return `720 min (Parada Total${noWorkReason ? `: ${noWorkReason}` : ''})`;
       }
 
-      const totalStops = totalM + totalP + totalO;
-      if (totalStops === 0) {
+      if (totalStops === 0 && allStopsList.length === 0) {
         return 'Sem paradas';
       }
 
-      let textDetails = `${totalStops} min`;
+      if (allStopsList.length > 0) {
+        const formattedStops = allStopsList.map(stop => {
+          const timeRange = (stop.de && stop.ate) ? `${stop.de} às ${stop.ate}` : '';
+          const minText = stop.min > 0 ? ` (${stop.min} min)` : '';
+          const motivoText = stop.motivo ? `: ${stop.motivo}` : '';
+          
+          if (timeRange) {
+            return `${timeRange}${minText}${motivoText}`;
+          } else if (stop.min > 0) {
+            return `${stop.min} min${motivoText}`;
+          } else {
+            return stop.motivo || 'Sem justificativa';
+          }
+        });
 
-      if (manutStopsList.length > 0 || totalM > 0) {
-        textDetails += `\n    - Manutenção (${totalM} min):`;
-        if (manutStopsList.length > 0) {
-          manutStopsList.forEach((stop, index) => {
-            const timeRange = (stop.de && stop.ate) ? `${stop.de} às ${stop.ate}` : '';
-            const minText = stop.min > 0 ? ` (${stop.min} min)` : '';
-            const motivoText = stop.motivo ? `: ${stop.motivo}` : '';
-            textDetails += `\n      ${index + 1}. ${timeRange}${minText}${motivoText}`;
-          });
-        } else {
-          textDetails += `\n      1. Justificativa: Não detalhada`;
-        }
+        return `${totalStops} min - ${formattedStops.join(' | ')}`;
       }
 
-      if (procStopsList.length > 0 || totalP > 0) {
-        textDetails += `\n    - Processo (${totalP} min):`;
-        if (procStopsList.length > 0) {
-          procStopsList.forEach((stop, index) => {
-            const timeRange = (stop.de && stop.ate) ? `${stop.de} às ${stop.ate}` : '';
-            const minText = stop.min > 0 ? ` (${stop.min} min)` : '';
-            const motivoText = stop.motivo ? `: ${stop.motivo}` : '';
-            textDetails += `\n      ${index + 1}. ${timeRange}${minText}${motivoText}`;
-          });
-        } else {
-          textDetails += `\n      1. Justificativa: Não detalhada`;
-        }
-      }
-
-      if (outStopsList.length > 0 || totalO > 0) {
-        textDetails += `\n    - Outros (${totalO} min):`;
-        if (outStopsList.length > 0) {
-          outStopsList.forEach((stop, index) => {
-            const timeRange = (stop.de && stop.ate) ? `${stop.de} às ${stop.ate}` : '';
-            const minText = stop.min > 0 ? ` (${stop.min} min)` : '';
-            const motivoText = stop.motivo ? `: ${stop.motivo}` : '';
-            textDetails += `\n      ${index + 1}. ${timeRange}${minText}${motivoText}`;
-          });
-        } else {
-          textDetails += `\n      1. Justificativa: Não detalhada`;
-        }
-      }
-
-      return textDetails;
+      return `${totalStops} min`;
     };
 
     const sumMetrics = (entries: typeof records) => {
@@ -3986,7 +3964,6 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       const ecoB = entries.reduce((acc, e) => acc + (e.ecoBP || 0) + (e.ecoBM || 0), 0);
       
       let stopsTotal = 0;
-      const reasons: string[] = [];
       let isNoWork = false;
       let noWorkReasonText = '';
 
@@ -4002,19 +3979,6 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
         const pMin = Number(e.processoMin || 0);
         const oMin = Number(e.outrosMin || 0);
         stopsTotal += (mMin + pMin + oMin);
-        
-        if (mMin > 0) {
-          const reasonText = formatMotivoForSharing(e.manutencaoMotivo);
-          reasons.push(`Manut. (${mMin} min${reasonText ? `: ${reasonText}` : ''})`);
-        }
-        if (pMin > 0) {
-          const reasonText = formatMotivoForSharing(e.processoMotivo);
-          reasons.push(`Proc. (${pMin} min${reasonText ? `: ${reasonText}` : ''})`);
-        }
-        if (oMin > 0) {
-          const reasonText = formatMotivoForSharing(e.outrosMotivo);
-          reasons.push(`Outros (${oMin} min${reasonText ? `: ${reasonText}` : ''})`);
-        }
       });
 
       if (isNoWork) {
@@ -4043,15 +4007,15 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       const ecoBJustText = ecoBJusts.length > 0 ? ` - ${ecoBJusts.join('; ')}` : '';
       const borraJustText = borraJusts.length > 0 ? ` - ${borraJusts.join('; ')}` : '';
 
+      const stopsFormatted = formatStopsForEmail(entries);
+
       return {
         net,
         ecoA,
         ecoB,
         stopsTotal,
-        stopsText: isNoWork 
-          ? `720 min (Parada Total${noWorkReasonText ? `: ${noWorkReasonText}` : ''})` 
-          : (stopsTotal > 0 ? `${stopsTotal} min - ${reasons.join(' | ')}` : 'Sem paradas'),
-        stopsFormatted: formatStopsForEmail(entries),
+        stopsText: stopsFormatted,
+        stopsFormatted,
         ecoAJustText,
         ecoBJustText,
         borraJustText
@@ -4384,6 +4348,27 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       .sort(([a], [b]) => a.localeCompare(b))
       .filter(([_, data]) => data.total > 0);
   }, [filteredDashboardData]);
+
+  const filteredMachineStopsDetails = useMemo(() => {
+    if (!stopsSearchTerm.trim()) {
+      return machineStopsDetails;
+    }
+    const query = stopsSearchTerm.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    return machineStopsDetails.map(([machine, data]) => {
+      const filteredMotifs = data.motifs.filter(m => {
+        const normReason = (m.reason || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normOp = (m.operator || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normType = (m.type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normMac = machine.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return normReason.includes(query) || normOp.includes(query) || normType.includes(query) || normMac.includes(query);
+      });
+
+      const newTotal = filteredMotifs.reduce((sum, item) => sum + item.min, 0);
+
+      return [machine, { total: newTotal, motifs: filteredMotifs }] as [string, { total: number; motifs: typeof data.motifs }];
+    }).filter(([_, data]) => data.motifs.length > 0);
+  }, [machineStopsDetails, stopsSearchTerm]);
 
   const eremaOperatorStats = useMemo(() => {
     const stats: any = {};
@@ -11079,17 +11064,19 @@ Produção total:
         {/* Card: Relação de Paradas e Motivos */}
         {dashboardSubTab === 'summary' && (
           <div id="stops-motifs-card" className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-sm relative group animate-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center border border-orange-100">
+                        <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center border border-orange-100 shrink-0">
                             <AlertCircle size={24} />
                         </div>
                         <div>
                             <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Relação de Paradas e Motivos</h3>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalhamento por Equipamento</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Detalhamento por Equipamento {stopsSearchTerm ? `• Filtrado por "${stopsSearchTerm}"` : ''}
+                            </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 no-print">
+                    <div className="flex items-center gap-2 no-print self-end md:self-auto">
                         <button 
                             onClick={exportStopsToCSV} 
                             className="chart-download-btn p-3 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100 shadow-sm"
@@ -11114,9 +11101,47 @@ Produção total:
                     </div>
                 </div>
 
-                {machineStopsDetails.length > 0 ? (
+                {/* Interactive Search Bar for Motifs */}
+                <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+                  <div className="relative flex-1">
+                    <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar motivo de parada... (ex: eixo, motor, troca, faca, vazamento)"
+                      value={stopsSearchTerm}
+                      onChange={(e) => setStopsSearchTerm(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-xs"
+                    />
+                    {stopsSearchTerm && (
+                      <button
+                        onClick={() => setStopsSearchTerm('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                        title="Limpar pesquisa"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {stopsSearchTerm && (
+                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl shrink-0">
+                      <Filter size={14} className="text-blue-600" />
+                      <span className="text-[11px] font-black text-blue-700">
+                        {filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.motifs.length, 0)} parada(s) ({formatMinutes(filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.total, 0))})
+                      </span>
+                      <button
+                        onClick={() => setStopsSearchTerm('')}
+                        className="text-[10px] font-black uppercase text-blue-600 hover:underline ml-1"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {filteredMachineStopsDetails.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {machineStopsDetails.map(([machine, data]) => (
+                    {filteredMachineStopsDetails.map(([machine, data]) => (
                       <div key={machine} className="bg-slate-50 rounded-[1.8rem] p-5 border border-slate-100 hover:border-blue-200 transition-all">
                         <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
                           <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{machine}</span>
@@ -11149,15 +11174,27 @@ Produção total:
                     ))}
                   </div>
                 ) : (
-                  <div className="py-20 flex flex-col items-center justify-center text-slate-300 gap-4">
-                      <Activity size={64} className="opacity-10" />
-                      <p className="font-black uppercase text-xs tracking-[0.2em]">Sem registros de parada no período</p>
+                  <div className="py-16 flex flex-col items-center justify-center text-slate-400 gap-3">
+                      <Activity size={48} className="opacity-20 text-slate-400" />
+                      <p className="font-black uppercase text-xs tracking-wider">
+                        {stopsSearchTerm 
+                          ? `Nenhuma parada encontrada para "${stopsSearchTerm}"` 
+                          : 'Sem registros de parada no período'}
+                      </p>
+                      {stopsSearchTerm && (
+                        <button
+                          onClick={() => setStopsSearchTerm('')}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-500 transition-all shadow-sm"
+                        >
+                          Limpar Pesquisa
+                        </button>
+                      )}
                   </div>
                 )}
             </div>
-          )}
-          </div>
         )}
+      </div>
+    )}
 
         {activeTab === 'extrusion' && extrusionSubTab === 'reports' && (
           <div className="space-y-6 animate-in fade-in duration-300 select-none cursor-default">
@@ -14847,8 +14884,8 @@ Produção total:
               </div>
             </div>
           </div>
-          )
-        )}
+        )
+      )}
 
         {activeTab === 'evaluations' && (
           <EvaluationsTab
@@ -15598,31 +15635,98 @@ Produção total:
               <div className="flex-1 p-8 overflow-y-auto">
                 <div className="w-full h-full min-h-[450px]">
                   {fullscreenChart === 'stops-motifs-card' && (
-                    machineStopsDetails.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[450px] overflow-y-auto pr-2">
-                        {machineStopsDetails.map(([machine, data]) => (
-                          <div key={machine} className="bg-slate-50 rounded-[2rem] p-6 border border-slate-200 text-left">
-                            <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
-                              <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{machine}</span>
-                              <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                                <Clock size={12} className="text-blue-500"/>
-                                <span className="text-[11px] font-black text-blue-600">{formatMinutes(data.total)}</span>
+                    <div className="space-y-4">
+                      {/* Search bar inside Fullscreen Modal */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                        <div className="relative flex-1">
+                          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Pesquisar motivo de parada... (ex: eixo, motor, troca, faca, vazamento)"
+                            value={stopsSearchTerm}
+                            onChange={(e) => setStopsSearchTerm(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-xs"
+                          />
+                          {stopsSearchTerm && (
+                            <button
+                              onClick={() => setStopsSearchTerm('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                              title="Limpar pesquisa"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        {stopsSearchTerm && (
+                          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl shrink-0">
+                            <Filter size={14} className="text-blue-600" />
+                            <span className="text-[11px] font-black text-blue-700">
+                              {filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.motifs.length, 0)} parada(s) ({formatMinutes(filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.total, 0))})
+                            </span>
+                            <button
+                              onClick={() => setStopsSearchTerm('')}
+                              className="text-[10px] font-black uppercase text-blue-600 hover:underline ml-1"
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {filteredMachineStopsDetails.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[500px] overflow-y-auto pr-2">
+                          {filteredMachineStopsDetails.map(([machine, data]) => (
+                            <div key={machine} className="bg-slate-50 rounded-[2rem] p-6 border border-slate-200 text-left hover:border-blue-300 transition-all">
+                              <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
+                                <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{machine}</span>
+                                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                                  <Clock size={12} className="text-blue-500"/>
+                                  <span className="text-[11px] font-black text-blue-600">{formatMinutes(data.total)}</span>
+                                </div>
+                              </div>
+                              <div className="space-y-2.5 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                                {data.motifs.map((m, idx) => (
+                                  <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-1">
+                                    <div className="flex justify-between items-center">
+                                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
+                                        m.type === 'Manutenção' ? 'bg-orange-100 text-orange-600' :
+                                        m.type === 'Processo' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'
+                                      }`}>
+                                        {m.type}
+                                      </span>
+                                      <span className="text-[10px] font-black text-slate-700">{m.min} min</span>
+                                    </div>
+                                    <p className="text-[11px] font-bold text-slate-600 leading-tight">"{m.reason}"</p>
+                                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-50">
+                                      <span className="text-[8px] font-bold text-slate-400 uppercase">{m.operator}</span>
+                                      <span className="text-[8px] font-bold text-slate-300">{m.date.split('-').reverse().join('/')}</span>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                            <div className="space-y-2 max-h-[180px] overflow-y-auto">
-                              {Object.entries(data.motifs).map(([motif, duration]) => (
-                                <div key={motif} className="flex justify-between items-center text-xs py-1.5">
-                                  <span className="text-slate-500 font-bold truncate max-w-[160px]" title={motif}>{motif}</span>
-                                  <span className="text-slate-700 font-black font-mono bg-white border border-slate-100 rounded-md px-1.5 py-0.5">{formatMinutes(Number(duration))}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Nenhuma parada registrada</div>
-                    )
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="py-20 flex flex-col items-center justify-center text-slate-300 gap-3">
+                          <Activity size={56} className="opacity-20 text-slate-400" />
+                          <p className="font-black uppercase text-xs tracking-wider text-slate-500">
+                            {stopsSearchTerm 
+                              ? `Nenhuma parada encontrada para "${stopsSearchTerm}"` 
+                              : 'Sem registros de parada no período'}
+                          </p>
+                          {stopsSearchTerm && (
+                            <button
+                              onClick={() => setStopsSearchTerm('')}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-500 transition-all shadow-sm"
+                            >
+                              Limpar Pesquisa
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {fullscreenChart === 'ribbon-chart-composed' && (
@@ -16339,9 +16443,9 @@ const SettingsModal: React.FC<{
   systemName, setSystemName, loginSystemName, setLoginSystemName, loginSystemSubtitle, setLoginSystemSubtitle, systemLogo, setSystemLogo, systemCoverImage, setSystemCoverImage, 
   isAdminUser, isInstallable, isStandalone, isIOS, handleInstallClick, setShowInstallExperience
 }) => {
-  if (!isOpen) return null;
-
   const [isSaving, setIsSaving] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleSave = async () => {
     setIsSaving(true);

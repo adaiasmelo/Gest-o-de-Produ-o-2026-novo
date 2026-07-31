@@ -57,8 +57,6 @@ export const DowntimeAnalyticsModal: React.FC<DowntimeAnalyticsModalProps> = ({
   productionData = [],
   ribbonEntries = []
 }) => {
-  if (!isOpen) return null;
-
   // Filter States
   const [selectedMachine, setSelectedMachine] = useState<string>('Todas');
   const [selectedShift, setSelectedShift] = useState<string>('Todos');
@@ -281,11 +279,16 @@ export const DowntimeAnalyticsModal: React.FC<DowntimeAnalyticsModalProps> = ({
       if (endDate && item.date > endDate) return false;
 
       if (searchTerm) {
-        const query = searchTerm.toLowerCase();
-        const matchesReason = item.reason.toLowerCase().includes(query);
-        const matchesOp = item.operator.toLowerCase().includes(query);
-        const matchesMac = item.machine.toLowerCase().includes(query);
-        if (!matchesReason && !matchesOp && !matchesMac) return false;
+        const query = searchTerm.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normReason = item.reason.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normOp = item.operator.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normMac = item.machine.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normCat = item.category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const matchesReason = normReason.includes(query);
+        const matchesOp = normOp.includes(query);
+        const matchesMac = normMac.includes(query);
+        const matchesCat = normCat.includes(query);
+        if (!matchesReason && !matchesOp && !matchesMac && !matchesCat) return false;
       }
 
       return true;
@@ -427,6 +430,8 @@ export const DowntimeAnalyticsModal: React.FC<DowntimeAnalyticsModalProps> = ({
     }
     return `${val} min`;
   };
+
+  if (!isOpen) return null;
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,";

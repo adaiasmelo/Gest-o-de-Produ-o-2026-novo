@@ -17,8 +17,6 @@ interface DowntimeReasonsModalProps {
 }
 
 export const DowntimeReasonsModal: React.FC<DowntimeReasonsModalProps> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
   const [presets, setPresets] = useState<StoredDowntimePresets>(() => getStoredDowntimePresets());
   const [activeCategory, setActiveCategory] = useState<'manutencao' | 'processo' | 'outros'>('manutencao');
   
@@ -52,6 +50,8 @@ export const DowntimeReasonsModal: React.FC<DowntimeReasonsModalProps> = ({ isOp
         : 'outrosGroups';
 
   const currentGroups = presets[currentGroupsKey] || [];
+
+  if (!isOpen) return null;
 
   const handleAddReason = (e: React.FormEvent) => {
     e.preventDefault();

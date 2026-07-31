@@ -21,54 +21,61 @@ async function startServer() {
   });
 
   // Initialize Firebase Admin if configuration exists
-  // For push notifications, we need a service account. 
-  // In this environment, we might rely on the default credentials or instructions for the user to provide them.
-  // Note: We'll attempt to initialize but handle failure gracefully.
   try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-      
-      // If the string starts with quotes, it might be double-quoted or escaped
-      if (saString.startsWith('"') && saString.endsWith('"')) {
-        try {
-          saString = JSON.parse(saString);
-        } catch (e) {
-          // If JSON.parse fails, maybe it was just a literal quote
-          saString = saString.slice(1, -1);
-        }
-      }
+      let serviceAccount: any = null;
+      const rawEnv = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
 
-      let serviceAccount;
+      // Attempt 1: direct JSON parse
       try {
-        // Try parsing directly first
-        serviceAccount = JSON.parse(saString);
-      } catch (parseError) {
-        // If it fails, maybe there are literal newlines that need escaping
-        // (common when pasting into some environments)
+        serviceAccount = JSON.parse(rawEnv);
+      } catch {}
+
+      // Attempt 2: base64 decode if string
+      if (!serviceAccount) {
         try {
-          // This replaces real newline characters with the literal \n sequence 
-          // needed for JSON string values.
-          const escaped = saString.replace(/\n/g, '\\n');
-          serviceAccount = JSON.parse(escaped);
-        } catch (secondError) {
-          console.error("FIREBASE_SERVICE_ACCOUNT: Erro ao analisar JSON.");
-          console.error("DICA: Certifique-se de que o valor no AI Studio comece com '{' e termine com '}'.");
-          throw parseError; // throw the original error
-        }
+          const decoded = Buffer.from(rawEnv, 'base64').toString('utf-8');
+          if (decoded.trim().startsWith('{')) {
+            serviceAccount = JSON.parse(decoded);
+          }
+        } catch {}
       }
 
-      if (admin.apps.length === 0) {
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        console.log("Firebase Admin initialized successfully");
+      // Attempt 3: unwrap wrapping quotes
+      if (!serviceAccount && ((rawEnv.startsWith('"') && rawEnv.endsWith('"')) || (rawEnv.startsWith("'") && rawEnv.endsWith("'")))) {
+        try {
+          const inner = rawEnv.slice(1, -1);
+          serviceAccount = JSON.parse(inner);
+        } catch {}
+      }
+
+      // Attempt 4: replace unescaped newlines in JSON string
+      if (!serviceAccount) {
+        try {
+          const fixedNewlines = rawEnv.replace(/\r?\n/g, '\\n');
+          serviceAccount = JSON.parse(fixedNewlines);
+        } catch {}
+      }
+
+      if (serviceAccount && typeof serviceAccount === 'object') {
+        if (typeof serviceAccount.private_key === 'string') {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+
+        if (admin.apps.length === 0) {
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+          });
+          console.log("Firebase Admin initialized successfully");
+        }
+      } else {
+        console.warn("FIREBASE_SERVICE_ACCOUNT exists but could not be parsed as a valid JSON object.");
       }
     } else {
       console.warn("FIREBASE_SERVICE_ACCOUNT not found.");
     }
   } catch (error) {
-    console.error("FIREBASE_SERVICE_ACCOUNT Error: O valor fornecido não é um JSON válido.");
-    console.error("Detalhes do erro:", error instanceof Error ? error.message : String(error));
+    console.warn("Firebase Admin setup warning:", error instanceof Error ? error.message : String(error));
   }
 
   // API Routes
