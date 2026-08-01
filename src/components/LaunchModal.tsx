@@ -1146,25 +1146,25 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           </div>
         </div>
 
-        {/* Full Form Area occupying maximum space */}
-        <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar relative max-w-[1700px] w-full mx-auto flex flex-col justify-between space-y-6">
-          <div className="space-y-6">
+        {/* Full Form Area occupying maximum space with non-scrolling 3-column layout on desktop */}
+        <form onSubmit={handleSubmit} className="flex-1 p-2 md:p-3 overflow-y-auto xl:overflow-hidden custom-scrollbar relative max-w-[1850px] w-full mx-auto flex flex-col justify-between gap-2 min-h-0">
+          <div className="flex flex-col gap-2 min-h-0 flex-1">
           {pendingEntries.length > 1 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={handlePrev} disabled={currentIndex === 0} className="p-1.5 bg-white rounded-lg border border-blue-200 text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 transition-all">
-                  <Clock size={16} className="rotate-180" />
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={handlePrev} disabled={currentIndex === 0} className="p-1 bg-white rounded-lg border border-blue-200 text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 transition-all">
+                  <Clock size={14} className="rotate-180" />
                 </button>
-                <div className="text-center">
-                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Documento</p>
-                  <p className="text-sm font-black text-blue-700">{currentIndex + 1} de {pendingEntries.length}</p>
+                <div className="text-center flex items-center gap-2">
+                  <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Documento</p>
+                  <p className="text-xs font-black text-blue-700">{currentIndex + 1} de {pendingEntries.length}</p>
                 </div>
-                <button type="button" onClick={handleNext} disabled={currentIndex === pendingEntries.length - 1} className="p-1.5 bg-white rounded-lg border border-blue-200 text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 transition-all">
-                  <Clock size={16} />
+                <button type="button" onClick={handleNext} disabled={currentIndex === pendingEntries.length - 1} className="p-1 bg-white rounded-lg border border-blue-200 text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-50 transition-all">
+                  <Clock size={14} />
                 </button>
               </div>
-              <button type="button" onClick={handleRemoveEntry} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Remover este documento">
-                <Trash2 size={18} />
+              <button type="button" onClick={handleRemoveEntry} className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Remover este documento">
+                <Trash2 size={16} />
               </button>
             </div>
           )}
@@ -1172,72 +1172,63 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           {isScanning && (
             <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
               <div className="relative">
-                <div className="w-24 h-24 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin" />
+                <div className="w-20 h-20 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center animate-pulse">
-                    <Camera className="text-white" size={32} />
+                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center animate-pulse">
+                    <Camera className="text-white" size={24} />
                   </div>
                 </div>
               </div>
-              <div className="mt-6 text-center">
-                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Processando Documento</h3>
-                <p className="text-sm font-bold text-blue-600 animate-bounce mt-1">A IA está extraindo as informações...</p>
-                <div className="mt-4 flex gap-1 justify-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
-                </div>
+              <div className="mt-4 text-center">
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter">Processando Documento</h3>
+                <p className="text-xs font-bold text-blue-600 animate-bounce mt-1">A IA está extraindo as informações...</p>
               </div>
             </div>
           )}
 
           {/* Header Controls Bar */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2 shrink-0">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
               {/* Toggles */}
-              <div className="md:col-span-4 grid grid-cols-2 gap-2">
-                <div className={`p-2 rounded-xl flex items-center justify-between transition-colors border ${formData.isMaintenanceEntry ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-200'}`}>
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${formData.isMaintenanceEntry ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
-                      <Wrench size={13} />
-                    </div>
+              <div className="md:col-span-3 grid grid-cols-2 gap-1.5">
+                <div className={`px-2 py-1 rounded-lg flex items-center justify-between transition-colors border ${formData.isMaintenanceEntry ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-1">
+                    <Wrench size={12} className={formData.isMaintenanceEntry ? 'text-orange-600' : 'text-slate-400'} />
                     <span className="text-[9px] font-black text-slate-800 uppercase">Manutenção</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" name="isMaintenanceEntry" checked={formData.isMaintenanceEntry} onChange={handleChange} className="sr-only peer" />
-                    <div className="w-7 h-3.5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-orange-600"></div>
+                    <div className="w-6 h-3 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-orange-600"></div>
                   </label>
                 </div>
 
-                <div className={`p-2 rounded-xl flex items-center justify-between transition-colors border ${formData.isNoWorkDay ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${formData.isNoWorkDay ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-                      <CalendarX size={13} />
-                    </div>
+                <div className={`px-2 py-1 rounded-lg flex items-center justify-between transition-colors border ${formData.isNoWorkDay ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-1">
+                    <CalendarX size={12} className={formData.isNoWorkDay ? 'text-red-600' : 'text-slate-400'} />
                     <span className="text-[9px] font-black text-slate-800 uppercase">Parado</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" name="isNoWorkDay" checked={formData.isNoWorkDay} onChange={handleChange} className="sr-only peer" />
-                    <div className="w-7 h-3.5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-red-600"></div>
+                    <div className="w-6 h-3 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-red-600"></div>
                   </label>
                 </div>
               </div>
 
               {/* Data, Operador, Máquina, Turno */}
-              <div className="md:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="md:col-span-9 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Data</label>
-                  <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block">Data</label>
+                  <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500/20 h-7" />
                 </div>
 
                 {!formData.isNoWorkDay ? (
                   <div>
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Operador</label>
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block">Operador</label>
                     <select 
                       name="operator"
                       value={formData.operator} 
                       onChange={handleChange}
-                      className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500/20 h-7 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.8rem_0.8rem] bg-right-[0.3rem]_center bg-no-repeat"
                     >
                       <option value="" disabled>Selecionar Operador</option>
                       {filteredOperators.map(emp => (
@@ -1252,12 +1243,12 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                 )}
 
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Máquina</label>
+                  <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block">Máquina</label>
                   <select 
                     name="machine" 
                     value={formData.machine} 
                     onChange={handleChange} 
-                    className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500/20 h-7 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.8rem_0.8rem] bg-right-[0.3rem]_center bg-no-repeat"
                   >
                     <option value="" disabled>Selecionar Máquina</option>
                     <option value="Cast 1">Cast 1</option>
@@ -1267,12 +1258,12 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Turno</label>
+                  <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block">Turno</label>
                   <select 
                     name="shift" 
                     value={formData.shift} 
                     onChange={handleChange} 
-                    className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500/20 h-7 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.8rem_0.8rem] bg-right-[0.3rem]_center bg-no-repeat"
                   >
                     <option value="" disabled>Selecionar Turno</option>
                     <option value="Diurno">Diurno</option>
@@ -1284,308 +1275,244 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           </div>
 
           {formData.isNoWorkDay && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 animate-in fade-in duration-300">
               <div className="flex items-center gap-2 text-red-700 font-black text-[10px] uppercase tracking-widest"><CalendarX size={14} /> Motivo da Parada Total</div>
               <div>
-                <label className="text-[9px] font-black text-red-500 uppercase">Descrição do Motivo</label>
+                <label className="text-[8px] font-black text-red-500 uppercase">Descrição do Motivo</label>
                 <input 
                   type="text" 
                   name="noWorkReason" 
                   value={formData.noWorkReason} 
                   onChange={handleChange} 
                   placeholder="Ex: Falta de energia, feriado, falta de pessoal..." 
-                  className="w-full mt-1 bg-white border border-red-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-500/20" 
+                  className="w-full mt-0.5 bg-white border border-red-200 rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-red-500/20" 
                 />
               </div>
             </div>
           )}
 
           {!formData.isNoWorkDay && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              {/* COLUNA ESQUERDA: Produção e Perdas */}
-              <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 flex-1 min-h-0 items-start">
+              {/* COLUNA 1: PRODUÇÃO & REUTILIZAÇÃO */}
+              <div className="space-y-2 flex flex-col h-full min-h-0">
                 {!isHiddenProduction && (
                   <>
                     {isErema ? (
-                      <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-4 animate-in fade-in duration-300">
-                        <div className="flex items-center gap-2 text-emerald-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Reciclada (Peso Líquido)</div>
+                      <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2 flex-1 flex flex-col justify-between">
+                        <div className="flex items-center gap-1.5 text-emerald-700 font-black text-[10px] uppercase tracking-widest"><Package size={13} /> Produção Reciclada (Erema)</div>
                         
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 1 (kg)</label>
+                            <label className="text-[8px] font-black text-emerald-600 uppercase">Lançamento 1 (kg)</label>
                             <input 
                               type="number" 
                               name="eremaWeight1" 
                               value={formData.eremaWeight1 || ''} 
                               onChange={handleChange} 
-                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none h-7" 
                               placeholder="0"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 2 (kg)</label>
+                            <label className="text-[8px] font-black text-emerald-600 uppercase">Lançamento 2 (kg)</label>
                             <input 
                               type="number" 
                               name="eremaWeight2" 
                               value={formData.eremaWeight2 || ''} 
                               onChange={handleChange} 
-                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none h-7" 
                               placeholder="0"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 3 (kg)</label>
+                            <label className="text-[8px] font-black text-emerald-600 uppercase">Lançamento 3 (kg)</label>
                             <input 
                               type="number" 
                               name="eremaWeight3" 
                               value={formData.eremaWeight3 || ''} 
                               onChange={handleChange} 
-                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none h-7" 
                               placeholder="0"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 4 (kg)</label>
+                            <label className="text-[8px] font-black text-emerald-600 uppercase">Lançamento 4 (kg)</label>
                             <input 
                               type="number" 
                               name="eremaWeight4" 
                               value={formData.eremaWeight4 || ''} 
                               onChange={handleChange} 
-                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none h-7" 
                               placeholder="0"
                             />
                           </div>
                         </div>
 
-                        <div className="bg-white p-3 rounded-xl border border-emerald-200 flex justify-between items-center shadow-sm">
-                          <span className="text-[10px] font-black text-emerald-500 uppercase">Peso Líquido Total</span>
-                          <span className="text-xl font-black text-emerald-600">{formatWeight(formData.netWeight)}</span>
+                        <div className="bg-white p-2 rounded-lg border border-emerald-200 flex justify-between items-center shadow-2xs">
+                          <span className="text-[9px] font-black text-emerald-600 uppercase">Peso Líquido Total</span>
+                          <span className="text-base font-black text-emerald-700">{formatWeight(formData.netWeight)}</span>
                         </div>
                       </div>
                     ) : (
                       <>
-                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
-                          <div className="flex items-center gap-2 text-blue-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Líquida</div>
-                          <div className="grid grid-cols-2 gap-3">
+                        {/* Card Produção Líquida */}
+                        <div className="p-2.5 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2 flex-1 flex flex-col justify-between">
+                          <div className="flex items-center gap-1.5 text-blue-700 font-black text-[10px] uppercase tracking-widest"><Package size={13} /> Produção Líquida</div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="text-[9px] font-black text-blue-500 uppercase">T. Bruto (kg)</label>
-                              <input type="number" name="grossWeight" value={formData.grossWeight || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                              <label className="text-[8px] font-black text-blue-600 uppercase">T. Bruto (kg)</label>
+                              <input type="number" name="grossWeight" value={formData.grossWeight || ''} onChange={handleChange} className="w-full bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold h-7" placeholder="0" />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-blue-500 uppercase">Tara (kg)</label>
-                              <input type="number" name="tara" value={formData.tara || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                              <label className="text-[8px] font-black text-blue-600 uppercase">Tara (kg)</label>
+                              <input type="number" name="tara" value={formData.tara || ''} onChange={handleChange} className="w-full bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs font-bold h-7" placeholder="0" />
                             </div>
                           </div>
 
-                          <div className="border-t border-dashed border-blue-100 pt-3 space-y-3">
+                          <div className="border-t border-dashed border-blue-150 pt-2 space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-black text-blue-700 uppercase">Materiais Produzidos ({materials.length})</span>
+                              <span className="text-[9px] font-black text-blue-800 uppercase">Materiais Produzidos ({materials.length})</span>
                               <button
                                 type="button"
                                 onClick={handleAddMaterial}
-                                className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-100 px-2 py-0.5 rounded transition-all cursor-pointer"
                               >
-                                <Plus size={10} /> Add Material
+                                <Plus size={9} /> Add
                               </button>
                             </div>
 
-                            {materials.map((item, idx) => {
-                              const showDeleteConfirm = confirmDeleteMatId === item.id;
-                              return (
-                                <div key={item.id} className="p-3 bg-white border border-blue-100 rounded-xl space-y-2 relative shadow-sm">
-                                  <div className="flex justify-between items-center border-b border-dashed border-blue-50 pb-1.5">
-                                    <span className="text-[9px] font-black text-blue-500 uppercase">Item #{idx + 1}</span>
-                                    {materials.length > 1 && (
-                                      <div className="flex items-center gap-1">
-                                        {showDeleteConfirm ? (
-                                          <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-155">
-                                            <span className="text-[8px] font-bold text-red-500 mr-1 uppercase">Excluir?</span>
+                            <div className="max-h-[160px] overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
+                              {materials.map((item, idx) => {
+                                const showDeleteConfirm = confirmDeleteMatId === item.id;
+                                return (
+                                  <div key={item.id} className="p-1.5 bg-white border border-blue-100 rounded-lg space-y-1 shadow-2xs">
+                                    <div className="flex justify-between items-center border-b border-dashed border-blue-50 pb-1">
+                                      <span className="text-[8px] font-black text-blue-500 uppercase">Item #{idx + 1}</span>
+                                      {materials.length > 1 && (
+                                        <div className="flex items-center gap-1">
+                                          {showDeleteConfirm ? (
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemoveMaterial(item.id)}
+                                                className="text-[7px] font-black bg-red-100 text-red-700 px-1 py-0.2 rounded"
+                                              >
+                                                Sim
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => setConfirmDeleteMatId(null)}
+                                                className="text-[7px] font-black bg-slate-100 text-slate-700 px-1 py-0.2 rounded"
+                                              >
+                                                Não
+                                              </button>
+                                            </div>
+                                          ) : (
                                             <button
                                               type="button"
-                                              onClick={() => handleRemoveMaterial(item.id)}
-                                              className="text-[8px] font-black bg-red-100 text-red-700 hover:bg-red-200 px-1.5 py-0.5 rounded cursor-pointer"
+                                              onClick={() => setConfirmDeleteMatId(item.id)}
+                                              className="text-slate-400 hover:text-red-500 transition-colors"
                                             >
-                                              Sim
+                                              <Trash2 size={11} />
                                             </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => setConfirmDeleteMatId(null)}
-                                              className="text-[8px] font-black bg-slate-100 text-slate-700 hover:bg-slate-200 px-1.5 py-0.5 rounded cursor-pointer"
-                                            >
-                                              Não
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={() => setConfirmDeleteMatId(item.id)}
-                                            className="text-slate-400 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
-                                            title="Excluir Material"
-                                          >
-                                            <Trash2 size={12} />
-                                          </button>
-                                        )}
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-12 gap-1.5 items-center">
+                                      <div className="col-span-3">
+                                        <label className="text-[7px] font-black text-slate-400 uppercase block">Tipo</label>
+                                        <select
+                                          value={item.materialType}
+                                          onChange={(e) => handleUpdateMaterial(item.id, 'materialType', e.target.value)}
+                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold h-6"
+                                        >
+                                          <option value="LC3">LC3</option>
+                                          <option value="LC2">LC2</option>
+                                          <option value="ATX">ATX</option>
+                                          <option value="ATX Plus">ATX Plus</option>
+                                        </select>
                                       </div>
-                                    )}
-                                  </div>
 
-                                  <div className="grid grid-cols-12 gap-2">
-                                    <div className="col-span-12 sm:col-span-3">
-                                      <label className="text-[9px] font-black text-slate-400 uppercase">Material</label>
-                                      <select
-                                        value={item.materialType}
-                                        onChange={(e) => handleUpdateMaterial(item.id, 'materialType', e.target.value)}
-                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
-                                      >
-                                        <option value="LC3">LC3</option>
-                                        <option value="LC2">LC2</option>
-                                        <option value="ATX">ATX</option>
-                                        <option value="ATX Plus">ATX Plus</option>
-                                      </select>
-                                    </div>
+                                      <div className="col-span-3">
+                                        <label className="text-[7px] font-black text-slate-400 uppercase block">Vols</label>
+                                        <input
+                                          type="number"
+                                          value={item.volumes || ''}
+                                          onChange={(e) => handleUpdateMaterial(item.id, 'volumes', parseFloat(e.target.value) || 0)}
+                                          placeholder="0"
+                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-center h-6"
+                                        />
+                                      </div>
 
-                                    <div className="col-span-4 sm:col-span-3">
-                                      <label className="text-[9px] font-black text-slate-400 uppercase">Volumes</label>
-                                      <input
-                                        type="number"
-                                        value={item.volumes || ''}
-                                        onChange={(e) => handleUpdateMaterial(item.id, 'volumes', parseFloat(e.target.value) || 0)}
-                                        placeholder="0"
-                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                      />
-                                    </div>
+                                      <div className="col-span-3">
+                                        <label className="text-[7px] font-black text-slate-400 uppercase block">TubUsados</label>
+                                        <input
+                                          type="number"
+                                          value={item.tubetes || ''}
+                                          onChange={(e) => handleUpdateMaterial(item.id, 'tubetes', parseFloat(e.target.value) || 0)}
+                                          placeholder="0"
+                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-center h-6"
+                                        />
+                                      </div>
 
-                                    <div className="col-span-4 sm:col-span-3">
-                                      <label className="text-[9px] font-black text-slate-400 uppercase">Tubetes Usados</label>
-                                      <input
-                                        type="number"
-                                        value={item.tubetes || ''}
-                                        onChange={(e) => handleUpdateMaterial(item.id, 'tubetes', parseFloat(e.target.value) || 0)}
-                                        placeholder="0"
-                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                      />
-                                    </div>
-
-                                    <div className="col-span-4 sm:col-span-3">
-                                      <label className="text-[9px] font-black text-slate-400 uppercase">Tubetes Eco B</label>
-                                      <input
-                                        type="number"
-                                        value={item.tubetesEcoB || ''}
-                                        onChange={(e) => handleUpdateMaterial(item.id, 'tubetesEcoB', parseFloat(e.target.value) || 0)}
-                                        placeholder="0"
-                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                      />
+                                      <div className="col-span-3">
+                                        <label className="text-[7px] font-black text-slate-400 uppercase block">TubEcoB</label>
+                                        <input
+                                          type="number"
+                                          value={item.tubetesEcoB || ''}
+                                          onChange={(e) => handleUpdateMaterial(item.id, 'tubetesEcoB', parseFloat(e.target.value) || 0)}
+                                          placeholder="0"
+                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-center h-6"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          <div className="bg-white p-3 rounded-xl border border-blue-200 flex justify-between items-center">
-                            <span className="text-[10px] font-black text-blue-400 uppercase">Peso Líquido Total</span>
-                            <span className="text-xl font-black text-blue-600">{formatWeight(formData.netWeight)}</span>
-                          </div>
-                        </div>
-
-                        {/* Card Eco A (Sede Curitiba) */}
-                        <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-3">
-                          <div className="flex items-center gap-2 text-indigo-700 font-black text-[10px] uppercase tracking-widest">
-                            <Layers size={14} className="text-indigo-500" /> Envio Eco A (Sede Curitiba) (Kg)
-                          </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-indigo-200/60 space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <label className="text-[10px] font-black text-indigo-600 uppercase">Eco A</label>
-                              <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-right" placeholder="0" />
+                                );
+                              })}
                             </div>
-                            {formData.ecoA > 0 && (
-                              <div className="pt-1.5 border-t border-dashed border-slate-150">
-                                <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda de Eco A..." />
-                              </div>
-                            )}
+                          </div>
+
+                          <div className="bg-white px-2 py-1.5 rounded-lg border border-blue-200 flex justify-between items-center mt-1">
+                            <span className="text-[9px] font-black text-blue-500 uppercase">Peso Líquido Total</span>
+                            <span className="text-base font-black text-blue-700">{formatWeight(formData.netWeight)}</span>
                           </div>
                         </div>
 
-                        {/* Reciclagem Eco B */}
-                        <div className="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl space-y-3">
-                          <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={14} /> Reciclagem (Kg)</div>
-                          <div className="space-y-3">
-                            <EcoBReasonCard
-                              label="Eco B (P)"
-                              weightName="ecoBP"
-                              motivoName="ecoBPMotivo"
-                              weightValue={formData.ecoBP || 0}
-                              motivoValue={formData.ecoBPMotivo || ''}
-                              categoryGroups={downtimeSuggestions.allGroups}
-                              onWeightChange={handleChange}
-                              onMotivoChange={handleMotivoChange}
-                            />
-
-                            <EcoBReasonCard
-                              label="Eco B (M)"
-                              weightName="ecoBM"
-                              motivoName="ecoBMMotivo"
-                              weightValue={formData.ecoBM || 0}
-                              motivoValue={formData.ecoBMMotivo || ''}
-                              categoryGroups={downtimeSuggestions.allGroups}
-                              onWeightChange={handleChange}
-                              onMotivoChange={handleMotivoChange}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Borra Total */}
-                        <div className="p-4 bg-red-50/50 border border-red-100 rounded-2xl space-y-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <label className="text-[10px] font-black text-red-600 uppercase tracking-widest block">🗑️ Borra Total (Kg)</label>
-                            <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-24 bg-white border border-red-200 rounded-lg px-2 py-1 text-xs font-black text-red-600 text-right" placeholder="0" />
-                          </div>
-                          {formData.borraTotal > 0 && (
-                            <div className="pt-1.5 border-t border-dashed border-red-150">
-                              <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/60 border border-red-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Reutilização / Saída de Reciclado */}
-                        <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-3xl space-y-3">
+                        {/* Saída de Reciclado / Reutilização */}
+                        <div className="p-2.5 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-1.5">
                           <div>
-                            <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block mb-1">♻️ Saída de Reciclado (Reutilização no Cast)</label>
-                            <span className="text-[9px] text-slate-500 block leading-tight">Cada volume (Bag) de pellet Erema reintroduzido no Cast possui peso padrão de <strong>{formatWeight(1100)}</strong>.</span>
+                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block">♻️ Saída de Reciclado (Cast)</label>
+                            <span className="text-[8px] text-slate-500 block leading-none">Padronizado: <strong>1100kg / Bag</strong>.</span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 pb-1">
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="text-[9px] font-black text-emerald-500 uppercase">Quantidade (Bags)</label>
+                              <label className="text-[8px] font-black text-emerald-600 uppercase">Qtd (Bags)</label>
                               <input 
                                 type="number" 
                                 step="any"
                                 name="recycledBags" 
                                 value={formData.recycledBags || ''} 
                                 onChange={handleChange} 
-                                placeholder="Ex: 1" 
-                                className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
+                                placeholder="0" 
+                                className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-black text-emerald-700 h-7" 
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-emerald-500 uppercase">Peso Abatido (Kg)</label>
+                              <label className="text-[8px] font-black text-emerald-600 uppercase">Peso Abatido (Kg)</label>
                               <input 
                                 type="number" 
                                 name="recycledUsed" 
                                 value={formData.recycledUsed || ''} 
                                 onChange={handleChange} 
-                                placeholder="Ex: 1100" 
-                                className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
+                                placeholder="0" 
+                                className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1 text-xs font-black text-emerald-800 h-7" 
                               />
                             </div>
                           </div>
-
-                          {formData.recycledBags > 0 && (
-                            <div className="bg-emerald-50 text-[10px] text-emerald-700 font-extrabold p-2.5 rounded-xl border border-emerald-150 flex justify-between items-center transition-all animate-none">
-                              <span>VOLUME REGISTRADO:</span>
-                              <span>{formData.recycledBags} {formData.recycledBags === 1 ? 'BAG' : 'BAGS'} ({formatWeight(formData.recycledUsed)})</span>
-                            </div>
-                          )}
                         </div>
                       </>
                     )}
@@ -1593,11 +1520,73 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                 )}
               </div>
 
-              {/* COLUNA DIREITA: Tempos de Parada & Ocorrência/Punição */}
-              <div className="space-y-4">
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-3xl space-y-4 shadow-inner">
-                  <div className="flex items-center gap-2 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-2">
-                    <Clock size={14} /> Tempos de Parada
+              {/* COLUNA 2: PERDAS & RECICLAGEM */}
+              <div className="space-y-2 flex flex-col h-full min-h-0">
+                {/* Card Eco A */}
+                <div className="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-indigo-800 font-black text-[10px] uppercase tracking-widest">
+                    <Layers size={13} className="text-indigo-600" /> Envio Eco A (Sede Curitiba) (Kg)
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-indigo-200/60 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[9px] font-black text-indigo-700 uppercase">Eco A (kg)</label>
+                      <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-0.5 text-xs font-bold text-right h-7" placeholder="0" />
+                    </div>
+                    {formData.ecoA > 0 && (
+                      <div className="pt-1 border-t border-dashed border-slate-150">
+                        <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda Eco A..." />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card Eco B */}
+                <div className="p-2.5 bg-orange-50/50 border border-orange-100 rounded-xl space-y-2 flex-1 flex flex-col justify-between">
+                  <div className="flex items-center gap-1.5 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={13} /> Reciclagem (Kg)</div>
+                  <div className="space-y-2">
+                    <EcoBReasonCard
+                      label="Eco B (P)"
+                      weightName="ecoBP"
+                      motivoName="ecoBPMotivo"
+                      weightValue={formData.ecoBP || 0}
+                      motivoValue={formData.ecoBPMotivo || ''}
+                      categoryGroups={downtimeSuggestions.allGroups}
+                      onWeightChange={handleChange}
+                      onMotivoChange={handleMotivoChange}
+                    />
+
+                    <EcoBReasonCard
+                      label="Eco B (M)"
+                      weightName="ecoBM"
+                      motivoName="ecoBMMotivo"
+                      weightValue={formData.ecoBM || 0}
+                      motivoValue={formData.ecoBMMotivo || ''}
+                      categoryGroups={downtimeSuggestions.allGroups}
+                      onWeightChange={handleChange}
+                      onMotivoChange={handleMotivoChange}
+                    />
+                  </div>
+                </div>
+
+                {/* Card Borra Total */}
+                <div className="p-2.5 bg-red-50/50 border border-red-100 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[9px] font-black text-red-700 uppercase tracking-widest block">🗑️ Borra Total (Kg)</label>
+                    <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-24 bg-white border border-red-200 rounded-lg px-2 py-0.5 text-xs font-black text-red-600 text-right h-7" placeholder="0" />
+                  </div>
+                  {formData.borraTotal > 0 && (
+                    <div className="pt-1 border-t border-dashed border-red-150">
+                      <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/80 border border-red-200 rounded-lg px-2 py-1 text-[10px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* COLUNA 3: TEMPOS DE PARADA & RANKING */}
+              <div className="space-y-2 flex flex-col h-full min-h-0">
+                <div className="p-2.5 bg-slate-100/70 border border-slate-200 rounded-xl space-y-2 shadow-2xs flex-1 flex flex-col justify-between">
+                  <div className="flex items-center gap-1.5 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-1">
+                    <Clock size={13} /> Tempos de Parada
                   </div>
 
                   {/* Datalists de sugestões extraídas do banco */}
@@ -1617,27 +1606,26 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                     ))}
                   </datalist>
 
-                  <div className="space-y-4">
-                    
+                  <div className="space-y-1.5 max-h-[320px] overflow-y-auto custom-scrollbar pr-0.5">
                     {/* Seção Manutenção */}
-                    <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5 text-orange-600 font-black text-[10px] uppercase tracking-widest">
-                          <Wrench size={13} /> Manutenção
+                    <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                        <div className="flex items-center gap-1 text-orange-600 font-black text-[9px] uppercase tracking-wider">
+                          <Wrench size={11} /> Manutenção
                         </div>
                         <button
                           type="button"
                           onClick={() => handleAddStop('manutencao')}
-                          className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                          className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
                         >
-                          <Plus size={10} /> Add Horário
+                          <Plus size={9} /> Horário
                         </button>
                       </div>
                       
                       {manutencaoStops.length === 0 ? (
-                        <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
+                        <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de manutenção</p>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-1.5">
                           {manutencaoStops.map((stop) => (
                             <StopItemCard
                               key={stop.id}
@@ -1649,7 +1637,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                           ))}
                         </div>
                       )}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
                         <span>Subtotal Manutenção</span>
                         <span className="text-slate-700 font-bold">{manutencaoMinCalculado} min</span>
                       </div>
@@ -1658,24 +1646,24 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                     {!formData.isMaintenanceEntry && (
                       <>
                         {/* Seção Processo */}
-                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 text-blue-600 font-black text-[10px] uppercase tracking-widest">
-                              <Layers size={13} /> Processo
+                        <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                            <div className="flex items-center gap-1 text-blue-600 font-black text-[9px] uppercase tracking-wider">
+                              <Layers size={11} /> Processo
                             </div>
                             <button
                               type="button"
                               onClick={() => handleAddStop('processo')}
-                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                              className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
                             >
-                              <Plus size={10} /> Add Horário
+                              <Plus size={9} /> Horário
                             </button>
                           </div>
                           
                           {processoStops.length === 0 ? (
-                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
+                            <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de processo</p>
                           ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-1.5">
                               {processoStops.map((stop) => (
                                 <StopItemCard
                                   key={stop.id}
@@ -1687,31 +1675,31 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                               ))}
                             </div>
                           )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                          <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
                             <span>Subtotal Processo</span>
                             <span className="text-slate-700 font-bold">{processoMinCalculado} min</span>
                           </div>
                         </div>
 
                         {/* Seção Outros */}
-                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 text-slate-600 font-black text-[10px] uppercase tracking-widest">
-                              <Package size={13} /> Outros
+                        <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                            <div className="flex items-center gap-1 text-slate-600 font-black text-[9px] uppercase tracking-wider">
+                              <Package size={11} /> Outros
                             </div>
                             <button
                               type="button"
                               onClick={() => handleAddStop('outros')}
-                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                              className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
                             >
-                              <Plus size={10} /> Add Horário
+                              <Plus size={9} /> Horário
                             </button>
                           </div>
                           
                           {outrosStops.length === 0 ? (
-                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
+                            <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem outras paradas</p>
                           ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-1.5">
                               {outrosStops.map((stop) => (
                                 <StopItemCard
                                   key={stop.id}
@@ -1723,28 +1711,28 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                               ))}
                             </div>
                           )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                          <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
                             <span>Subtotal Outros</span>
                             <span className="text-slate-700 font-bold">{outrosMinCalculado} min</span>
                           </div>
                         </div>
                       </>
                     )}
+                  </div>
 
-                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center px-1">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Parado Geral</span>
-                      <span className="text-sm font-black text-slate-700">{totalParadas} min</span>
-                    </div>
+                  <div className="pt-1 border-t border-slate-200 flex justify-between items-center">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total Parado Geral</span>
+                    <span className="text-xs font-black text-slate-800">{totalParadas} min</span>
                   </div>
                 </div>
 
                 {/* Seção de Punição / Ocorrência no Ranking */}
-                <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-3xl space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between border-b border-rose-200/80 pb-2 flex-wrap gap-2">
-                    <div className="flex items-center gap-2 text-rose-800 font-black text-[10px] uppercase tracking-widest">
-                      <ShieldAlert size={15} className="text-rose-600" /> Ocorrência / Punição no Ranking
+                <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded-xl space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-rose-200/80 pb-1 flex-wrap gap-1">
+                    <div className="flex items-center gap-1 text-rose-800 font-black text-[9px] uppercase tracking-widest">
+                      <ShieldAlert size={13} className="text-rose-600" /> Punição Ranking
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer bg-white/80 px-2.5 py-1 rounded-xl border border-rose-200 hover:bg-white transition-all">
+                    <label className="flex items-center gap-1.5 cursor-pointer bg-white/80 px-2 py-0.5 rounded-lg border border-rose-200 hover:bg-white transition-all">
                       <input
                         type="checkbox"
                         checked={formData.hasPenalty || false}
@@ -1755,22 +1743,18 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                           penaltyType: e.target.checked ? (prev.penaltyType || 'deduction_kg') : 'deduction_kg',
                           deductionValue: e.target.checked ? (prev.deductionValue || 500) : 0,
                         }))}
-                        className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
+                        className="w-3.5 h-3.5 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
                       />
-                      <span className="text-[10px] font-black uppercase text-rose-900">Aplicar Punição neste Lançamento</span>
+                      <span className="text-[9px] font-black uppercase text-rose-900">Aplicar Punição</span>
                     </label>
                   </div>
 
                   {formData.hasPenalty && (
-                    <div className="space-y-3 pt-1">
-                      <p className="text-[10px] text-rose-800 font-medium leading-tight bg-white/80 p-2.5 rounded-xl border border-rose-100">
-                        Se o operador descumpriu alguma regra neste turno (ex: <strong>não realizou a parada obrigatória de limpeza a cada 6h</strong>), selecione a infração e a punição a ser aplicada na pontuação/peso do ranking.
-                      </p>
-
+                    <div className="space-y-1.5 pt-0.5">
                       {/* Regra / Infração */}
                       <div>
-                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                          Regra Descumprida / Infração *
+                        <label className="block text-[8px] font-black uppercase text-rose-900 mb-0.5">
+                          Infração *
                         </label>
                         <select
                           value={selectedPresetInfraction}
@@ -1783,7 +1767,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                               setFormData(prev => ({ ...prev, infractionType: customInfractionText }));
                             }
                           }}
-                          className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          className="w-full bg-white border border-rose-300 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-900 h-7"
                         >
                           {PRESET_INFRACTIONS.map((preset) => (
                             <option key={preset} value={preset}>{preset}</option>
@@ -1793,99 +1777,80 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                         {selectedPresetInfraction === '📝 Outra Infração Personalizada...' && (
                           <input
                             type="text"
-                            placeholder="Especifique a regra ou infração..."
+                            placeholder="Especifique a infração..."
                             value={customInfractionText}
                             onChange={(e) => {
                               setCustomInfractionText(e.target.value);
                               setFormData(prev => ({ ...prev, infractionType: e.target.value }));
                             }}
-                            className="w-full mt-2 bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            className="w-full mt-1 bg-white border border-rose-300 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-900 h-7"
                           />
                         )}
                       </div>
 
                       {/* Tipo de Punição */}
-                      <div>
-                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                          Tipo de Penalidade *
+                      <div className="grid grid-cols-3 gap-1">
+                        <label className={`p-1 rounded-lg border cursor-pointer transition-all flex items-center justify-center gap-1 ${
+                          formData.penaltyType === 'deduction_kg'
+                            ? 'border-rose-500 bg-white font-black text-rose-950 shadow-2xs'
+                            : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="modalPenaltyType"
+                            checked={formData.penaltyType === 'deduction_kg'}
+                            onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_kg' }))}
+                            className="text-rose-600 sr-only"
+                          />
+                          <span className="text-[8px] font-black uppercase">Desc. Kg</span>
                         </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                            formData.penaltyType === 'deduction_kg'
-                              ? 'border-rose-500 bg-white font-black text-rose-950 shadow-xs'
-                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                          }`}>
-                            <input
-                              type="radio"
-                              name="modalPenaltyType"
-                              checked={formData.penaltyType === 'deduction_kg'}
-                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_kg' }))}
-                              className="text-rose-600 focus:ring-rose-500"
-                            />
-                            <span className="text-[10px] font-black uppercase">Desconto em Kg</span>
-                          </label>
 
-                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                            formData.penaltyType === 'deduction_percent'
-                              ? 'border-amber-500 bg-white font-black text-amber-950 shadow-xs'
-                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                          }`}>
-                            <input
-                              type="radio"
-                              name="modalPenaltyType"
-                              checked={formData.penaltyType === 'deduction_percent'}
-                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_percent' }))}
-                              className="text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className="text-[10px] font-black uppercase">Desconto %</span>
-                          </label>
+                        <label className={`p-1 rounded-lg border cursor-pointer transition-all flex items-center justify-center gap-1 ${
+                          formData.penaltyType === 'deduction_percent'
+                            ? 'border-amber-500 bg-white font-black text-amber-950 shadow-2xs'
+                            : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="modalPenaltyType"
+                            checked={formData.penaltyType === 'deduction_percent'}
+                            onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_percent' }))}
+                            className="text-amber-600 sr-only"
+                          />
+                          <span className="text-[8px] font-black uppercase">Desc. %</span>
+                        </label>
 
-                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                            formData.penaltyType === 'disqualify'
-                              ? 'border-red-600 bg-red-100 font-black text-red-950 shadow-xs'
-                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                          }`}>
-                            <input
-                              type="radio"
-                              name="modalPenaltyType"
-                              checked={formData.penaltyType === 'disqualify'}
-                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'disqualify' }))}
-                              className="text-red-600 focus:ring-red-500"
-                            />
-                            <span className="text-[10px] font-black uppercase">Desqualificar</span>
-                          </label>
-                        </div>
+                        <label className={`p-1 rounded-lg border cursor-pointer transition-all flex items-center justify-center gap-1 ${
+                          formData.penaltyType === 'disqualify'
+                            ? 'border-red-600 bg-red-100 font-black text-red-950 shadow-2xs'
+                            : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                        }`}>
+                          <input
+                            type="radio"
+                            name="modalPenaltyType"
+                            checked={formData.penaltyType === 'disqualify'}
+                            onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'disqualify' }))}
+                            className="text-red-600 sr-only"
+                          />
+                          <span className="text-[8px] font-black uppercase">Desqualif.</span>
+                        </label>
                       </div>
 
                       {/* Valor do Desconto */}
                       {formData.penaltyType !== 'disqualify' && (
-                        <div>
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                            Valor da Punição ({formData.penaltyType === 'deduction_kg' ? 'em Kg' : 'em %'}) *
+                        <div className="flex items-center gap-2">
+                          <label className="text-[8px] font-black uppercase text-rose-900 shrink-0">
+                            Valor ({formData.penaltyType === 'deduction_kg' ? 'Kg' : '%'}):
                           </label>
                           <input
                             type="number"
                             min="1"
                             value={formData.deductionValue || 0}
                             onChange={(e) => setFormData(prev => ({ ...prev, deductionValue: Number(e.target.value) || 0 }))}
-                            className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            className="w-full bg-white border border-rose-300 rounded-lg px-2 py-0.5 text-xs font-black text-slate-900 h-7"
                           />
                         </div>
                       )}
-
-                      {/* Observações */}
-                      <div>
-                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                          Justificativa / Observações (Opcional)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ex: Não efetuou a parada obrigatória de 6h para limpeza da matriz..."
-                          value={formData.penaltyReason || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, penaltyReason: e.target.value }))}
-                          className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                        />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -1895,12 +1860,13 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
 
           </div>
 
-          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md p-4 border border-slate-200 rounded-2xl flex gap-4 z-30 shadow-2xl mt-8">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer">
+          {/* Fixed bottom action buttons bar */}
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md px-3 py-2 border border-slate-200 rounded-xl flex gap-3 z-30 shadow-md shrink-0">
+            <button type="button" onClick={onClose} className="flex-1 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-black text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer">
               Cancelar
             </button>
-            <button type="submit" className="flex-1 px-6 py-3.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-xl shadow-blue-500/25 hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer">
-              <Save size={18} /> {initialData ? 'Atualizar Lançamento' : (pendingEntries.length > 1 ? `Salvar Todos os ${pendingEntries.length} Lançamentos` : 'Salvar Lançamento')}
+            <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-black text-xs uppercase shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <Save size={16} /> {initialData ? 'Atualizar Lançamento' : (pendingEntries.length > 1 ? `Salvar (${pendingEntries.length}) Lançamentos` : 'Salvar Lançamento')}
             </button>
           </div>
         </form>
