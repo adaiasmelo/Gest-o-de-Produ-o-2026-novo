@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Camera, Loader2, Search, Plus, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { X, Save, Edit2, Package, Layers, Trash2, Clock, Wrench, CalendarX, Camera, Loader2, Search, Plus, ShieldAlert, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { ProductionEntry, RibbonCuttingEntry, Shift, Collaborator, Employee } from '../types';
 import { extractProductionData } from '../services/aiService';
 import { extractDowntimeMotives, ECO_B_REASONS_PRESETS } from '../constants/downtimeReasons';
@@ -1078,34 +1078,50 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
   const isHiddenProduction = formData.isMaintenanceEntry || formData.isNoWorkDay;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl relative overflow-hidden my-auto border border-slate-100">
-        <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {initialData ? <Edit2 size={20} /> : <Save size={20} />}
-            <h2 className="text-lg font-semibold tracking-tight uppercase">{initialData ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-slate-50 w-full h-full flex flex-col overflow-hidden relative">
+        {/* Header Bar */}
+        <div className="bg-[#1e293b] text-white px-4 md:px-8 py-3.5 flex items-center justify-between shrink-0 shadow-lg z-20 border-b border-slate-700">
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-600/50 cursor-pointer"
+              title="Voltar"
+            >
+              <ArrowLeft size={18} />
+              <span className="hidden sm:inline uppercase text-[11px]">Voltar</span>
+            </button>
+            <div className="h-6 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+            <div className="flex items-center gap-2">
+              {initialData ? <Edit2 size={20} className="text-blue-400" /> : <Save size={20} className="text-blue-400" />}
+              <h2 className="text-base md:text-xl font-black tracking-tight uppercase text-white">
+                {initialData ? 'Editar Lançamento' : 'Novo Lançamento'}
+              </h2>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex bg-blue-500 rounded-lg overflow-hidden shadow-lg shadow-blue-500/20">
+
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex bg-blue-600 rounded-xl overflow-hidden shadow-lg shadow-blue-500/20 border border-blue-400/30">
               <button 
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isScanning}
-                className="flex items-center gap-1.5 hover:bg-blue-600 disabled:bg-blue-400 text-white px-2.5 py-1.5 text-[9px] font-black uppercase border-r border-blue-400 transition-all"
+                className="flex items-center gap-1.5 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 py-2 text-[10px] font-black uppercase border-r border-blue-500/50 transition-all cursor-pointer"
                 title="Carregar Imagem"
               >
-                {isScanning ? <Loader2 size={12} className="animate-spin" /> : <Package size={12} />}
-                {isScanning ? '...' : 'Imagem'}
+                {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+                <span>{isScanning ? 'Lendo...' : 'IA Imagem'}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
                 disabled={isScanning}
-                className="flex items-center gap-1.5 hover:bg-blue-600 disabled:bg-blue-400 text-white px-2.5 py-1.5 text-[9px] font-black uppercase transition-all"
+                className="flex items-center gap-1.5 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 py-2 text-[10px] font-black uppercase transition-all cursor-pointer"
                 title="Usar Câmera"
               >
-                {isScanning ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-                {isScanning ? '...' : 'Câmera'}
+                {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                <span>{isScanning ? 'Lendo...' : 'IA Câmera'}</span>
               </button>
             </div>
             <input 
@@ -1124,13 +1140,15 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               capture="environment"
               className="hidden" 
             />
-            <button onClick={onClose} className="hover:bg-white/10 p-1 rounded-full transition-colors">
-              <X size={24} />
+            <button onClick={onClose} className="hover:bg-slate-700 p-2 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer" title="Fechar">
+              <X size={22} />
             </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[88vh] overflow-y-auto custom-scrollbar relative">
+        {/* Full Form Area occupying maximum space */}
+        <form onSubmit={handleSubmit} className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar relative max-w-[1700px] w-full mx-auto flex flex-col justify-between space-y-6">
+          <div className="space-y-6">
           {pendingEntries.length > 1 && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
@@ -1875,10 +1893,14 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
             </div>
           )}
 
-          <div className="flex gap-3 pt-4 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-black text-[10px] uppercase hover:bg-slate-50 transition-all cursor-pointer">Cancelar</button>
-            <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
-              <Save size={16} /> {initialData ? 'Atualizar' : (pendingEntries.length > 1 ? `Salvar Todos (${pendingEntries.length})` : 'Salvar')}
+          </div>
+
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md p-4 border border-slate-200 rounded-2xl flex gap-4 z-30 shadow-2xl mt-8">
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer">
+              Cancelar
+            </button>
+            <button type="submit" className="flex-1 px-6 py-3.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-xl shadow-blue-500/25 hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <Save size={18} /> {initialData ? 'Atualizar Lançamento' : (pendingEntries.length > 1 ? `Salvar Todos os ${pendingEntries.length} Lançamentos` : 'Salvar Lançamento')}
             </button>
           </div>
         </form>
