@@ -65,12 +65,12 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
   }, [categoryGroups]);
 
   return (
-    <div className="bg-white p-3 rounded-2xl border border-orange-200/70 space-y-3 shadow-2xs">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-black text-orange-600 uppercase tracking-wider">{label}</label>
+    <div className="bg-white p-2 rounded-xl border border-orange-200/70 space-y-1.5 shadow-2xs">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10px] font-black text-orange-600 uppercase tracking-wider">{label}</label>
           {selectedReasons.length > 0 && (
-            <span className="text-[9px] font-black bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full border border-orange-200">
+            <span className="text-[8px] font-black bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded-full border border-orange-200">
               {selectedReasons.length} {selectedReasons.length === 1 ? 'motivo' : 'motivos'}
             </span>
           )}
@@ -81,17 +81,17 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
             name={weightName}
             value={weightValue || ''}
             onChange={onWeightChange}
-            className="w-24 bg-slate-50 border border-orange-200 rounded-lg px-2 py-1 text-xs font-black text-slate-800 text-right focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none"
+            className="w-20 bg-slate-50 border border-orange-200 rounded-lg px-2 py-0.5 text-xs font-black text-slate-800 text-right focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none h-6"
             placeholder="0"
           />
-          <span className="text-xs font-bold text-slate-400">Kg</span>
+          <span className="text-[10px] font-bold text-slate-400">Kg</span>
         </div>
       </div>
 
       {weightValue > 0 && (
-        <div className="pt-2 border-t border-dashed border-orange-150 space-y-2.5">
+        <div className="pt-1.5 border-t border-dashed border-orange-150 space-y-1.5">
           {/* Quick Dropdown Picker */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <select
               value=""
               onChange={(e) => {
@@ -100,7 +100,7 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
                   e.target.value = '';
                 }
               }}
-              className="w-full bg-orange-50/60 text-slate-800 border border-orange-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer shadow-2xs"
+              className="w-full bg-orange-50/60 text-slate-800 border border-orange-200 rounded-lg px-2 py-1 text-[10px] font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer shadow-2xs h-7"
             >
               <option value="">📋 Adicionar motivo padronizado de Eco B...</option>
               {categoryGroups && categoryGroups.length > 0 ? (
@@ -131,7 +131,7 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer"
+              className="px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer h-7"
             >
               {isExpanded ? 'Ocultar' : `Opções (${totalReasonsCount})`}
             </button>
@@ -139,17 +139,17 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
 
           {/* Interactive Multi-Select Pills */}
           {isExpanded && (
-            <div className="p-3 bg-slate-50 border border-orange-200/80 rounded-xl space-y-3">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
-                <span>⚡ Seleção Múltipla de Motivos de Eco B:</span>
-                <span className="text-[9px] text-orange-600 font-bold">Clique para marcar/desmarcar</span>
+            <div className="p-2 bg-slate-50 border border-orange-200/80 rounded-lg space-y-1.5">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                <span>⚡ Seleção Múltipla:</span>
+                <span className="text-[8px] text-orange-600 font-bold">Marcar/desmarcar</span>
               </p>
-              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
                 {categoryGroups && categoryGroups.length > 0 ? (
                   categoryGroups.map((group, gIdx) => (
-                    <div key={gIdx} className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">{group.groupName}</p>
-                      <div className="flex flex-wrap gap-1.5">
+                    <div key={gIdx} className="space-y-0.5">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">{group.groupName}</p>
+                      <div className="flex flex-wrap gap-1">
                         {group.reasons.map((reason, rIdx) => {
                           const active = isEcoBReasonSelected(motivoValue, reason);
                           return (
@@ -157,13 +157,13 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
                               key={rIdx}
                               type="button"
                               onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all text-left flex items-center gap-1 cursor-pointer ${
                                 active
                                   ? 'bg-orange-600 text-white font-extrabold shadow-2xs border border-orange-600'
                                   : 'bg-white text-slate-700 hover:bg-orange-100/70 border border-slate-200'
                               }`}
                             >
-                              <span className="text-xs font-black">{active ? '✓' : '＋'}</span>
+                              <span className="text-[10px] font-black">{active ? '✓' : '＋'}</span>
                               <span>{reason}</span>
                             </button>
                           );
@@ -172,7 +172,7 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
                     </div>
                   ))
                 ) : (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1">
                     {ECO_B_REASONS_PRESETS.map((reason, idx) => {
                       const active = isEcoBReasonSelected(motivoValue, reason);
                       return (
@@ -180,13 +180,13 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
                           key={idx}
                           type="button"
                           onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all text-left flex items-center gap-1 cursor-pointer ${
                             active
                               ? 'bg-orange-600 text-white font-extrabold shadow-2xs border border-orange-600'
                               : 'bg-white text-slate-700 hover:bg-orange-100/70 border border-slate-200'
                           }`}
                         >
-                          <span className="text-xs font-black">{active ? '✓' : '＋'}</span>
+                          <span className="text-[10px] font-black">{active ? '✓' : '＋'}</span>
                           <span>{reason}</span>
                         </button>
                       );
@@ -199,17 +199,17 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
 
           {/* Selected Active Badges Chips */}
           {selectedReasons.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
+            <div className="flex flex-wrap gap-1 pt-0.5">
               {selectedReasons.map((reason, rIdx) => (
                 <span
                   key={rIdx}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-200 shadow-2xs"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-orange-100 text-orange-900 border border-orange-200 shadow-2xs"
                 >
                   <span>{reason}</span>
                   <button
                     type="button"
                     onClick={() => onMotivoChange(motivoName, toggleEcoBReason(motivoValue, reason))}
-                    className="hover:text-red-600 font-extrabold ml-0.5 text-xs cursor-pointer"
+                    className="hover:text-red-600 font-extrabold ml-0.5 text-[10px] cursor-pointer"
                     title="Remover motivo"
                   >
                     ×
@@ -219,9 +219,9 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
               <button
                 type="button"
                 onClick={() => onMotivoChange(motivoName, '')}
-                className="text-[9px] font-bold text-red-500 hover:underline px-1 py-0.5 cursor-pointer"
+                className="text-[8px] font-black text-red-500 hover:text-red-700 underline px-1 cursor-pointer"
               >
-                Limpar todos
+                Limpar
               </button>
             </div>
           )}
@@ -233,7 +233,7 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
               name={motivoName}
               value={motivoValue || ''}
               onChange={(e) => onMotivoChange(motivoName, e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-[10px] font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-1 focus:ring-orange-400 outline-none"
               placeholder="Justificar perda de Eco B (digite ou selecione acima)..."
             />
           </div>
@@ -1081,46 +1081,46 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-200">
       <div className="bg-slate-50 w-full h-full flex flex-col overflow-hidden relative">
         {/* Header Bar */}
-        <div className="bg-[#1e293b] text-white px-4 md:px-8 py-3.5 flex items-center justify-between shrink-0 shadow-lg z-20 border-b border-slate-700">
-          <div className="flex items-center gap-3">
+        <div className="bg-[#1e293b] text-white px-3 md:px-5 py-2 flex items-center justify-between shrink-0 shadow-md z-20 border-b border-slate-700">
+          <div className="flex items-center gap-2.5">
             <button 
               type="button" 
               onClick={onClose} 
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all border border-slate-600/50 cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-all border border-slate-600/50 cursor-pointer"
               title="Voltar"
             >
-              <ArrowLeft size={18} />
-              <span className="hidden sm:inline uppercase text-[11px]">Voltar</span>
+              <ArrowLeft size={16} />
+              <span className="hidden sm:inline uppercase text-[10px]">Voltar</span>
             </button>
-            <div className="h-6 w-px bg-slate-700 mx-1 hidden sm:block"></div>
-            <div className="flex items-center gap-2">
-              {initialData ? <Edit2 size={20} className="text-blue-400" /> : <Save size={20} className="text-blue-400" />}
-              <h2 className="text-base md:text-xl font-black tracking-tight uppercase text-white">
+            <div className="h-5 w-px bg-slate-700 mx-0.5 hidden sm:block"></div>
+            <div className="flex items-center gap-1.5">
+              {initialData ? <Edit2 size={16} className="text-blue-400" /> : <Save size={16} className="text-blue-400" />}
+              <h2 className="text-sm md:text-base font-black tracking-tight uppercase text-white">
                 {initialData ? 'Editar Lançamento' : 'Novo Lançamento'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="flex bg-blue-600 rounded-xl overflow-hidden shadow-lg shadow-blue-500/20 border border-blue-400/30">
+          <div className="flex items-center gap-2">
+            <div className="flex bg-blue-600 rounded-lg overflow-hidden shadow-sm shadow-blue-500/20 border border-blue-400/30">
               <button 
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isScanning}
-                className="flex items-center gap-1.5 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 py-2 text-[10px] font-black uppercase border-r border-blue-500/50 transition-all cursor-pointer"
+                className="flex items-center gap-1 hover:bg-blue-700 disabled:bg-blue-400 text-white px-2.5 py-1 text-[9px] font-black uppercase border-r border-blue-500/50 transition-all cursor-pointer"
                 title="Carregar Imagem"
               >
-                {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+                {isScanning ? <Loader2 size={12} className="animate-spin" /> : <Package size={12} />}
                 <span>{isScanning ? 'Lendo...' : 'IA Imagem'}</span>
               </button>
               <button 
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
                 disabled={isScanning}
-                className="flex items-center gap-1.5 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 py-2 text-[10px] font-black uppercase transition-all cursor-pointer"
+                className="flex items-center gap-1 hover:bg-blue-700 disabled:bg-blue-400 text-white px-2.5 py-1 text-[9px] font-black uppercase transition-all cursor-pointer"
                 title="Usar Câmera"
               >
-                {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                {isScanning ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
                 <span>{isScanning ? 'Lendo...' : 'IA Câmera'}</span>
               </button>
             </div>
@@ -1140,8 +1140,8 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               capture="environment"
               className="hidden" 
             />
-            <button onClick={onClose} className="hover:bg-slate-700 p-2 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer" title="Fechar">
-              <X size={22} />
+            <button onClick={onClose} className="hover:bg-slate-700 p-1 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer" title="Fechar">
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -1521,29 +1521,29 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               </div>
 
               {/* COLUNA 2: PERDAS & RECICLAGEM */}
-              <div className="space-y-2 flex flex-col h-full min-h-0">
+              <div className="space-y-2 flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
                 {/* Card Eco A */}
-                <div className="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1.5">
+                <div className="p-2 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1 shrink-0">
                   <div className="flex items-center gap-1.5 text-indigo-800 font-black text-[10px] uppercase tracking-widest">
                     <Layers size={13} className="text-indigo-600" /> Envio Eco A (Sede Curitiba) (Kg)
                   </div>
-                  <div className="bg-white p-2 rounded-lg border border-indigo-200/60 space-y-1.5">
+                  <div className="bg-white p-1.5 rounded-lg border border-indigo-200/60 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <label className="text-[9px] font-black text-indigo-700 uppercase">Eco A (kg)</label>
-                      <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-0.5 text-xs font-bold text-right h-7" placeholder="0" />
+                      <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-20 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-0.5 text-xs font-bold text-right h-6" placeholder="0" />
                     </div>
                     {formData.ecoA > 0 && (
                       <div className="pt-1 border-t border-dashed border-slate-150">
-                        <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda Eco A..." />
+                        <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-[10px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda Eco A..." />
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Card Eco B */}
-                <div className="p-2.5 bg-orange-50/50 border border-orange-100 rounded-xl space-y-2 flex-1 flex flex-col justify-between">
+                {/* Card Eco B (Reciclagem) */}
+                <div className="p-2 bg-orange-50/50 border border-orange-100 rounded-xl space-y-1.5 shrink-0">
                   <div className="flex items-center gap-1.5 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={13} /> Reciclagem (Kg)</div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <EcoBReasonCard
                       label="Eco B (P)"
                       weightName="ecoBP"
@@ -1569,14 +1569,14 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                 </div>
 
                 {/* Card Borra Total */}
-                <div className="p-2.5 bg-red-50/50 border border-red-100 rounded-xl space-y-1.5">
+                <div className="p-2 bg-red-50/50 border border-red-100 rounded-xl space-y-1 shrink-0">
                   <div className="flex items-center justify-between gap-2">
                     <label className="text-[9px] font-black text-red-700 uppercase tracking-widest block">🗑️ Borra Total (Kg)</label>
-                    <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-24 bg-white border border-red-200 rounded-lg px-2 py-0.5 text-xs font-black text-red-600 text-right h-7" placeholder="0" />
+                    <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-20 bg-white border border-red-200 rounded-lg px-2 py-0.5 text-xs font-black text-red-600 text-right h-6" placeholder="0" />
                   </div>
                   {formData.borraTotal > 0 && (
                     <div className="pt-1 border-t border-dashed border-red-150">
-                      <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/80 border border-red-200 rounded-lg px-2 py-1 text-[10px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
+                      <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/80 border border-red-200 rounded-lg px-2 py-0.5 text-[10px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
                     </div>
                   )}
                 </div>
