@@ -1057,6 +1057,8 @@ export const App: React.FC = () => {
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateNotes, setUpdateNotes] = useState<string>('');
+  const sessionLoadedBuildTimeRef = useRef<string | null>(null);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isQuickAllocModalOpen, setIsQuickAllocModalOpen] = useState(false);
   const [quickAllocSector, setQuickAllocSector] = useState('Extrusão');
@@ -1830,16 +1832,31 @@ export const App: React.FC = () => {
           }
         }
 
-        // Check for App Update
-        const localTime = new Date(APP_BUILD_TIME).getTime();
-        const remoteTime = data.appBuildTime ? new Date(data.appBuildTime).getTime() : 0;
-        if (remoteTime > localTime) {
+        // Detector de Atualizações e Edições do Sistema em Tempo Real (PC e Mobile)
+        const remoteVersion = data.appBuildTime || data.systemVersion || data.lastUpdated || APP_BUILD_TIME;
+        
+        if (!sessionLoadedBuildTimeRef.current) {
+          sessionLoadedBuildTimeRef.current = remoteVersion;
+        } else if (remoteVersion !== sessionLoadedBuildTimeRef.current) {
+          console.log('App: Nova alteração/atualização de sistema detectada!', remoteVersion);
           setIsUpdateAvailable(true);
           setUpdateDismissed(false);
-        } else if (localTime > remoteTime) {
-          // Current client is newer, update database
-          setDoc(doc(db, 'settings', 'global'), { appBuildTime: APP_BUILD_TIME }, { merge: true })
-            .catch(err => console.error('Erro ao atualizar appBuildTime em settings/global:', err));
+          if (data.updateNotes) {
+            setUpdateNotes(data.updateNotes);
+          }
+
+          // Notificação nativa em dispositivos/navegadores que deram permissão
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('🚀 Nova Atualização do Sistema!', {
+                body: data.updateNotes || 'Uma nova alteração ou versão do sistema de produção foi disponibilizada. Clique no aplicativo para atualizar.',
+                icon: data.systemLogo || 'https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png',
+                tag: 'system-update'
+              });
+            } catch (err) {
+              console.warn('Erro ao disparar notificação nativa:', err);
+            }
+          }
         }
       }
       setSettingsLoaded(true);
@@ -2720,8 +2737,26 @@ export const App: React.FC = () => {
     handleOpenBiometricRegisterModal(biometricUser);
   };
 
+  const handleTriggerUpdateNotification = async (customNotes?: string) => {
+    try {
+      const now = new Date().toISOString();
+      const notes = customNotes || 'Uma nova alteração ou atualização do sistema foi realizada pelo administrador.';
+      await setDoc(doc(db, 'settings', 'global'), {
+        appBuildTime: now,
+        lastUpdated: now,
+        updateNotes: notes,
+        updatedBy: loggedUser?.name || 'Administrador'
+      }, { merge: true });
+      alert('Notificação de atualização disparada com sucesso para todos os dispositivos instalados (PC e Celulares)!');
+    } catch (err) {
+      console.error('Erro ao disparar notificação de atualização:', err);
+      alert('Erro ao enviar notificação de atualização para os dispositivos.');
+    }
+  };
+
   const handleSaveSettings = async () => {
     try {
+      const now = new Date().toISOString();
       const settingsData = {
         operators,
         availableRoles,
@@ -2731,7 +2766,9 @@ export const App: React.FC = () => {
         loginSystemSubtitle,
         systemLogo,
         systemCoverImage,
-        lastUpdated: new Date().toISOString()
+        appBuildTime: now,
+        lastUpdated: now,
+        updateNotes: 'As configurações e parâmetros do sistema foram alterados e salvas.'
       };
       
       // Check for size limit (1MB)
@@ -2742,7 +2779,7 @@ export const App: React.FC = () => {
       }
 
       await setDoc(doc(db, 'settings', 'global'), settingsData);
-      alert('Configurações salvas com sucesso!');
+      alert('Configurações salvas e notificação de atualização sincronizada com sucesso!');
     } catch (err) {
       console.error("Erro ao salvar configurações:", err);
       alert('Erro crítico ao salvar no banco de dados. Verifique sua conexão ou se a imagem é muito grande.');
@@ -15114,6 +15151,7 @@ Produção total:
         isIOS={isIOS}
         handleInstallClick={handleInstallClick}
         setShowInstallExperience={setShowInstallExperience}
+        onTriggerUpdateNotification={handleTriggerUpdateNotification}
       />
 
       <PermissionOverlay 
@@ -15263,11 +15301,15 @@ Produção total:
       
       <UpdateModal 
         isOpen={isUpdateAvailable} 
+        updateNotes={updateNotes}
         onClose={() => {
           setIsUpdateAvailable(false);
           setUpdateDismissed(true);
         }} 
         onUpdate={() => {
+          if (sessionLoadedBuildTimeRef.current) {
+            sessionLoadedBuildTimeRef.current = new Date().toISOString();
+          }
           if ((window as any).refreshAppVersion) {
             (window as any).refreshAppVersion();
           } else {
@@ -16446,6 +16488,7 @@ const SettingsModal: React.FC<{
   isIOS: boolean;
   handleInstallClick: () => void;
   setShowInstallExperience: (show: boolean) => void;
+  onTriggerUpdateNotification?: (notes?: string) => Promise<void>;
 }> = ({
   isOpen, onClose, onSave, activeTab, setActiveTab,
   filterOperator, setFilterOperator, filterDay, setFilterDay, filterStartDate, setFilterStartDate, filterEndDate, setFilterEndDate, dashboardMonth, setDashboardMonth,
@@ -16453,7 +16496,7 @@ const SettingsModal: React.FC<{
   setIsUserManagementOpen, setIsDowntimeReasonsModalOpen, setIsDowntimeAnalyticsModalOpen, setIsOperatorModalOpen, setIsRoleModalOpen, setIsShiftModalOpen, setIsPermissionModalOpen,
   downloadBackup, handleRestoreData, handleSyncLocalToCloud, openConfirm, isInitializing, fileInputRef,
   systemName, setSystemName, loginSystemName, setLoginSystemName, loginSystemSubtitle, setLoginSystemSubtitle, systemLogo, setSystemLogo, systemCoverImage, setSystemCoverImage, 
-  isAdminUser, isInstallable, isStandalone, isIOS, handleInstallClick, setShowInstallExperience
+  isAdminUser, isInstallable, isStandalone, isIOS, handleInstallClick, setShowInstallExperience, onTriggerUpdateNotification
 }) => {
   const [isSaving, setIsSaving] = useState(false);
 
@@ -16598,6 +16641,29 @@ const SettingsModal: React.FC<{
                     )}
                   </div>
                </div>
+
+               {isAdminUser && onTriggerUpdateNotification && (
+                 <div 
+                   className="bg-gradient-to-br from-blue-900 to-indigo-950 p-6 rounded-[1.8rem] border border-blue-500/30 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:border-blue-400 transition-all shadow-xl shadow-blue-900/20 mb-4 text-white" 
+                   onClick={() => {
+                     const notes = prompt('Digite as observações da atualização para exibir nos dispositivos (opcional):', 'Nova atualização do sistema disponível. Clique para atualizar.');
+                     if (notes !== null) {
+                       onTriggerUpdateNotification(notes);
+                     }
+                   }}
+                 >
+                   <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center border border-blue-400/30 group-hover:scale-110 transition-transform">
+                     <Bell size={20} className="animate-bounce" />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Notificação em Tempo Real</p>
+                     <p className="text-[12px] font-black uppercase leading-tight text-white">Disparar Notificação de Atualização (PC & Celular)</p>
+                     <p className="text-[10px] text-slate-300 font-medium mt-1 leading-relaxed">
+                       Notifica instantaneamente todos os dispositivos com o aplicativo instalado para atualizar a versão.
+                     </p>
+                   </div>
+                 </div>
+               )}
 
                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all mb-4" onClick={() => {
                   onClose();

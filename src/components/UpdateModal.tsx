@@ -6,9 +6,10 @@ interface UpdateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
+  updateNotes?: string;
 }
 
-const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, onUpdate }) => {
+const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, onUpdate, updateNotes }) => {
   if (!isOpen) return null;
 
   return (
@@ -73,14 +74,14 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, onUpdate }) 
             {/* Features list */}
             <div className="bg-slate-950/40 border border-slate-800/60 rounded-2xl p-5 mb-8 space-y-3.5 text-xs">
               <p className="text-slate-300 font-medium text-center pb-2 border-b border-white/5 leading-relaxed">
-                Uma atualização crítica de performance e estabilidade está disponível para o seu dispositivo.
+                {updateNotes || 'Uma nova alteração/versão do sistema foi disponibilizada para o seu dispositivo. Clique abaixo para atualizar e carregar os dados mais recentes.'}
               </p>
               
               <div className="flex gap-3">
                 <div className="mt-0.5 text-blue-400 shrink-0"><Cpu size={14} /></div>
                 <div>
-                  <h4 className="font-extrabold text-slate-200">Motor de Sincronia Rápida</h4>
-                  <p className="text-slate-400 font-medium text-[11px] leading-relaxed">Aceleração em conexões Cloud Firestore e cache offline robusto.</p>
+                  <h4 className="font-extrabold text-slate-200">Sincronização em Tempo Real</h4>
+                  <p className="text-slate-400 font-medium text-[11px] leading-relaxed">Atualização instantânea em computadores e dispositivos móveis.</p>
                 </div>
               </div>
 
@@ -88,7 +89,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, onUpdate }) 
                 <div className="mt-0.5 text-emerald-400 shrink-0"><CheckCircle2 size={14} /></div>
                 <div>
                   <h4 className="font-extrabold text-slate-200">Consistência Operacional</h4>
-                  <p className="text-slate-300 font-medium text-[11px] leading-relaxed">Garantia que todos os turnos e relatórios omitam inconsistências antigas.</p>
+                  <p className="text-slate-300 font-medium text-[11px] leading-relaxed">Garantia que todos os turnos e relatórios estejam perfeitamente alinhados.</p>
                 </div>
               </div>
             </div>
