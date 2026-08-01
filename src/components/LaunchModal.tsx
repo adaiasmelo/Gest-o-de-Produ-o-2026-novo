@@ -280,21 +280,17 @@ const formatWeight = (val: number) => {
 };
 
 const getDefaultDateForMonth = (dbMonth?: string) => {
-  if (!dbMonth) return getYesterdayStr();
-  const today = new Date();
-  const todayYm = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  
-  if (dbMonth === todayYm) {
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const yesterdayYm = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}`;
-    if (yesterdayYm === dbMonth) {
-      return yesterday.toLocaleDateString('sv-SE');
-    }
-    return today.toLocaleDateString('sv-SE');
-  } else {
-    return `${dbMonth}-01`;
+  const yesterdayStr = getYesterdayStr();
+  if (!dbMonth) return yesterdayStr;
+
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const todayYm = todayStr.slice(0, 7);
+  const yesterdayYm = yesterdayStr.slice(0, 7);
+
+  if (dbMonth === todayYm || dbMonth === yesterdayYm) {
+    return yesterdayStr;
   }
+  return `${dbMonth}-01`;
 };
 
 const getDiffMinutes = (startTimeStr: string, endTimeStr: string): number => {
@@ -1083,7 +1079,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden my-auto">
+      <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl relative overflow-hidden my-auto border border-slate-100">
         <div className="bg-[#1e293b] text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {initialData ? <Edit2 size={20} /> : <Save size={20} />}
@@ -1134,7 +1130,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar relative">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[88vh] overflow-y-auto custom-scrollbar relative">
           {pendingEntries.length > 1 && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
@@ -1176,91 +1172,98 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               </div>
             </div>
           )}
-          
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`p-3 rounded-xl flex items-center justify-between transition-colors border ${formData.isMaintenanceEntry ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formData.isMaintenanceEntry ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-500'}`}>
-                  <Wrench size={16} />
+
+          {/* Header Controls Bar */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+              {/* Toggles */}
+              <div className="md:col-span-4 grid grid-cols-2 gap-2">
+                <div className={`p-2 rounded-xl flex items-center justify-between transition-colors border ${formData.isMaintenanceEntry ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${formData.isMaintenanceEntry ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
+                      <Wrench size={13} />
+                    </div>
+                    <span className="text-[9px] font-black text-slate-800 uppercase">Manutenção</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="isMaintenanceEntry" checked={formData.isMaintenanceEntry} onChange={handleChange} className="sr-only peer" />
+                    <div className="w-7 h-3.5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-orange-600"></div>
+                  </label>
                 </div>
-                <div><h3 className="text-[9px] font-black text-slate-800 uppercase">Manutenção</h3></div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" name="isMaintenanceEntry" checked={formData.isMaintenanceEntry} onChange={handleChange} className="sr-only peer" />
-                <div className="w-8 h-4 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-orange-600"></div>
-              </label>
-            </div>
 
-            <div className={`p-3 rounded-xl flex items-center justify-between transition-colors border ${formData.isNoWorkDay ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formData.isNoWorkDay ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-500'}`}>
-                  <CalendarX size={16} />
+                <div className={`p-2 rounded-xl flex items-center justify-between transition-colors border ${formData.isNoWorkDay ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${formData.isNoWorkDay ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                      <CalendarX size={13} />
+                    </div>
+                    <span className="text-[9px] font-black text-slate-800 uppercase">Parado</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="isNoWorkDay" checked={formData.isNoWorkDay} onChange={handleChange} className="sr-only peer" />
+                    <div className="w-7 h-3.5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-red-600"></div>
+                  </label>
                 </div>
-                <div><h3 className="text-[9px] font-black text-slate-800 uppercase">Parado</h3></div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" name="isNoWorkDay" checked={formData.isNoWorkDay} onChange={handleChange} className="sr-only peer" />
-                <div className="w-8 h-4 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-red-600"></div>
-              </label>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className={formData.isNoWorkDay ? 'col-span-2' : ''}>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Data</label>
-              <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-            </div>
-            {!formData.isNoWorkDay && (
-              <div className="relative">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Operador</label>
-                <select 
-                  name="operator"
-                  value={formData.operator} 
-                  onChange={handleChange}
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-right-[0.5rem]_center bg-no-repeat"
-                >
-                  <option value="" disabled>Selecionar Operador</option>
-                  {filteredOperators.map(emp => (
-                    <option key={emp.id} value={emp.name}>
-                      {emp.name}{emp.isMachineOp ? ' (Operador desta Máquina)' : ''}
-                    </option>
-                  ))}
-                </select>
+              {/* Data, Operador, Máquina, Turno */}
+              <div className="md:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Data</label>
+                  <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                </div>
+
+                {!formData.isNoWorkDay ? (
+                  <div>
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Operador</label>
+                    <select 
+                      name="operator"
+                      value={formData.operator} 
+                      onChange={handleChange}
+                      className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                    >
+                      <option value="" disabled>Selecionar Operador</option>
+                      {filteredOperators.map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name}{emp.isMachineOp ? ' (Op. Máquina)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="hidden sm:block" />
+                )}
+
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Máquina</label>
+                  <select 
+                    name="machine" 
+                    value={formData.machine} 
+                    onChange={handleChange} 
+                    className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                  >
+                    <option value="" disabled>Selecionar Máquina</option>
+                    <option value="Cast 1">Cast 1</option>
+                    <option value="Cast 2">Cast 2</option>
+                    <option value="Erema">Erema</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Turno</label>
+                  <select 
+                    name="shift" 
+                    value={formData.shift} 
+                    onChange={handleChange} 
+                    className="w-full mt-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem_1rem] bg-right-[0.4rem]_center bg-no-repeat"
+                  >
+                    <option value="" disabled>Selecionar Turno</option>
+                    <option value="Diurno">Diurno</option>
+                    <option value="Noturno">Noturno</option>
+                  </select>
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Máquina</label>
-              <select 
-                name="machine" 
-                value={formData.machine} 
-                onChange={handleChange} 
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-right-[0.5rem]_center bg-no-repeat"
-              >
-                <option value="" disabled>Selecionar Máquina</option>
-                <option value="Cast 1">Cast 1</option>
-                <option value="Cast 2">Cast 2</option>
-                <option value="Erema">Erema</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Turno</label>
-              <select 
-                name="shift" 
-                value={formData.shift} 
-                onChange={handleChange} 
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-right-[0.5rem]_center bg-no-repeat"
-              >
-                <option value="" disabled>Selecionar Turno</option>
-                <option value="Diurno">Diurno</option>
-                <option value="Noturno">Noturno</option>
-              </select>
             </div>
           </div>
-
-
 
           {formData.isNoWorkDay && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1279,595 +1282,602 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
             </div>
           )}
 
-          {!isHiddenProduction && (
-            <div className="space-y-4">
-              {isErema ? (
-                <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-4 animate-in fade-in duration-300">
-                  <div className="flex items-center gap-2 text-emerald-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Reciclada (Peso Líquido)</div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 1 (kg)</label>
-                      <input 
-                        type="number" 
-                        name="eremaWeight1" 
-                        value={formData.eremaWeight1 || ''} 
-                        onChange={handleChange} 
-                        className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 2 (kg)</label>
-                      <input 
-                        type="number" 
-                        name="eremaWeight2" 
-                        value={formData.eremaWeight2 || ''} 
-                        onChange={handleChange} 
-                        className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 3 (kg)</label>
-                      <input 
-                        type="number" 
-                        name="eremaWeight3" 
-                        value={formData.eremaWeight3 || ''} 
-                        onChange={handleChange} 
-                        className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 4 (kg)</label>
-                      <input 
-                        type="number" 
-                        name="eremaWeight4" 
-                        value={formData.eremaWeight4 || ''} 
-                        onChange={handleChange} 
-                        className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
+          {!formData.isNoWorkDay && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              {/* COLUNA ESQUERDA: Produção e Perdas */}
+              <div className="space-y-4">
+                {!isHiddenProduction && (
+                  <>
+                    {isErema ? (
+                      <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-4 animate-in fade-in duration-300">
+                        <div className="flex items-center gap-2 text-emerald-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Reciclada (Peso Líquido)</div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 1 (kg)</label>
+                            <input 
+                              type="number" 
+                              name="eremaWeight1" 
+                              value={formData.eremaWeight1 || ''} 
+                              onChange={handleChange} 
+                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 2 (kg)</label>
+                            <input 
+                              type="number" 
+                              name="eremaWeight2" 
+                              value={formData.eremaWeight2 || ''} 
+                              onChange={handleChange} 
+                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 3 (kg)</label>
+                            <input 
+                              type="number" 
+                              name="eremaWeight3" 
+                              value={formData.eremaWeight3 || ''} 
+                              onChange={handleChange} 
+                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-emerald-500 uppercase">Lançamento 4 (kg)</label>
+                            <input 
+                              type="number" 
+                              name="eremaWeight4" 
+                              value={formData.eremaWeight4 || ''} 
+                              onChange={handleChange} 
+                              className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500" 
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
 
-                  <div className="bg-white p-3 rounded-xl border border-emerald-200 flex justify-between items-center shadow-sm">
-                    <span className="text-[10px] font-black text-emerald-500 uppercase">Peso Líquido Total</span>
-                    <span className="text-xl font-black text-emerald-600">{formatWeight(formData.netWeight)}</span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
-                    <div className="flex items-center gap-2 text-blue-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Líquida</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[9px] font-black text-blue-500 uppercase">T. Bruto (kg)</label>
-                        <input type="number" name="grossWeight" value={formData.grossWeight || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
+                        <div className="bg-white p-3 rounded-xl border border-emerald-200 flex justify-between items-center shadow-sm">
+                          <span className="text-[10px] font-black text-emerald-500 uppercase">Peso Líquido Total</span>
+                          <span className="text-xl font-black text-emerald-600">{formatWeight(formData.netWeight)}</span>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] font-black text-blue-500 uppercase">Tara (kg)</label>
-                        <input type="number" name="tara" value={formData.tara || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
-                      </div>
-                    </div>
-                    
-                    <div className="border-t border-dashed border-blue-100 pt-3 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-blue-700 uppercase">Materiais Produzidos ({materials.length})</span>
-                        <button
-                          type="button"
-                          onClick={handleAddMaterial}
-                          className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-100 px-2.5 py-1 rounded-lg transition-all"
-                        >
-                          <Plus size={10} /> Add Material
-                        </button>
-                      </div>
-
-                      {materials.map((item, idx) => {
-                        const showDeleteConfirm = confirmDeleteMatId === item.id;
-                        return (
-                          <div key={item.id} className="p-3 bg-white border border-blue-100 rounded-xl space-y-2 relative shadow-sm">
-                            <div className="flex justify-between items-center border-b border-dashed border-blue-50 pb-1.5">
-                              <span className="text-[9px] font-black text-blue-500 uppercase">Item #{idx + 1}</span>
-                              {materials.length > 1 && (
-                                <div className="flex items-center gap-1">
-                                  {showDeleteConfirm ? (
-                                    <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-155">
-                                      <span className="text-[8px] font-bold text-red-500 mr-1 uppercase">Excluir?</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveMaterial(item.id)}
-                                        className="text-[8px] font-black bg-red-100 text-red-700 hover:bg-red-200 px-1.5 py-0.5 rounded cursor-pointer"
-                                      >
-                                        Sim
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setConfirmDeleteMatId(null)}
-                                        className="text-[8px] font-black bg-slate-100 text-slate-700 hover:bg-slate-200 px-1.5 py-0.5 rounded cursor-pointer"
-                                      >
-                                        Não
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => setConfirmDeleteMatId(item.id)}
-                                      className="text-slate-400 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
-                                      title="Excluir Material"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                    ) : (
+                      <>
+                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
+                          <div className="flex items-center gap-2 text-blue-700 font-black text-[10px] uppercase tracking-widest"><Package size={14} /> Produção Líquida</div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[9px] font-black text-blue-500 uppercase">T. Bruto (kg)</label>
+                              <input type="number" name="grossWeight" value={formData.grossWeight || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
                             </div>
-
-                            <div className="grid grid-cols-12 gap-2">
-                              <div className="col-span-12 sm:col-span-3">
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Material</label>
-                                <select
-                                  value={item.materialType}
-                                  onChange={(e) => handleUpdateMaterial(item.id, 'materialType', e.target.value)}
-                                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
-                                >
-                                  <option value="LC3">LC3</option>
-                                  <option value="LC2">LC2</option>
-                                  <option value="ATX">ATX</option>
-                                  <option value="ATX Plus">ATX Plus</option>
-                                </select>
-                              </div>
-
-                              <div className="col-span-4 sm:col-span-3">
-                                <label className="text-[9px] font-black text-slate-400 uppercase font-bold text-slate-700">Volumes</label>
-                                <input
-                                  type="number"
-                                  value={item.volumes || ''}
-                                  onChange={(e) => handleUpdateMaterial(item.id, 'volumes', parseFloat(e.target.value) || 0)}
-                                  placeholder="0"
-                                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                />
-                              </div>
-
-                              <div className="col-span-4 sm:col-span-3">
-                                <label className="text-[9px] font-black text-slate-400 uppercase font-bold text-slate-700">Tubetes Usados</label>
-                                <input
-                                  type="number"
-                                  value={item.tubetes || ''}
-                                  onChange={(e) => handleUpdateMaterial(item.id, 'tubetes', parseFloat(e.target.value) || 0)}
-                                  placeholder="0"
-                                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                />
-                              </div>
-
-                              <div className="col-span-4 sm:col-span-3">
-                                <label className="text-[9px] font-black text-slate-400 uppercase font-bold text-slate-700">Tubetes Eco B</label>
-                                <input
-                                  type="number"
-                                  value={item.tubetesEcoB || ''}
-                                  onChange={(e) => handleUpdateMaterial(item.id, 'tubetesEcoB', parseFloat(e.target.value) || 0)}
-                                  placeholder="0"
-                                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
-                                />
-                              </div>
+                            <div>
+                              <label className="text-[9px] font-black text-blue-500 uppercase">Tara (kg)</label>
+                              <input type="number" name="tara" value={formData.tara || ''} onChange={handleChange} className="w-full mt-1 bg-white border border-blue-200 rounded-xl px-3 py-2 text-sm font-bold" />
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
 
-                    <div className="bg-white p-3 rounded-xl border border-blue-200 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-blue-400 uppercase">Peso Líquido Total</span>
-                      <span className="text-xl font-black text-blue-600">{formatWeight(formData.netWeight)}</span>
-                    </div>
-                  </div>
+                          <div className="border-t border-dashed border-blue-100 pt-3 space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-black text-blue-700 uppercase">Materiais Produzidos ({materials.length})</span>
+                              <button
+                                type="button"
+                                onClick={handleAddMaterial}
+                                className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                              >
+                                <Plus size={10} /> Add Material
+                              </button>
+                            </div>
 
-                  {/* Card Eco A (Sede Curitiba) */}
-                  <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-3">
-                    <div className="flex items-center gap-2 text-indigo-700 font-black text-[10px] uppercase tracking-widest">
-                      <Layers size={14} className="text-indigo-500" /> Envio Eco A (Sede Curitiba) (Kg)
-                    </div>
-                    <div className="bg-white p-2.5 rounded-xl border border-indigo-200/60 space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="text-[10px] font-black text-indigo-600 uppercase">Eco A</label>
-                        <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-right" placeholder="0" />
-                      </div>
-                      {formData.ecoA > 0 && (
-                        <div className="pt-1.5 border-t border-dashed border-slate-150">
-                          <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda de Eco A..." />
+                            {materials.map((item, idx) => {
+                              const showDeleteConfirm = confirmDeleteMatId === item.id;
+                              return (
+                                <div key={item.id} className="p-3 bg-white border border-blue-100 rounded-xl space-y-2 relative shadow-sm">
+                                  <div className="flex justify-between items-center border-b border-dashed border-blue-50 pb-1.5">
+                                    <span className="text-[9px] font-black text-blue-500 uppercase">Item #{idx + 1}</span>
+                                    {materials.length > 1 && (
+                                      <div className="flex items-center gap-1">
+                                        {showDeleteConfirm ? (
+                                          <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-155">
+                                            <span className="text-[8px] font-bold text-red-500 mr-1 uppercase">Excluir?</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveMaterial(item.id)}
+                                              className="text-[8px] font-black bg-red-100 text-red-700 hover:bg-red-200 px-1.5 py-0.5 rounded cursor-pointer"
+                                            >
+                                              Sim
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => setConfirmDeleteMatId(null)}
+                                              className="text-[8px] font-black bg-slate-100 text-slate-700 hover:bg-slate-200 px-1.5 py-0.5 rounded cursor-pointer"
+                                            >
+                                              Não
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => setConfirmDeleteMatId(item.id)}
+                                            className="text-slate-400 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                            title="Excluir Material"
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-12 gap-2">
+                                    <div className="col-span-12 sm:col-span-3">
+                                      <label className="text-[9px] font-black text-slate-400 uppercase">Material</label>
+                                      <select
+                                        value={item.materialType}
+                                        onChange={(e) => handleUpdateMaterial(item.id, 'materialType', e.target.value)}
+                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold"
+                                      >
+                                        <option value="LC3">LC3</option>
+                                        <option value="LC2">LC2</option>
+                                        <option value="ATX">ATX</option>
+                                        <option value="ATX Plus">ATX Plus</option>
+                                      </select>
+                                    </div>
+
+                                    <div className="col-span-4 sm:col-span-3">
+                                      <label className="text-[9px] font-black text-slate-400 uppercase">Volumes</label>
+                                      <input
+                                        type="number"
+                                        value={item.volumes || ''}
+                                        onChange={(e) => handleUpdateMaterial(item.id, 'volumes', parseFloat(e.target.value) || 0)}
+                                        placeholder="0"
+                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
+                                      />
+                                    </div>
+
+                                    <div className="col-span-4 sm:col-span-3">
+                                      <label className="text-[9px] font-black text-slate-400 uppercase">Tubetes Usados</label>
+                                      <input
+                                        type="number"
+                                        value={item.tubetes || ''}
+                                        onChange={(e) => handleUpdateMaterial(item.id, 'tubetes', parseFloat(e.target.value) || 0)}
+                                        placeholder="0"
+                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
+                                      />
+                                    </div>
+
+                                    <div className="col-span-4 sm:col-span-3">
+                                      <label className="text-[9px] font-black text-slate-400 uppercase">Tubetes Eco B</label>
+                                      <input
+                                        type="number"
+                                        value={item.tubetesEcoB || ''}
+                                        onChange={(e) => handleUpdateMaterial(item.id, 'tubetesEcoB', parseFloat(e.target.value) || 0)}
+                                        placeholder="0"
+                                        className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-blue-200 flex justify-between items-center">
+                            <span className="text-[10px] font-black text-blue-400 uppercase">Peso Líquido Total</span>
+                            <span className="text-xl font-black text-blue-600">{formatWeight(formData.netWeight)}</span>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl space-y-3">
-                    <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={14} /> Reciclagem (Kg)</div>
-                    <div className="space-y-3">
-                      {/* Eco B (P) */}
-                      <EcoBReasonCard
-                        label="Eco B (P)"
-                        weightName="ecoBP"
-                        motivoName="ecoBPMotivo"
-                        weightValue={formData.ecoBP || 0}
-                        motivoValue={formData.ecoBPMotivo || ''}
-                        categoryGroups={downtimeSuggestions.allGroups}
-                        onWeightChange={handleChange}
-                        onMotivoChange={handleMotivoChange}
-                      />
-
-                      {/* Eco B (M) */}
-                      <EcoBReasonCard
-                        label="Eco B (M)"
-                        weightName="ecoBM"
-                        motivoName="ecoBMMotivo"
-                        weightValue={formData.ecoBM || 0}
-                        motivoValue={formData.ecoBMMotivo || ''}
-                        categoryGroups={downtimeSuggestions.allGroups}
-                        onWeightChange={handleChange}
-                        onMotivoChange={handleMotivoChange}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-red-50/50 border border-red-100 rounded-2xl space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="text-[10px] font-black text-red-600 uppercase tracking-widest block">🗑️ Borra Total (Kg)</label>
-                      <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-24 bg-white border border-red-200 rounded-lg px-2 py-1 text-xs font-black text-red-600 text-right" placeholder="0" />
-                    </div>
-                    {formData.borraTotal > 0 && (
-                      <div className="pt-1.5 border-t border-dashed border-red-150">
-                        <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/60 border border-red-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-3xl space-y-3">
-                    <div>
-                      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block mb-1">♻️ Saída de Reciclado (Reutilização no Cast)</label>
-                      <span className="text-[9px] text-slate-500 block leading-tight">Cada volume (Bag) de pellet Erema reintroduzido no Cast possui peso padrão de <strong>{formatWeight(1100)}</strong>.</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 pb-1">
-                      <div>
-                        <label className="text-[9px] font-black text-emerald-500 uppercase">Quantidade (Bags)</label>
-                        <input 
-                          type="number" 
-                          step="any"
-                          name="recycledBags" 
-                          value={formData.recycledBags || ''} 
-                          onChange={handleChange} 
-                          placeholder="Ex: 1" 
-                          className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-emerald-500 uppercase">Peso Abatido (Kg)</label>
-                        <input 
-                          type="number" 
-                          name="recycledUsed" 
-                          value={formData.recycledUsed || ''} 
-                          onChange={handleChange} 
-                          placeholder="Ex: 1100" 
-                          className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
-                        />
-                      </div>
-                    </div>
-
-                    {formData.recycledBags > 0 && (
-                      <div className="bg-emerald-50 text-[10px] text-emerald-700 font-extrabold p-2.5 rounded-xl border border-emerald-150 flex justify-between items-center transition-all animate-none">
-                        <span>VOLUME REGISTRADO:</span>
-                        <span>{formData.recycledBags} {formData.recycledBags === 1 ? 'BAG' : 'BAGS'} ({formatWeight(formData.recycledUsed)})</span>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {!formData.isNoWorkDay && (
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-3xl space-y-4 shadow-inner">
-              <div className="flex items-center gap-2 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-2">
-                <Clock size={14} /> Tempos de Parada
-              </div>
-
-              {/* Datalists de sugestões extraídas do banco */}
-              <datalist id="datalist-manutencao-reasons">
-                {downtimeSuggestions.manutencao.map((r, i) => (
-                  <option key={i} value={r} />
-                ))}
-              </datalist>
-              <datalist id="datalist-processo-reasons">
-                {downtimeSuggestions.processo.map((r, i) => (
-                  <option key={i} value={r} />
-                ))}
-              </datalist>
-              <datalist id="datalist-outros-reasons">
-                {downtimeSuggestions.outros.map((r, i) => (
-                  <option key={i} value={r} />
-                ))}
-              </datalist>
-
-              <div className="space-y-4">
-                
-                {/* Seção Manutenção */}
-                <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                    <div className="flex items-center gap-1.5 text-orange-600 font-black text-[10px] uppercase tracking-widest">
-                      <Wrench size={13} /> Manutenção
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAddStop('manutencao')}
-                      className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                    >
-                      <Plus size={10} /> Add Horário
-                    </button>
-                  </div>
-                  
-                  {manutencaoStops.length === 0 ? (
-                    <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {manutencaoStops.map((stop) => (
-                        <StopItemCard
-                          key={stop.id}
-                          stop={stop}
-                          type="manutencao"
-                          onUpdate={(id, field, value) => handleUpdateStop('manutencao', id, field, value)}
-                          onRemove={(id) => handleRemoveStop('manutencao', id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                    <span>Subtotal Manutenção</span>
-                    <span className="text-slate-700 font-bold">{manutencaoMinCalculado} min</span>
-                  </div>
-                </div>
-
-                {!formData.isMaintenanceEntry && (
-                  <>
-                    {/* Seção Processo */}
-                    <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5 text-blue-600 font-black text-[10px] uppercase tracking-widest">
-                          <Layers size={13} /> Processo
+                        {/* Card Eco A (Sede Curitiba) */}
+                        <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-3">
+                          <div className="flex items-center gap-2 text-indigo-700 font-black text-[10px] uppercase tracking-widest">
+                            <Layers size={14} className="text-indigo-500" /> Envio Eco A (Sede Curitiba) (Kg)
+                          </div>
+                          <div className="bg-white p-2.5 rounded-xl border border-indigo-200/60 space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="text-[10px] font-black text-indigo-600 uppercase">Eco A</label>
+                              <input type="number" name="ecoA" value={formData.ecoA || ''} onChange={handleChange} className="w-24 bg-slate-50 border border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-right" placeholder="0" />
+                            </div>
+                            {formData.ecoA > 0 && (
+                              <div className="pt-1.5 border-t border-dashed border-slate-150">
+                                <input type="text" name="ecoAMotivo" value={formData.ecoAMotivo || ''} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-slate-300 focus:bg-white" placeholder="Justificar perda de Eco A..." />
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddStop('processo')}
-                          className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                        >
-                          <Plus size={10} /> Add Horário
-                        </button>
-                      </div>
-                      
-                      {processoStops.length === 0 ? (
-                        <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {processoStops.map((stop) => (
-                            <StopItemCard
-                              key={stop.id}
-                              stop={stop}
-                              type="processo"
-                              onUpdate={(id, field, value) => handleUpdateStop('processo', id, field, value)}
-                              onRemove={(id) => handleRemoveStop('processo', id)}
+
+                        {/* Reciclagem Eco B */}
+                        <div className="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl space-y-3">
+                          <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-widest"><Layers size={14} /> Reciclagem (Kg)</div>
+                          <div className="space-y-3">
+                            <EcoBReasonCard
+                              label="Eco B (P)"
+                              weightName="ecoBP"
+                              motivoName="ecoBPMotivo"
+                              weightValue={formData.ecoBP || 0}
+                              motivoValue={formData.ecoBPMotivo || ''}
+                              categoryGroups={downtimeSuggestions.allGroups}
+                              onWeightChange={handleChange}
+                              onMotivoChange={handleMotivoChange}
                             />
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                        <span>Subtotal Processo</span>
-                        <span className="text-slate-700 font-bold">{processoMinCalculado} min</span>
-                      </div>
-                    </div>
 
-                    {/* Seção Outros */}
-                    <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5 text-slate-600 font-black text-[10px] uppercase tracking-widest">
-                          <Package size={13} /> Outros
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddStop('outros')}
-                          className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                        >
-                          <Plus size={10} /> Add Horário
-                        </button>
-                      </div>
-                      
-                      {outrosStops.length === 0 ? (
-                        <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {outrosStops.map((stop) => (
-                            <StopItemCard
-                              key={stop.id}
-                              stop={stop}
-                              type="outros"
-                              onUpdate={(id, field, value) => handleUpdateStop('outros', id, field, value)}
-                              onRemove={(id) => handleRemoveStop('outros', id)}
+                            <EcoBReasonCard
+                              label="Eco B (M)"
+                              weightName="ecoBM"
+                              motivoName="ecoBMMotivo"
+                              weightValue={formData.ecoBM || 0}
+                              motivoValue={formData.ecoBMMotivo || ''}
+                              categoryGroups={downtimeSuggestions.allGroups}
+                              onWeightChange={handleChange}
+                              onMotivoChange={handleMotivoChange}
                             />
-                          ))}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                        <span>Subtotal Outros</span>
-                        <span className="text-slate-700 font-bold">{outrosMinCalculado} min</span>
-                      </div>
-                    </div>
+
+                        {/* Borra Total */}
+                        <div className="p-4 bg-red-50/50 border border-red-100 rounded-2xl space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-[10px] font-black text-red-600 uppercase tracking-widest block">🗑️ Borra Total (Kg)</label>
+                            <input type="number" name="borraTotal" value={formData.borraTotal || ''} onChange={handleChange} className="w-24 bg-white border border-red-200 rounded-lg px-2 py-1 text-xs font-black text-red-600 text-right" placeholder="0" />
+                          </div>
+                          {formData.borraTotal > 0 && (
+                            <div className="pt-1.5 border-t border-dashed border-red-150">
+                              <input type="text" name="borraTotalMotivo" value={formData.borraTotalMotivo || ''} onChange={handleChange} className="w-full bg-white/60 border border-red-200 rounded-lg px-2.5 py-1 text-[11px] font-medium placeholder-red-400 focus:bg-white text-red-700" placeholder="Justificar perda de Borra..." />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reutilização / Saída de Reciclado */}
+                        <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-3xl space-y-3">
+                          <div>
+                            <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block mb-1">♻️ Saída de Reciclado (Reutilização no Cast)</label>
+                            <span className="text-[9px] text-slate-500 block leading-tight">Cada volume (Bag) de pellet Erema reintroduzido no Cast possui peso padrão de <strong>{formatWeight(1100)}</strong>.</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pb-1">
+                            <div>
+                              <label className="text-[9px] font-black text-emerald-500 uppercase">Quantidade (Bags)</label>
+                              <input 
+                                type="number" 
+                                step="any"
+                                name="recycledBags" 
+                                value={formData.recycledBags || ''} 
+                                onChange={handleChange} 
+                                placeholder="Ex: 1" 
+                                className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-emerald-500 uppercase">Peso Abatido (Kg)</label>
+                              <input 
+                                type="number" 
+                                name="recycledUsed" 
+                                value={formData.recycledUsed || ''} 
+                                onChange={handleChange} 
+                                placeholder="Ex: 1100" 
+                                className="w-full mt-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm font-black text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 focus:border-emerald-500" 
+                              />
+                            </div>
+                          </div>
+
+                          {formData.recycledBags > 0 && (
+                            <div className="bg-emerald-50 text-[10px] text-emerald-700 font-extrabold p-2.5 rounded-xl border border-emerald-150 flex justify-between items-center transition-all animate-none">
+                              <span>VOLUME REGISTRADO:</span>
+                              <span>{formData.recycledBags} {formData.recycledBags === 1 ? 'BAG' : 'BAGS'} ({formatWeight(formData.recycledUsed)})</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
-
-                <div className="pt-2 border-t border-slate-200 flex justify-between items-center px-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Parado Geral</span>
-                  <span className="text-sm font-black text-slate-700">{totalParadas} min</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Seção de Punição / Ocorrência no Ranking */}
-          {!formData.isNoWorkDay && (
-            <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-3xl space-y-3 shadow-xs">
-              <div className="flex items-center justify-between border-b border-rose-200/80 pb-2 flex-wrap gap-2">
-                <div className="flex items-center gap-2 text-rose-800 font-black text-[10px] uppercase tracking-widest">
-                  <ShieldAlert size={15} className="text-rose-600" /> Ocorrência / Punição no Ranking
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer bg-white/80 px-2.5 py-1 rounded-xl border border-rose-200 hover:bg-white transition-all">
-                  <input
-                    type="checkbox"
-                    checked={formData.hasPenalty || false}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      hasPenalty: e.target.checked,
-                      infractionType: e.target.checked ? (prev.infractionType || selectedPresetInfraction || PRESET_INFRACTIONS[0]) : '',
-                      penaltyType: e.target.checked ? (prev.penaltyType || 'deduction_kg') : 'deduction_kg',
-                      deductionValue: e.target.checked ? (prev.deductionValue || 500) : 0,
-                    }))}
-                    className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
-                  />
-                  <span className="text-[10px] font-black uppercase text-rose-900">Aplicar Punição neste Lançamento</span>
-                </label>
               </div>
 
-              {formData.hasPenalty && (
-                <div className="space-y-3 pt-1">
-                  <p className="text-[10px] text-rose-800 font-medium leading-tight bg-white/80 p-2.5 rounded-xl border border-rose-100">
-                    Se o operador descumpriu alguma regra neste turno (ex: <strong>não realizou a parada obrigatória de limpeza a cada 6h</strong>), selecione a infração e a punição a ser aplicada na pontuação/peso do ranking.
-                  </p>
-
-                  {/* Regra / Infração */}
-                  <div>
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                      Regra Descumprida / Infração *
-                    </label>
-                    <select
-                      value={selectedPresetInfraction}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedPresetInfraction(val);
-                        if (val !== '📝 Outra Infração Personalizada...') {
-                          setFormData(prev => ({ ...prev, infractionType: val }));
-                        } else {
-                          setFormData(prev => ({ ...prev, infractionType: customInfractionText }));
-                        }
-                      }}
-                      className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    >
-                      {PRESET_INFRACTIONS.map((preset) => (
-                        <option key={preset} value={preset}>{preset}</option>
-                      ))}
-                    </select>
-
-                    {selectedPresetInfraction === '📝 Outra Infração Personalizada...' && (
-                      <input
-                        type="text"
-                        placeholder="Especifique a regra ou infração..."
-                        value={customInfractionText}
-                        onChange={(e) => {
-                          setCustomInfractionText(e.target.value);
-                          setFormData(prev => ({ ...prev, infractionType: e.target.value }));
-                        }}
-                        className="w-full mt-2 bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                      />
-                    )}
+              {/* COLUNA DIREITA: Tempos de Parada & Ocorrência/Punição */}
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-3xl space-y-4 shadow-inner">
+                  <div className="flex items-center gap-2 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-2">
+                    <Clock size={14} /> Tempos de Parada
                   </div>
 
-                  {/* Tipo de Punição */}
-                  <div>
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                      Tipo de Penalidade *
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                        formData.penaltyType === 'deduction_kg'
-                          ? 'border-rose-500 bg-white font-black text-rose-950 shadow-xs'
-                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="modalPenaltyType"
-                          checked={formData.penaltyType === 'deduction_kg'}
-                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_kg' }))}
-                          className="text-rose-600 focus:ring-rose-500"
-                        />
-                        <span className="text-[10px] font-black uppercase">Desconto em Kg</span>
-                      </label>
+                  {/* Datalists de sugestões extraídas do banco */}
+                  <datalist id="datalist-manutencao-reasons">
+                    {downtimeSuggestions.manutencao.map((r, i) => (
+                      <option key={i} value={r} />
+                    ))}
+                  </datalist>
+                  <datalist id="datalist-processo-reasons">
+                    {downtimeSuggestions.processo.map((r, i) => (
+                      <option key={i} value={r} />
+                    ))}
+                  </datalist>
+                  <datalist id="datalist-outros-reasons">
+                    {downtimeSuggestions.outros.map((r, i) => (
+                      <option key={i} value={r} />
+                    ))}
+                  </datalist>
 
-                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                        formData.penaltyType === 'deduction_percent'
-                          ? 'border-amber-500 bg-white font-black text-amber-950 shadow-xs'
-                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="modalPenaltyType"
-                          checked={formData.penaltyType === 'deduction_percent'}
-                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_percent' }))}
-                          className="text-amber-600 focus:ring-amber-500"
-                        />
-                        <span className="text-[10px] font-black uppercase">Desconto %</span>
-                      </label>
+                  <div className="space-y-4">
+                    
+                    {/* Seção Manutenção */}
+                    <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-1.5 text-orange-600 font-black text-[10px] uppercase tracking-widest">
+                          <Wrench size={13} /> Manutenção
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddStop('manutencao')}
+                          className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                        >
+                          <Plus size={10} /> Add Horário
+                        </button>
+                      </div>
+                      
+                      {manutencaoStops.length === 0 ? (
+                        <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manutenção registrada</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {manutencaoStops.map((stop) => (
+                            <StopItemCard
+                              key={stop.id}
+                              stop={stop}
+                              type="manutencao"
+                              onUpdate={(id, field, value) => handleUpdateStop('manutencao', id, field, value)}
+                              onRemove={(id) => handleRemoveStop('manutencao', id)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                        <span>Subtotal Manutenção</span>
+                        <span className="text-slate-700 font-bold">{manutencaoMinCalculado} min</span>
+                      </div>
+                    </div>
 
-                      <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
-                        formData.penaltyType === 'disqualify'
-                          ? 'border-red-600 bg-red-100 font-black text-red-950 shadow-xs'
-                          : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="modalPenaltyType"
-                          checked={formData.penaltyType === 'disqualify'}
-                          onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'disqualify' }))}
-                          className="text-red-600 focus:ring-red-500"
-                        />
-                        <span className="text-[10px] font-black uppercase">Desqualificar</span>
-                      </label>
+                    {!formData.isMaintenanceEntry && (
+                      <>
+                        {/* Seção Processo */}
+                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-1.5 text-blue-600 font-black text-[10px] uppercase tracking-widest">
+                              <Layers size={13} /> Processo
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAddStop('processo')}
+                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Plus size={10} /> Add Horário
+                            </button>
+                          </div>
+                          
+                          {processoStops.length === 0 ? (
+                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {processoStops.map((stop) => (
+                                <StopItemCard
+                                  key={stop.id}
+                                  stop={stop}
+                                  type="processo"
+                                  onUpdate={(id, field, value) => handleUpdateStop('processo', id, field, value)}
+                                  onRemove={(id) => handleRemoveStop('processo', id)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                            <span>Subtotal Processo</span>
+                            <span className="text-slate-700 font-bold">{processoMinCalculado} min</span>
+                          </div>
+                        </div>
+
+                        {/* Seção Outros */}
+                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-1.5 text-slate-600 font-black text-[10px] uppercase tracking-widest">
+                              <Package size={13} /> Outros
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAddStop('outros')}
+                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Plus size={10} /> Add Horário
+                            </button>
+                          </div>
+                          
+                          {outrosStops.length === 0 ? (
+                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {outrosStops.map((stop) => (
+                                <StopItemCard
+                                  key={stop.id}
+                                  stop={stop}
+                                  type="outros"
+                                  onUpdate={(id, field, value) => handleUpdateStop('outros', id, field, value)}
+                                  onRemove={(id) => handleRemoveStop('outros', id)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
+                            <span>Subtotal Outros</span>
+                            <span className="text-slate-700 font-bold">{outrosMinCalculado} min</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center px-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Parado Geral</span>
+                      <span className="text-sm font-black text-slate-700">{totalParadas} min</span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Valor do Desconto */}
-                  {formData.penaltyType !== 'disqualify' && (
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                        Valor da Punição ({formData.penaltyType === 'deduction_kg' ? 'em Kg' : 'em %'}) *
-                      </label>
+                {/* Seção de Punição / Ocorrência no Ranking */}
+                <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-3xl space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-rose-200/80 pb-2 flex-wrap gap-2">
+                    <div className="flex items-center gap-2 text-rose-800 font-black text-[10px] uppercase tracking-widest">
+                      <ShieldAlert size={15} className="text-rose-600" /> Ocorrência / Punição no Ranking
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer bg-white/80 px-2.5 py-1 rounded-xl border border-rose-200 hover:bg-white transition-all">
                       <input
-                        type="number"
-                        min="1"
-                        value={formData.deductionValue || 0}
-                        onChange={(e) => setFormData(prev => ({ ...prev, deductionValue: Number(e.target.value) || 0 }))}
-                        className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        type="checkbox"
+                        checked={formData.hasPenalty || false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          hasPenalty: e.target.checked,
+                          infractionType: e.target.checked ? (prev.infractionType || selectedPresetInfraction || PRESET_INFRACTIONS[0]) : '',
+                          penaltyType: e.target.checked ? (prev.penaltyType || 'deduction_kg') : 'deduction_kg',
+                          deductionValue: e.target.checked ? (prev.deductionValue || 500) : 0,
+                        }))}
+                        className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500 cursor-pointer"
                       />
+                      <span className="text-[10px] font-black uppercase text-rose-900">Aplicar Punição neste Lançamento</span>
+                    </label>
+                  </div>
+
+                  {formData.hasPenalty && (
+                    <div className="space-y-3 pt-1">
+                      <p className="text-[10px] text-rose-800 font-medium leading-tight bg-white/80 p-2.5 rounded-xl border border-rose-100">
+                        Se o operador descumpriu alguma regra neste turno (ex: <strong>não realizou a parada obrigatória de limpeza a cada 6h</strong>), selecione a infração e a punição a ser aplicada na pontuação/peso do ranking.
+                      </p>
+
+                      {/* Regra / Infração */}
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                          Regra Descumprida / Infração *
+                        </label>
+                        <select
+                          value={selectedPresetInfraction}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedPresetInfraction(val);
+                            if (val !== '📝 Outra Infração Personalizada...') {
+                              setFormData(prev => ({ ...prev, infractionType: val }));
+                            } else {
+                              setFormData(prev => ({ ...prev, infractionType: customInfractionText }));
+                            }
+                          }}
+                          className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        >
+                          {PRESET_INFRACTIONS.map((preset) => (
+                            <option key={preset} value={preset}>{preset}</option>
+                          ))}
+                        </select>
+
+                        {selectedPresetInfraction === '📝 Outra Infração Personalizada...' && (
+                          <input
+                            type="text"
+                            placeholder="Especifique a regra ou infração..."
+                            value={customInfractionText}
+                            onChange={(e) => {
+                              setCustomInfractionText(e.target.value);
+                              setFormData(prev => ({ ...prev, infractionType: e.target.value }));
+                            }}
+                            className="w-full mt-2 bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        )}
+                      </div>
+
+                      {/* Tipo de Punição */}
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                          Tipo de Penalidade *
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                            formData.penaltyType === 'deduction_kg'
+                              ? 'border-rose-500 bg-white font-black text-rose-950 shadow-xs'
+                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="modalPenaltyType"
+                              checked={formData.penaltyType === 'deduction_kg'}
+                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_kg' }))}
+                              className="text-rose-600 focus:ring-rose-500"
+                            />
+                            <span className="text-[10px] font-black uppercase">Desconto em Kg</span>
+                          </label>
+
+                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                            formData.penaltyType === 'deduction_percent'
+                              ? 'border-amber-500 bg-white font-black text-amber-950 shadow-xs'
+                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="modalPenaltyType"
+                              checked={formData.penaltyType === 'deduction_percent'}
+                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'deduction_percent' }))}
+                              className="text-amber-600 focus:ring-amber-500"
+                            />
+                            <span className="text-[10px] font-black uppercase">Desconto %</span>
+                          </label>
+
+                          <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${
+                            formData.penaltyType === 'disqualify'
+                              ? 'border-red-600 bg-red-100 font-black text-red-950 shadow-xs'
+                              : 'border-slate-200 bg-white/70 text-slate-600 font-bold hover:bg-white'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="modalPenaltyType"
+                              checked={formData.penaltyType === 'disqualify'}
+                              onChange={() => setFormData(prev => ({ ...prev, penaltyType: 'disqualify' }))}
+                              className="text-red-600 focus:ring-red-500"
+                            />
+                            <span className="text-[10px] font-black uppercase">Desqualificar</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Valor do Desconto */}
+                      {formData.penaltyType !== 'disqualify' && (
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                            Valor da Punição ({formData.penaltyType === 'deduction_kg' ? 'em Kg' : 'em %'}) *
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.deductionValue || 0}
+                            onChange={(e) => setFormData(prev => ({ ...prev, deductionValue: Number(e.target.value) || 0 }))}
+                            className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      )}
+
+                      {/* Observações */}
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
+                          Justificativa / Observações (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Não efetuou a parada obrigatória de 6h para limpeza da matriz..."
+                          value={formData.penaltyReason || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, penaltyReason: e.target.value }))}
+                          className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
                     </div>
                   )}
-
-                  {/* Observações */}
-                  <div>
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-rose-900 mb-1">
-                      Justificativa / Observações (Opcional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Não efetuou a parada obrigatória de 6h para limpeza da matriz..."
-                      value={formData.penaltyReason || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, penaltyReason: e.target.value }))}
-                      className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                  </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
           <div className="flex gap-3 pt-4 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-black text-[10px] uppercase hover:bg-slate-50 transition-all">Cancelar</button>
-            <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-black text-[10px] uppercase hover:bg-slate-50 transition-all cursor-pointer">Cancelar</button>
+            <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
               <Save size={16} /> {initialData ? 'Atualizar' : (pendingEntries.length > 1 ? `Salvar Todos (${pendingEntries.length})` : 'Salvar')}
             </button>
           </div>

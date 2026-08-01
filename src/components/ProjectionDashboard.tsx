@@ -493,8 +493,9 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
     // Projection & Daily Goal
     const today = new Date();
-    const currentDayNum = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : 30;
-    const daysInMonth = 30;
+    const [yNum, mNum] = dashboardMonth.split('-').map(Number);
+    const daysInMonth = (yNum && mNum) ? new Date(yNum, mNum, 0).getDate() : 30;
+    const currentDayNum = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : daysInMonth;
 
     const avgDailyProd = prodMonthTotal / Math.max(1, currentDayNum);
     const projectedMonthTotal = avgDailyProd * daysInMonth;

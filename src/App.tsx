@@ -787,7 +787,11 @@ export const App: React.FC = () => {
   const [isGeneratingMock, setIsGeneratingMock] = useState(false);
 
   // Corte de Fita form state
-  const [ribbonDate, setRibbonDate] = useState(() => new Date().toLocaleDateString('en-CA'));
+  const [ribbonDate, setRibbonDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('sv-SE');
+  });
   const [ribbonOperator, setRibbonOperator] = useState('');
   const [ribbonShift, setRibbonShift] = useState('');
   const [ribbonProducedM2, setRibbonProducedM2] = useState('');
@@ -854,7 +858,11 @@ export const App: React.FC = () => {
   const [ribbonBiStartDate, setRibbonBiStartDate] = useState<string>('');
   const [ribbonBiEndDate, setRibbonBiEndDate] = useState<string>('');
   const [ribbonBiDrilldownModal, setRibbonBiDrilldownModal] = useState<{ isOpen: boolean; title: string; operator?: string; items: any[] }>({ isOpen: false, title: '', items: [] });
-  const [ribbonShareDate, setRibbonShareDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [ribbonShareDate, setRibbonShareDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('sv-SE');
+  });
   const [selectedRibbonIds, setSelectedRibbonIds] = useState<string[]>([]);
   const [ribbonStopsGroupBy, setRibbonStopsGroupBy] = useState<'machine' | 'operator'>('machine');
   
@@ -3232,9 +3240,11 @@ export const App: React.FC = () => {
     res.lossPercent = res.month > 0 ? (res.totWaste / res.month) * 100 : 0;
 
     const today = new Date();
-    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : 30;
-    res.projection = (res.month / Math.max(1, currentDay)) * 30;
-    res.avgReq = Math.max(0, (res.goal - res.month) / Math.max(1, 30 - currentDay));
+    const [yNum, mNum] = dashboardMonth.split('-').map(Number);
+    const totalDaysInMonth = (yNum && mNum) ? new Date(yNum, mNum, 0).getDate() : 30;
+    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : totalDaysInMonth;
+    res.projection = (res.month / Math.max(1, currentDay)) * totalDaysInMonth;
+    res.avgReq = Math.max(0, (res.goal - res.month) / Math.max(1, totalDaysInMonth - currentDay));
     
     return res;
   }, [ribbonEntries, dashboardMonth, ribbonGoals]);
@@ -3785,9 +3795,11 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     });
 
     const today = new Date();
-    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : 30;
-    res.projection = (res.month / Math.max(1, currentDay)) * 30;
-    res.avgReq = Math.max(0, (res.goal - res.month) / Math.max(1, 30 - currentDay));
+    const [yNum, mNum] = dashboardMonth.split('-').map(Number);
+    const totalDaysInMonth = (yNum && mNum) ? new Date(yNum, mNum, 0).getDate() : 30;
+    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : totalDaysInMonth;
+    res.projection = (res.month / Math.max(1, currentDay)) * totalDaysInMonth;
+    res.avgReq = Math.max(0, (res.goal - res.month) / Math.max(1, totalDaysInMonth - currentDay));
     return res;
   }, [productionData, dashboardMonth, goals, filteredDashboardData]);
 
