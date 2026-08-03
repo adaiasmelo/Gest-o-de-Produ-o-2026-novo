@@ -320,12 +320,42 @@ export interface RibbonCuttingEntry {
   outrosMotivo?: string;
 }
 
+export type DowntimeNature = 'Manutenção' | 'Processo' | 'Outros' | string;
+
+export interface DowntimeKeyword {
+  id: string;
+  keyword: string; // ex: "eixo", "biela central", "mangueira de ar", "bomba hidraulica", "refile"
+  category?: string;
+  isPopular?: boolean;
+}
+
+export interface DowntimeRecord {
+  id: string;
+  nature: DowntimeNature; // 'Manutenção' | 'Processo' | 'Outros'
+  keyword: string; // palavra-chave selecionada isoladamente
+  justification: string; // justificativa livre
+  durationMinutes: number; // tempo de parada em minutos
+  de?: string; // Horário de início HH:MM
+  ate?: string; // Horário de término HH:MM
+  createdAt?: string;
+  machine?: string;
+  operator?: string;
+  shift?: string;
+}
+
 export interface StopItem {
   id: string;
   de: string;
   ate: string;
-  motivo: string;
-  explicacao?: string;
+  motivo: string; // Armazena a palavra-chave (ou texto formatado)
+  explicacao?: string; // Armazena a justificativa livre
+  nature?: DowntimeNature;
+  keyword?: string;
+  justification?: string;
+  durationMinutes?: number;
+  category?: string;
+  component?: string;
+  defect?: string;
 }
 
 export type MaintenancePriority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';

@@ -8710,7 +8710,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                   </div>
                   <div>
                     <span className="text-[9px] font-black tracking-widest text-blue-400 uppercase">COMPARTILHAMENTO DIÁRIO</span>
-                    <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight">Relatório de Produção (Outlook)</h3>
+                    <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight">Relatório de Produção (Outlook / WhatsApp)</h3>
                   </div>
                 </div>
                 
@@ -8877,7 +8877,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
               </div>
 
               {/* Botões de Ação */}
-              <div className="flex flex-col sm:flex-row items-center gap-3 mt-2 border-t border-white/10 pt-5">
+              <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 mt-2 border-t border-white/10 pt-5">
                 <button
                   type="button"
                   onClick={() => {
@@ -8950,7 +8950,7 @@ Gestão de Produção`;
                     const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                     window.location.href = mailtoUrl;
                   }}
-                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Mail size={16} />
                   Compartilhar no Outlook
@@ -8960,70 +8960,152 @@ Gestão de Produção`;
                   type="button"
                   onClick={() => {
                     const formattedDate = shareDate.split('-').reverse().join('/');
+                    const whatsappText = `Bom dia.
+Segue o relatório de produção referente ao dia *( ${formattedDate} )*:
+
+---------------------------------------------------
+*( CAST 1 DIA )*
+---------------------------------------------------
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast1Dia.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoB)}${dailyShareMetrics.cast1Dia.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoA)}${dailyShareMetrics.cast1Dia.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast1Dia.stopsFormatted}
+
+---------------------------------------------------
+*( CAST 1 NOITE )*
+---------------------------------------------------
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast1Noite.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoB)}${dailyShareMetrics.cast1Noite.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoA)}${dailyShareMetrics.cast1Noite.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast1Noite.stopsFormatted}
+
+---------------------------------------------------
+*( CAST 2 DIA )*
+---------------------------------------------------
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast2Dia.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoB)}${dailyShareMetrics.cast2Dia.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoA)}${dailyShareMetrics.cast2Dia.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast2Dia.stopsFormatted}
+
+---------------------------------------------------
+*( CAST 2 NOITE )*
+---------------------------------------------------
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast2Noite.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoB)}${dailyShareMetrics.cast2Noite.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoA)}${dailyShareMetrics.cast2Noite.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast2Noite.stopsFormatted}
+
+---------------------------------------------------
+*( PRODUÇÃO TOTAL - CAST 1 + 2 )*:
+---------------------------------------------------
+• *(Prod. Líquida Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.net)}
+• *(Eco B Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.ecoB)}
+• *(Eco A Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.ecoA)}
+• *(Tempo Parado Total):* ${dailyShareMetrics.cast12Total.stopsFormatted}
+
+---------------------------------------------------
+*( EREMA - DIA )*
+---------------------------------------------------
+• *(Prod. Reciclada):* ${formatShareWeight(dailyShareMetrics.eremaDia.net)}
+• *(Tempo Parado):* ${dailyShareMetrics.eremaDia.stopsFormatted}
+
+---------------------------------------------------
+*( EREMA - NOITE )*
+---------------------------------------------------
+• *(Prod. Reciclada):* ${formatShareWeight(dailyShareMetrics.eremaNoite.net)}
+• *(Tempo Parado):* ${dailyShareMetrics.eremaNoite.stopsFormatted}
+
+---------------------------------------------------
+*( PRODUÇÃO TOTAL EREMA )*:
+---------------------------------------------------
+• *(Prod. Reciclada Total):* ${formatShareWeight(dailyShareMetrics.eremaTotal.net)}
+• *(Tempo Parado Total):* ${dailyShareMetrics.eremaTotal.stopsFormatted}
+
+Atenciosamente,
+*(Gestão de Produção)*`;
+
+                    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappText)}`;
+                    window.open(waUrl, '_blank');
+                  }}
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Share size={16} />
+                  Compartilhar no WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const formattedDate = shareDate.split('-').reverse().join('/');
                     const textToCopy = `Bom dia.
-Segue o relatório de produção referente ao dia ${formattedDate}:
+Segue o relatório de produção referente ao dia *( ${formattedDate} )*:
 
 ---------------------------------------------------
-CAST 1 DIA
+*( CAST 1 DIA )*
 ---------------------------------------------------
-• Prod. Líquida: ${formatShareWeight(dailyShareMetrics.cast1Dia.net)}
-• Eco B: ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoB)}${dailyShareMetrics.cast1Dia.ecoBJustText}
-• Eco A: ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoA)}${dailyShareMetrics.cast1Dia.ecoAJustText}
-• Tempo Parado: ${dailyShareMetrics.cast1Dia.stopsFormatted}
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast1Dia.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoB)}${dailyShareMetrics.cast1Dia.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast1Dia.ecoA)}${dailyShareMetrics.cast1Dia.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast1Dia.stopsFormatted}
 
 ---------------------------------------------------
-CAST 1 NOITE
+*( CAST 1 NOITE )*
 ---------------------------------------------------
-• Prod. Líquida: ${formatShareWeight(dailyShareMetrics.cast1Noite.net)}
-• Eco B: ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoB)}${dailyShareMetrics.cast1Noite.ecoBJustText}
-• Eco A: ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoA)}${dailyShareMetrics.cast1Noite.ecoAJustText}
-• Tempo Parado: ${dailyShareMetrics.cast1Noite.stopsFormatted}
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast1Noite.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoB)}${dailyShareMetrics.cast1Noite.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast1Noite.ecoA)}${dailyShareMetrics.cast1Noite.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast1Noite.stopsFormatted}
 
 ---------------------------------------------------
-CAST 2 DIA
+*( CAST 2 DIA )*
 ---------------------------------------------------
-• Prod. Líquida: ${formatShareWeight(dailyShareMetrics.cast2Dia.net)}
-• Eco B: ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoB)}${dailyShareMetrics.cast2Dia.ecoBJustText}
-• Eco A: ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoA)}${dailyShareMetrics.cast2Dia.ecoAJustText}
-• Tempo Parado: ${dailyShareMetrics.cast2Dia.stopsFormatted}
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast2Dia.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoB)}${dailyShareMetrics.cast2Dia.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast2Dia.ecoA)}${dailyShareMetrics.cast2Dia.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast2Dia.stopsFormatted}
 
 ---------------------------------------------------
-CAST 2 NOITE
+*( CAST 2 NOITE )*
 ---------------------------------------------------
-• Prod. Líquida: ${formatShareWeight(dailyShareMetrics.cast2Noite.net)}
-• Eco B: ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoB)}${dailyShareMetrics.cast2Noite.ecoBJustText}
-• Eco A: ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoA)}${dailyShareMetrics.cast2Noite.ecoAJustText}
-• Tempo Parado: ${dailyShareMetrics.cast2Noite.stopsFormatted}
+• *(Prod. Líquida):* ${formatShareWeight(dailyShareMetrics.cast2Noite.net)}
+• *(Eco B):* ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoB)}${dailyShareMetrics.cast2Noite.ecoBJustText}
+• *(Eco A):* ${formatShareWeight(dailyShareMetrics.cast2Noite.ecoA)}${dailyShareMetrics.cast2Noite.ecoAJustText}
+• *(Tempo Parado):* ${dailyShareMetrics.cast2Noite.stopsFormatted}
 
 ---------------------------------------------------
-Produção Total:
+*( PRODUÇÃO TOTAL - CAST 1 + 2 )*:
 ---------------------------------------------------
-• Prod. Líquida: ${formatShareWeight(dailyShareMetrics.cast12Total.net)}
-• Eco B: ${formatShareWeight(dailyShareMetrics.cast12Total.ecoB)}
-• Eco A: ${formatShareWeight(dailyShareMetrics.cast12Total.ecoA)}
-• Tempo Parado Total (Cast 1 + 2): ${dailyShareMetrics.cast12Total.stopsFormatted}
+• *(Prod. Líquida Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.net)}
+• *(Eco B Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.ecoB)}
+• *(Eco A Total):* ${formatShareWeight(dailyShareMetrics.cast12Total.ecoA)}
+• *(Tempo Parado Total):* ${dailyShareMetrics.cast12Total.stopsFormatted}
 
 ---------------------------------------------------
-EREMA - DIA
+*( EREMA - DIA )*
 ---------------------------------------------------
-• Prod. Reciclada: ${formatShareWeight(dailyShareMetrics.eremaDia.net)}
-• Tempo Parado: ${dailyShareMetrics.eremaDia.stopsFormatted}
+• *(Prod. Reciclada):* ${formatShareWeight(dailyShareMetrics.eremaDia.net)}
+• *(Tempo Parado):* ${dailyShareMetrics.eremaDia.stopsFormatted}
 
 ---------------------------------------------------
-EREMA - NOITE
+*( EREMA - NOITE )*
 ---------------------------------------------------
-• Prod. Reciclada: ${formatShareWeight(dailyShareMetrics.eremaNoite.net)}
-• Tempo Parado: ${dailyShareMetrics.eremaNoite.stopsFormatted}
+• *(Prod. Reciclada):* ${formatShareWeight(dailyShareMetrics.eremaNoite.net)}
+• *(Tempo Parado):* ${dailyShareMetrics.eremaNoite.stopsFormatted}
 
-Produção total:
-• Prod. Reciclada Total: ${formatShareWeight(dailyShareMetrics.eremaTotal.net)}
-• Tempo Parado Total: ${dailyShareMetrics.eremaTotal.stopsFormatted}`;
+---------------------------------------------------
+*( PRODUÇÃO TOTAL EREMA )*:
+---------------------------------------------------
+• *(Prod. Reciclada Total):* ${formatShareWeight(dailyShareMetrics.eremaTotal.net)}
+• *(Tempo Parado Total):* ${dailyShareMetrics.eremaTotal.stopsFormatted}
+
+Atenciosamente,
+*(Gestão de Produção)*`;
 
                     navigator.clipboard.writeText(textToCopy)
-                      .then(() => alert('Relatório copiado com sucesso para a área de transferência! Cole diretamente no seu Outlook.'))
+                      .then(() => alert('Relatório copiado com sucesso para a área de transferência! Cole no WhatsApp, Outlook ou onde desejar.'))
                       .catch((err) => console.error('Erro ao copiar:', err));
                   }}
-                  className="w-full sm:w-auto bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Copy size={16} />
                   Copiar Texto Formatado
