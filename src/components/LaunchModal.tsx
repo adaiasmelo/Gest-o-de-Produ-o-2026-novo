@@ -391,6 +391,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
   const [manutencaoStops, setManutencaoStops] = useState<StopItem[]>([]);
   const [processoStops, setProcessoStops] = useState<StopItem[]>([]);
   const [outrosStops, setOutrosStops] = useState<StopItem[]>([]);
+  const [selectedStopCategory, setSelectedStopCategory] = useState<'manutencao' | 'processo' | 'outros' | 'todas'>('manutencao');
   const [materials, setMaterials] = useState<Array<{
     id: string;
     materialType: string;
@@ -556,6 +557,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
       motivo: '',
       explicacao: ''
     };
+    setSelectedStopCategory(type);
     if (type === 'manutencao') {
       setManutencaoStops(prev => [...prev, newItem]);
     } else if (type === 'processo') {
@@ -1585,8 +1587,39 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               {/* COLUNA 3: TEMPOS DE PARADA & RANKING */}
               <div className="space-y-2 flex flex-col h-full min-h-0">
                 <div className="p-2.5 bg-slate-100/70 border border-slate-200 rounded-xl space-y-2 shadow-2xs flex-1 flex flex-col justify-between">
-                  <div className="flex items-center gap-1.5 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-1">
-                    <Clock size={13} /> Tempos de Parada
+                  <div className="flex items-center justify-between gap-1.5 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-1">
+                    <span className="flex items-center gap-1.5"><Clock size={13} /> Tempos de Parada</span>
+                    <span className="text-[9px] text-slate-500 font-bold">{totalParadas} min</span>
+                  </div>
+
+                  {/* Caixa de Seleção da Categoria de Parada */}
+                  <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-2xs space-y-1">
+                    <label htmlFor="stopCategorySelect" className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                      Selecione a Categoria:
+                    </label>
+                    <select
+                      id="stopCategorySelect"
+                      value={selectedStopCategory}
+                      onChange={(e) => setSelectedStopCategory(e.target.value as any)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-md px-2 py-1 text-xs font-black text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="manutencao">
+                        🔧 Manutenção {manutencaoStops.length > 0 ? `(${manutencaoMinCalculado} min)` : ''}
+                      </option>
+                      {!formData.isMaintenanceEntry && (
+                        <>
+                          <option value="processo">
+                            ⚙️ Processo {processoStops.length > 0 ? `(${processoMinCalculado} min)` : ''}
+                          </option>
+                          <option value="outros">
+                            📦 Outros {outrosStops.length > 0 ? `(${outrosMinCalculado} min)` : ''}
+                          </option>
+                          <option value="todas">
+                            📋 Mostrar Todas as Paradas ({totalParadas} min)
+                          </option>
+                        </>
+                      )}
+                    </select>
                   </div>
 
                   {/* Datalists de sugestões extraídas do banco */}
@@ -1608,114 +1641,120 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
 
                   <div className="space-y-1.5 max-h-[320px] overflow-y-auto custom-scrollbar pr-0.5">
                     {/* Seção Manutenção */}
-                    <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
-                      <div className="flex justify-between items-center border-b border-slate-100 pb-1">
-                        <div className="flex items-center gap-1 text-orange-600 font-black text-[9px] uppercase tracking-wider">
-                          <Wrench size={11} /> Manutenção
+                    {(selectedStopCategory === 'manutencao' || selectedStopCategory === 'todas') && (
+                      <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                          <div className="flex items-center gap-1 text-orange-600 font-black text-[9px] uppercase tracking-wider">
+                            <Wrench size={11} /> Manutenção
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddStop('manutencao')}
+                            className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
+                          >
+                            <Plus size={9} /> Horário
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddStop('manutencao')}
-                          className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
-                        >
-                          <Plus size={9} /> Horário
-                        </button>
-                      </div>
-                      
-                      {manutencaoStops.length === 0 ? (
-                        <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de manutenção</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {manutencaoStops.map((stop) => (
-                            <StopItemCard
-                              key={stop.id}
-                              stop={stop}
-                              type="manutencao"
-                              onUpdate={(id, field, value) => handleUpdateStop('manutencao', id, field, value)}
-                              onRemove={(id) => handleRemoveStop('manutencao', id)}
-                            />
-                          ))}
+                        
+                        {manutencaoStops.length === 0 ? (
+                          <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de manutenção</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {manutencaoStops.map((stop) => (
+                              <StopItemCard
+                                key={stop.id}
+                                stop={stop}
+                                type="manutencao"
+                                onUpdate={(id, field, value) => handleUpdateStop('manutencao', id, field, value)}
+                                onRemove={(id) => handleRemoveStop('manutencao', id)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
+                          <span>Subtotal Manutenção</span>
+                          <span className="text-slate-700 font-bold">{manutencaoMinCalculado} min</span>
                         </div>
-                      )}
-                      <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
-                        <span>Subtotal Manutenção</span>
-                        <span className="text-slate-700 font-bold">{manutencaoMinCalculado} min</span>
                       </div>
-                    </div>
+                    )}
 
                     {!formData.isMaintenanceEntry && (
                       <>
                         {/* Seção Processo */}
-                        <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
-                            <div className="flex items-center gap-1 text-blue-600 font-black text-[9px] uppercase tracking-wider">
-                              <Layers size={11} /> Processo
+                        {(selectedStopCategory === 'processo' || selectedStopCategory === 'todas') && (
+                          <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                              <div className="flex items-center gap-1 text-blue-600 font-black text-[9px] uppercase tracking-wider">
+                                <Layers size={11} /> Processo
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleAddStop('processo')}
+                                className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
+                              >
+                                <Plus size={9} /> Horário
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddStop('processo')}
-                              className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
-                            >
-                              <Plus size={9} /> Horário
-                            </button>
-                          </div>
-                          
-                          {processoStops.length === 0 ? (
-                            <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de processo</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {processoStops.map((stop) => (
-                                <StopItemCard
-                                  key={stop.id}
-                                  stop={stop}
-                                  type="processo"
-                                  onUpdate={(id, field, value) => handleUpdateStop('processo', id, field, value)}
-                                  onRemove={(id) => handleRemoveStop('processo', id)}
-                                />
-                              ))}
+                            
+                            {processoStops.length === 0 ? (
+                              <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem paradas de processo</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {processoStops.map((stop) => (
+                                  <StopItemCard
+                                    key={stop.id}
+                                    stop={stop}
+                                    type="processo"
+                                    onUpdate={(id, field, value) => handleUpdateStop('processo', id, field, value)}
+                                    onRemove={(id) => handleRemoveStop('processo', id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
+                              <span>Subtotal Processo</span>
+                              <span className="text-slate-700 font-bold">{processoMinCalculado} min</span>
                             </div>
-                          )}
-                          <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
-                            <span>Subtotal Processo</span>
-                            <span className="text-slate-700 font-bold">{processoMinCalculado} min</span>
                           </div>
-                        </div>
+                        )}
 
                         {/* Seção Outros */}
-                        <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
-                            <div className="flex items-center gap-1 text-slate-600 font-black text-[9px] uppercase tracking-wider">
-                              <Package size={11} /> Outros
+                        {(selectedStopCategory === 'outros' || selectedStopCategory === 'todas') && (
+                          <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                              <div className="flex items-center gap-1 text-slate-600 font-black text-[9px] uppercase tracking-wider">
+                                <Package size={11} /> Outros
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleAddStop('outros')}
+                                className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
+                              >
+                                <Plus size={9} /> Horário
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddStop('outros')}
-                              className="inline-flex items-center gap-0.5 text-[8px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2 py-0.5 rounded cursor-pointer"
-                            >
-                              <Plus size={9} /> Horário
-                            </button>
-                          </div>
-                          
-                          {outrosStops.length === 0 ? (
-                            <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem outras paradas</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {outrosStops.map((stop) => (
-                                <StopItemCard
-                                  key={stop.id}
-                                  stop={stop}
-                                  type="outros"
-                                  onUpdate={(id, field, value) => handleUpdateStop('outros', id, field, value)}
-                                  onRemove={(id) => handleRemoveStop('outros', id)}
-                                />
-                              ))}
+                            
+                            {outrosStops.length === 0 ? (
+                              <p className="text-[9px] font-bold text-slate-400 italic text-center py-1">Sem outras paradas</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {outrosStops.map((stop) => (
+                                  <StopItemCard
+                                    key={stop.id}
+                                    stop={stop}
+                                    type="outros"
+                                    onUpdate={(id, field, value) => handleUpdateStop('outros', id, field, value)}
+                                    onRemove={(id) => handleRemoveStop('outros', id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
+                              <span>Subtotal Outros</span>
+                              <span className="text-slate-700 font-bold">{outrosMinCalculado} min</span>
                             </div>
-                          )}
-                          <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[8px] font-black text-slate-400 uppercase">
-                            <span>Subtotal Outros</span>
-                            <span className="text-slate-700 font-bold">{outrosMinCalculado} min</span>
                           </div>
-                        </div>
+                        )}
                       </>
                     )}
                   </div>
