@@ -144,7 +144,7 @@ const EcoBReasonCard: React.FC<EcoBReasonCardProps> = ({
                 <span>⚡ Seleção Múltipla:</span>
                 <span className="text-[8px] text-orange-600 font-bold">Marcar/desmarcar</span>
               </p>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-1.5 pr-1">
                 {categoryGroups && categoryGroups.length > 0 ? (
                   categoryGroups.map((group, gIdx) => (
                     <div key={gIdx} className="space-y-0.5">
@@ -327,6 +327,17 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
   productionEntries = [], ribbonEntries = []
 }) => {
   const [downtimeVersion, setDowntimeVersion] = useState(0);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const handleUpdate = () => setDowntimeVersion(v => v + 1);
@@ -1385,7 +1396,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                               </button>
                             </div>
 
-                            <div className="max-h-[160px] overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
+                            <div className="space-y-1.5">
                               {materials.map((item, idx) => {
                                 const showDeleteConfirm = confirmDeleteMatId === item.id;
                                 return (
@@ -1640,7 +1651,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
                     ))}
                   </datalist>
 
-                  <div className="space-y-1.5 max-h-[320px] overflow-y-auto custom-scrollbar pr-0.5">
+                  <div className="space-y-1.5">
                     {/* Seção Manutenção */}
                     {(selectedStopCategory === 'manutencao' || selectedStopCategory === 'todas') && (
                       <div className="p-2 bg-white border border-slate-150 rounded-lg space-y-1.5 shadow-2xs">
