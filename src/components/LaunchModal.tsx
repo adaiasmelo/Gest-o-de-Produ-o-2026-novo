@@ -1080,30 +1080,30 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
   const isHiddenProduction = formData.isMaintenanceEntry || formData.isNoWorkDay;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col w-screen h-screen overflow-hidden animate-in fade-in duration-200">
-      <div className="bg-slate-50 w-full h-full flex flex-col overflow-hidden relative">
+    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col w-full h-[100dvh] overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-slate-50 w-full h-full flex flex-col overflow-hidden relative max-w-[1850px] mx-auto">
         {/* Header Bar */}
         <div className="bg-[#1e293b] text-white px-3 md:px-5 py-2 flex items-center justify-between shrink-0 shadow-md z-20 border-b border-slate-700">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
             <button 
               type="button" 
               onClick={onClose} 
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-all border border-slate-600/50 cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-lg text-xs font-bold transition-all border border-slate-600/50 cursor-pointer shrink-0"
               title="Voltar"
             >
               <ArrowLeft size={16} />
               <span className="hidden sm:inline uppercase text-[10px]">Voltar</span>
             </button>
             <div className="h-5 w-px bg-slate-700 mx-0.5 hidden sm:block"></div>
-            <div className="flex items-center gap-1.5">
-              {initialData ? <Edit2 size={16} className="text-blue-400" /> : <Save size={16} className="text-blue-400" />}
-              <h2 className="text-sm md:text-base font-black tracking-tight uppercase text-white">
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              {initialData ? <Edit2 size={16} className="text-blue-400 shrink-0" /> : <Save size={16} className="text-blue-400 shrink-0" />}
+              <h2 className="text-xs sm:text-sm md:text-base font-black tracking-tight uppercase text-white truncate">
                 {initialData ? 'Editar Lançamento' : 'Novo Lançamento'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="flex bg-blue-600 rounded-lg overflow-hidden shadow-sm shadow-blue-500/20 border border-blue-400/30">
               <button 
                 type="button"
@@ -1148,9 +1148,10 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           </div>
         </div>
 
-        {/* Full Form Area occupying maximum space with non-scrolling 3-column layout on desktop */}
-        <form onSubmit={handleSubmit} className="flex-1 p-2 md:p-3 overflow-y-auto xl:overflow-hidden custom-scrollbar relative max-w-[1850px] w-full mx-auto flex flex-col justify-between gap-2 min-h-0">
-          <div className="flex flex-col gap-2 min-h-0 flex-1">
+        {/* Form Container */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden relative w-full">
+          {/* Scrollable Form Body */}
+          <div className="flex-1 overflow-y-auto p-2 md:p-3 custom-scrollbar relative space-y-2.5">
           {pendingEntries.length > 1 && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -1294,9 +1295,9 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
           )}
 
           {!formData.isNoWorkDay && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 flex-1 min-h-0 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 items-start">
               {/* COLUNA 1: PRODUÇÃO & REUTILIZAÇÃO */}
-              <div className="space-y-2 flex flex-col h-full min-h-0">
+              <div className="space-y-2">
                 {!isHiddenProduction && (
                   <>
                     {isErema ? (
@@ -1523,7 +1524,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               </div>
 
               {/* COLUNA 2: PERDAS & RECICLAGEM */}
-              <div className="space-y-2 flex flex-col h-full min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
+              <div className="space-y-2">
                 {/* Card Eco A */}
                 <div className="p-2 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1 shrink-0">
                   <div className="flex items-center gap-1.5 text-indigo-800 font-black text-[10px] uppercase tracking-widest">
@@ -1585,7 +1586,7 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
               </div>
 
               {/* COLUNA 3: TEMPOS DE PARADA & RANKING */}
-              <div className="space-y-2 flex flex-col h-full min-h-0">
+              <div className="space-y-2">
                 <div className="p-2.5 bg-slate-100/70 border border-slate-200 rounded-xl space-y-2 shadow-2xs flex-1 flex flex-col justify-between">
                   <div className="flex items-center justify-between gap-1.5 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-1">
                     <span className="flex items-center gap-1.5"><Clock size={13} /> Tempos de Parada</span>
@@ -1899,12 +1900,12 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
 
           </div>
 
-          {/* Fixed bottom action buttons bar */}
-          <div className="sticky bottom-0 bg-white/95 backdrop-blur-md px-3 py-2 border border-slate-200 rounded-xl flex gap-3 z-30 shadow-md shrink-0">
-            <button type="button" onClick={onClose} className="flex-1 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-black text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer">
+          {/* Static bottom action buttons bar - always fixed at the bottom of the screen */}
+          <div className="shrink-0 bg-white border-t border-slate-200 px-3 md:px-5 py-2.5 flex gap-3 z-30 shadow-lg">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl font-black text-xs uppercase hover:bg-slate-50 transition-all cursor-pointer shadow-2xs">
               Cancelar
             </button>
-            <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-black text-xs uppercase shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer">
               <Save size={16} /> {initialData ? 'Atualizar Lançamento' : (pendingEntries.length > 1 ? `Salvar (${pendingEntries.length}) Lançamentos` : 'Salvar Lançamento')}
             </button>
           </div>
