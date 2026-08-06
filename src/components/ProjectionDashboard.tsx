@@ -1040,33 +1040,33 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
   return (
     <div className="fixed inset-0 z-[200] bg-slate-100 text-slate-900 flex flex-col font-sans overflow-hidden select-none">
       {/* Top TV Bar - Crisp Light Mode Header */}
-      <header className="bg-white border-b-2 border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm z-10 transition-all">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-2xl flex items-center justify-center text-white shadow-md border border-blue-400/20 shrink-0">
+      <header className="bg-white border-b-2 border-slate-200 px-3 md:px-6 py-2 md:py-3 flex items-center justify-between shrink-0 shadow-sm z-10 transition-all gap-2 max-w-full overflow-hidden">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-700 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-md border border-blue-400/20 shrink-0">
             {systemLogo ? (
-              <img src={systemLogo} alt="Logo" className="w-full h-full object-cover rounded-2xl" />
+              <img src={systemLogo} alt="Logo" className="w-full h-full object-cover rounded-xl md:rounded-2xl" />
             ) : (
-              <Tv className="w-7 h-7 md:w-8 md:h-8 text-white" />
+              <Tv className="w-5 h-5 md:w-8 md:h-8 text-white" />
             )}
           </div>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight uppercase">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 md:gap-3">
+              <h1 className="text-base sm:text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight uppercase truncate">
                 {systemName} <span className="text-blue-600 font-black">• PROJEÇÃO TV</span>
               </h1>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span> AO VIVO
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> AO VIVO
               </span>
             </div>
-            <p className="text-xs md:text-sm font-extrabold text-slate-500 tracking-wider">
+            <p className="hidden md:block text-xs md:text-sm font-extrabold text-slate-500 tracking-wider truncate">
               PAINEL INDUSTRIAL AUTOMÁTICO • EXTRUSÃO & CORTE
             </p>
           </div>
         </div>
 
-        {/* Center Navigation / Slide Switcher */}
+        {/* Center Navigation / Slide Switcher (Desktop) */}
         {!isFullscreen && (
-          <div className="hidden lg:flex items-center gap-2 bg-slate-100 p-2 rounded-2xl border border-slate-200 shadow-inner">
+          <div className="hidden lg:flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
             {slideTitles.map((title, idx) => (
               <button
                 key={idx}
@@ -1074,7 +1074,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   setViewMode('slides');
                   handleSlideChange(idx);
                 }}
-                className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                className={`px-3 py-2 rounded-xl text-xs md:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                   viewMode === 'slides' && currentSlide === idx
                     ? 'bg-blue-600 text-white shadow-md border border-blue-500'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
@@ -1085,7 +1085,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
             ))}
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-4 py-2.5 rounded-xl text-xs md:text-sm font-black uppercase tracking-wider transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs md:text-sm font-black uppercase tracking-wider transition-all ${
                 viewMode === 'grid'
                   ? 'bg-emerald-600 text-white shadow-md border border-emerald-500'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
@@ -1097,7 +1097,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
         )}
 
         {/* Right Controls: Clock & Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
           {/* Transition Duration Speed Buttons */}
           {!isFullscreen && (
             <div className="hidden xl:flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
@@ -1122,44 +1122,94 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
           )}
 
           {/* Clock (Relógio) */}
-          <div className="text-right sm:block bg-slate-50 px-5 py-2 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xl md:text-2xl font-mono font-black text-blue-700 tracking-wider flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-600" />
+          <div className="text-right bg-slate-50 px-2.5 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm shrink-0">
+            <div className="text-xs sm:text-lg md:text-2xl font-mono font-black text-blue-700 tracking-wider flex items-center gap-1 sm:gap-2">
+              <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-blue-600 shrink-0" />
               {currentTime.toLocaleTimeString('pt-BR')}
             </div>
-            <div className="text-xs font-extrabold text-slate-500 uppercase tracking-widest">
-              {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+            <div className="hidden sm:block text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-widest">
+              {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
             </div>
           </div>
 
           {/* Control Buttons: Pause, Fullscreen, Exit */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+          <div className="flex items-center gap-1 sm:gap-2 bg-slate-100 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200">
             <button
               onClick={() => setIsAutoPlay(!isAutoPlay)}
-              className={`p-3 rounded-xl transition-all shadow-sm ${
+              className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all shadow-sm ${
                 isAutoPlay ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
               }`}
               title={isAutoPlay ? 'Pausar Rotação' : 'Iniciar Rotação Automática'}
             >
-              {isAutoPlay ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+              {isAutoPlay ? <Pause className="w-4 h-4 sm:w-6 sm:h-6" /> : <Play className="w-4 h-4 sm:w-6 sm:h-6" />}
             </button>
             <button
               onClick={toggleFullscreen}
-              className="p-3 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl transition-all shadow-sm"
+              className="p-2 sm:p-3 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg sm:rounded-xl transition-all shadow-sm"
               title="Alternar Tela Cheia (Pressione ESC para sair)"
             >
-              {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
+              {isFullscreen ? <Minimize2 className="w-4 h-4 sm:w-6 sm:h-6" /> : <Maximize2 className="w-4 h-4 sm:w-6 sm:h-6" />}
             </button>
             <button
               onClick={onClose}
-              className="p-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-sm"
+              className="p-2 sm:p-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg sm:rounded-xl transition-all shadow-sm"
               title="Sair da Projeção"
             >
-              <X className="w-6 h-6" />
+              <X className="w-4 h-4 sm:w-6 sm:h-6" />
             </button>
           </div>
         </div>
       </header>
+
+      {/* Mobile Slide Navigation Strip */}
+      {!isFullscreen && (
+        <div className="flex lg:hidden items-center justify-between gap-1.5 bg-slate-200/90 p-1.5 px-2 text-xs border-b border-slate-300 shrink-0 shadow-xs">
+          <button
+            onClick={() => handleSlideChange((currentSlide - 1 + slideTitles.length) % slideTitles.length)}
+            className="p-1.5 bg-white text-slate-800 rounded-lg shadow-2xs font-bold flex items-center shrink-0 active:scale-95 border border-slate-300"
+            title="Slide Anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5 max-w-full">
+            {slideTitles.map((title, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setViewMode('slides');
+                  handleSlideChange(idx);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all shrink-0 ${
+                  viewMode === 'slides' && currentSlide === idx
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300/80'
+                }`}
+              >
+                {idx + 1}. {title.split(' ')[0]}
+              </button>
+            ))}
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase whitespace-nowrap transition-all shrink-0 ${
+                viewMode === 'grid'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300/80'
+              }`}
+            >
+              Grade
+            </button>
+          </div>
+
+          <button
+            onClick={() => handleSlideChange((currentSlide + 1) % slideTitles.length)}
+            className="p-1.5 bg-white text-slate-800 rounded-lg shadow-2xs font-bold flex items-center shrink-0 active:scale-95 border border-slate-300"
+            title="Próximo Slide"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Rotation Progress Bar */}
       {!isFullscreen && isAutoPlay && viewMode === 'slides' && (
@@ -1172,7 +1222,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
       )}
 
       {/* Main Viewport */}
-      <main className="flex-1 p-3 md:p-4 lg:p-5 overflow-hidden relative bg-slate-100 flex flex-col justify-between h-full min-h-0">
+      <main className="flex-1 p-2 md:p-4 lg:p-5 overflow-y-auto lg:overflow-hidden relative bg-slate-100 flex flex-col justify-between h-full min-h-0 custom-scrollbar">
         {viewMode === 'slides' ? (
           <AnimatePresence mode="wait">
             <motion.div
@@ -1181,7 +1231,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
               transition={{ duration: 0.4 }}
-              className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden"
+              className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 min-h-0 overflow-y-auto lg:overflow-hidden"
             >
               {/* SLIDE 0: VISÃO GERAL DE PRODUÇÃO & METAS */}
               {currentSlide === 0 && (
@@ -1588,7 +1638,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* BOTTOM: 4 Cards Row (Equal width side by side) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 w-full shrink-0 lg:h-[165px] xl:h-[180px]">
                     {/* Card 1: Crescimento Mensal (MoM) */}
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50/40 border-2 border-blue-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
                       <span className="text-xs font-black text-blue-900 uppercase tracking-wider block border-b border-blue-200/60 pb-1">
@@ -1730,7 +1780,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* BOTTOM: Cards Row */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 w-full shrink-0 lg:h-[165px] xl:h-[180px]">
                     {/* Total Stoppage Time Card */}
                     <div className="bg-gradient-to-br from-rose-50 to-amber-50/40 border-2 border-rose-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
                       <span className="text-xs font-black text-rose-900 uppercase tracking-wider block border-b border-rose-200/60 pb-1">
@@ -1856,7 +1906,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                   </div>
 
                   {/* BOTTOM: 2 KPI Cards Row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 w-full shrink-0 h-[165px] xl:h-[180px]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 w-full shrink-0 lg:h-[165px] xl:h-[180px]">
                     {/* Card 1: Volume Total de Eco B */}
                     <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-200 rounded-3xl p-3 lg:p-4 shadow-md flex flex-col justify-between h-full">
                       <span className="text-xs font-black text-amber-800 uppercase tracking-wider block border-b border-amber-200/60 pb-1">
@@ -1970,61 +2020,61 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 5: AVISOS DE RECURSOS HUMANOS (RH) */}
               {currentSlide === 5 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
-                  <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border-2 border-blue-200 shadow-sm shrink-0">
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 min-h-0 overflow-y-auto lg:overflow-hidden">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-3 sm:px-5 sm:py-3 rounded-2xl border-2 border-blue-200 shadow-sm shrink-0 gap-2 sm:gap-0">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-md">
-                        <Users className="w-6 h-6" />
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
+                        <Users className="w-5 h-5 sm:w-6 sm:h-6" />
                       </div>
                       <div>
-                        <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                        <h2 className="text-base sm:text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                           Recursos Humanos • Avisos & Comunicados
                         </h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        <p className="hidden sm:block text-xs font-bold text-slate-500 uppercase tracking-widest">
                           Informações Institucionais e Gestão de Pessoas
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => setNoticeModalCategory('rh')}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition-all active:scale-95"
+                      className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all active:scale-95 shrink-0"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Gerenciar Avisos de RH</span>
+                      <span>Gerenciar Avisos</span>
                     </button>
                   </div>
 
                   {/* RH Notices Display Container */}
-                  <div className="flex-1 min-h-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
                     {rhNotices.length === 0 ? (
-                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-blue-200 p-8 flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner">
-                          <Users className="w-8 h-8" />
+                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-blue-200 p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center shadow-inner">
+                          <Users className="w-7 h-7 sm:w-8 sm:h-8" />
                         </div>
                         <div>
-                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de RH no momento</h3>
-                          <p className="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
-                            Clique no botão acima "Gerenciar Avisos de RH" para publicar novos comunicados para a equipe.
+                          <h3 className="text-lg sm:text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de RH no momento</h3>
+                          <p className="text-xs sm:text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
+                            Clique no botão acima "Gerenciar Avisos" para publicar novos comunicados para a equipe.
                           </p>
                         </div>
                         <button
                           onClick={() => setNoticeModalCategory('rh')}
-                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
                         >
                           <Plus className="w-4 h-4" />
                           <span>Adicionar Primeiro Aviso</span>
                         </button>
                       </div>
                     ) : (
-                      <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch overflow-hidden">
+                      <div className="min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch">
                         {rhNotices.map((notice, idx) => (
                           <div
                             key={notice.id || idx}
-                            className="bg-white rounded-3xl border-2 border-slate-200 shadow-md p-5 lg:p-6 flex flex-col justify-between h-full min-h-0 overflow-hidden relative group hover:border-blue-300 transition-all"
+                            className="bg-white rounded-3xl border-2 border-slate-200 shadow-md p-4 sm:p-5 lg:p-6 flex flex-col justify-between min-h-0 overflow-hidden relative group hover:border-blue-300 transition-all"
                           >
                             {/* Notice Header Badge & Date */}
                             <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
-                              <span className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-widest border shadow-xs ${
+                              <span className={`px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest border shadow-xs ${
                                 notice.priority === 'high'
                                   ? 'bg-rose-100 text-rose-800 border-rose-300'
                                   : notice.priority === 'medium'
@@ -2035,7 +2085,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                               </span>
                               <div className="flex items-center gap-2">
                                 {notice.date && (
-                                  <span className="text-xs font-mono font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
+                                  <span className="text-[10px] sm:text-xs font-mono font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200">
                                     {notice.date}
                                   </span>
                                 )}
@@ -2051,7 +2101,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Title & Subtitle */}
                             <div className="shrink-0 mb-3">
-                              <h3 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                              <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
                                 {notice.title}
                               </h3>
                               {notice.subtitle && (
@@ -2063,7 +2113,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Image Banner */}
                             {notice.imageUrl && (
-                              <div className="flex-1 min-h-0 my-2 rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 relative group-hover:shadow-lg transition-all">
+                              <div className="flex-1 min-h-[160px] lg:min-h-0 my-2 rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 relative group-hover:shadow-lg transition-all">
                                 <img
                                   src={notice.imageUrl}
                                   alt={notice.title}
@@ -2079,7 +2129,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Description Text */}
                             <div className="shrink-0 pt-3 border-t border-slate-100">
-                              <p className="text-sm md:text-base lg:text-lg font-medium text-slate-700 leading-relaxed line-clamp-4">
+                              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-slate-700 leading-relaxed line-clamp-4">
                                 {notice.description}
                               </p>
                             </div>
@@ -2093,61 +2143,61 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
               {/* SLIDE 6: AVISOS DE SEGURANÇA DO TRABALHO (SST & CIPA) */}
               {currentSlide === 6 && (
-                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 h-full min-h-0 overflow-hidden">
-                  <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border-2 border-emerald-300 shadow-sm shrink-0">
+                <div className="w-full flex-1 flex flex-col justify-between gap-3 md:gap-4 min-h-0 overflow-y-auto lg:overflow-hidden">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-3 sm:px-5 sm:py-3 rounded-2xl border-2 border-emerald-300 shadow-sm shrink-0 gap-2 sm:gap-0">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-md">
-                        <ShieldAlert className="w-6 h-6 text-white" />
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
+                        <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                        <h2 className="text-base sm:text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                           Segurança do Trabalho • SST & CIPA
                         </h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        <p className="hidden sm:block text-xs font-bold text-slate-500 uppercase tracking-widest">
                           Prevenção de Acidentes, EPIs e Saúde Ocupacional
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => setNoticeModalCategory('safety')}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition-all active:scale-95"
+                      className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all active:scale-95 shrink-0"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Gerenciar Avisos de Segurança</span>
+                      <span>Gerenciar Avisos</span>
                     </button>
                   </div>
 
                   {/* Safety Notices Display Container */}
-                  <div className="flex-1 min-h-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
                     {safetyNotices.length === 0 ? (
-                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-8 flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center shadow-inner">
-                          <ShieldAlert className="w-8 h-8" />
+                      <div className="h-full bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center shadow-inner">
+                          <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8" />
                         </div>
                         <div>
-                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de Segurança no momento</h3>
-                          <p className="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
-                            Clique no botão acima "Gerenciar Avisos de Segurança" para publicar alertas de segurança e SST.
+                          <h3 className="text-lg sm:text-xl font-black text-slate-800 uppercase tracking-tight">Nenhum aviso de Segurança no momento</h3>
+                          <p className="text-xs sm:text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">
+                            Clique no botão acima "Gerenciar Avisos" para publicar alertas de segurança e SST.
                           </p>
                         </div>
                         <button
                           onClick={() => setNoticeModalCategory('safety')}
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
                         >
                           <Plus className="w-4 h-4" />
                           <span>Adicionar Primeiro Aviso</span>
                         </button>
                       </div>
                     ) : (
-                      <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch overflow-hidden">
+                      <div className="min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-stretch">
                         {safetyNotices.map((notice, idx) => (
                           <div
                             key={notice.id || idx}
-                            className="bg-white rounded-3xl border-2 border-emerald-200 shadow-md p-5 lg:p-6 flex flex-col justify-between h-full min-h-0 overflow-hidden relative group hover:border-emerald-400 transition-all"
+                            className="bg-white rounded-3xl border-2 border-emerald-200 shadow-md p-4 sm:p-5 lg:p-6 flex flex-col justify-between min-h-0 overflow-hidden relative group hover:border-emerald-400 transition-all"
                           >
                             {/* Notice Header Badge & Date */}
                             <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
-                              <span className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-widest border shadow-xs ${
+                              <span className={`px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest border shadow-xs ${
                                 notice.priority === 'high'
                                   ? 'bg-rose-600 text-white border-rose-700'
                                   : 'bg-emerald-100 text-emerald-900 border-emerald-300'
@@ -2156,7 +2206,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
                               </span>
                               <div className="flex items-center gap-2">
                                 {notice.date && (
-                                  <span className="text-xs font-mono font-black text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                                  <span className="text-[10px] sm:text-xs font-mono font-black text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
                                     {notice.date}
                                   </span>
                                 )}
@@ -2172,7 +2222,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Title & Subtitle */}
                             <div className="shrink-0 mb-3">
-                              <h3 className="text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                              <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight leading-tight">
                                 {notice.title}
                               </h3>
                               {notice.subtitle && (
@@ -2184,7 +2234,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Image Banner */}
                             {notice.imageUrl && (
-                              <div className="flex-1 min-h-0 my-2 rounded-2xl overflow-hidden border border-emerald-200 bg-slate-950 relative group-hover:shadow-lg transition-all">
+                              <div className="flex-1 min-h-[160px] lg:min-h-0 my-2 rounded-2xl overflow-hidden border border-emerald-200 bg-slate-950 relative group-hover:shadow-lg transition-all">
                                 <img
                                   src={notice.imageUrl}
                                   alt={notice.title}
@@ -2200,7 +2250,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
                             {/* Description Text */}
                             <div className="shrink-0 pt-3 border-t border-slate-100">
-                              <p className="text-sm md:text-base lg:text-lg font-medium text-slate-800 leading-relaxed line-clamp-4">
+                              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-slate-800 leading-relaxed line-clamp-4">
                                 {notice.description}
                               </p>
                             </div>

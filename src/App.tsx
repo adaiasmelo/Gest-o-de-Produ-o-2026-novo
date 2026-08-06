@@ -6341,7 +6341,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
         updatedAt: new Date().toISOString()
       };
       await setDoc(doc(db, 'training_records', id), record, { merge: true });
-      exportTrainingToPDF(record as TrainingRecord);
+      await exportTrainingToPDF(record as TrainingRecord);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'training_records');
     }
@@ -6987,13 +6987,271 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     }
   };
 
-  const exportTrainingToPDF = (training: TrainingRecord) => {
+  const exportTrainingToPDF = async (training: TrainingRecord) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 10;
     const footerH = 15;
     let y = 10;
+
+    // Helper to parse HTML rich text into structured blocks with formatting and alignment preserved natively in jsPDF
+    const parseHtmlToFormattedBlocks = (html: string) => {
+      if (!html || !html.trim()) return [];
+
+      const parser = new DOMParser();
+      const parsedDoc = parser.parseFromString(html, 'text/html');
+
+      interface FormattedSegment {
+        text: string;
+        isBold: boolean;
+        isItalic: boolean;
+        isUnderline: boolean;
+      }
+
+      interface FormattedLine {
+        segments: FormattedSegment[];
+        align: 'left' | 'center' | 'right' | 'justify';
+        isListItem?: boolean;
+        isFirstLineOfListItem?: boolean;
+        headerLevel?: number;
+        isExtraSpacingAfter?: boolean;
+      }
+
+      interface RawBlock {
+        element: HTMLElement;
+        tag: string;
+        listType?: 'bullet' | 'ordered';
+        listIndex?: number;
+        align: 'left' | 'center' | 'right' | 'justify';
+        headerLevel: number;
+        isListItem: boolean;
+      }
+
+      const blocks: RawBlock[] = [];
+
+      const processNode = (node: Node, parentListType?: 'bullet' | 'ordered', listCounter = { val: 1 }) => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const el = node as HTMLElement;
+        const tag = el.tagName.toLowerCase();
+
+        let align: 'left' | 'center' | 'right' | 'justify' = 'left';
+        const className = el.className || '';
+        const styleAttr = el.getAttribute('style') || '';
+
+        if (className.includes('ql-align-center') || /text-align\s*:\s*center/i.test(styleAttr)) align = 'center';
+        else if (className.includes('ql-align-right') || /text-align\s*:\s*right/i.test(styleAttr)) align = 'right';
+        else if (className.includes('ql-align-justify') || /text-align\s*:\s*justify/i.test(styleAttr)) align = 'justify';
+        else if (className.includes('ql-align-left') || /text-align\s*:\s*left/i.test(styleAttr)) align = 'left';
+
+        if (tag === 'ul') {
+          const counter = { val: 1 };
+          Array.from(el.childNodes).forEach(child => processNode(child, 'bullet', counter));
+          return;
+        }
+
+        if (tag === 'ol') {
+          const counter = { val: 1 };
+          Array.from(el.childNodes).forEach(child => processNode(child, 'ordered', counter));
+          return;
+        }
+
+        if (tag === 'li') {
+          const dataList = el.getAttribute('data-list');
+          const currentListType = dataList === 'ordered' ? 'ordered' : (dataList === 'bullet' ? 'bullet' : (parentListType || 'bullet'));
+          const idx = listCounter.val++;
+          blocks.push({
+            element: el,
+            tag: 'li',
+            listType: currentListType,
+            listIndex: idx,
+            align,
+            headerLevel: 0,
+            isListItem: true
+          });
+          return;
+        }
+
+        if (tag === 'p' || tag === 'div' || tag === 'blockquote' || /^h[1-6]$/.test(tag)) {
+          let headerLevel = 0;
+          if (/^h[1-6]$/.test(tag)) {
+            headerLevel = parseInt(tag.charAt(1));
+          }
+          blocks.push({
+            element: el,
+            tag,
+            align,
+            headerLevel,
+            isListItem: false
+          });
+          return;
+        }
+
+        Array.from(el.childNodes).forEach(child => processNode(child, parentListType, listCounter));
+      };
+
+      Array.from(parsedDoc.body.childNodes).forEach(child => processNode(child));
+
+      if (blocks.length === 0) {
+        const p = parsedDoc.createElement('p');
+        p.textContent = parsedDoc.body.textContent || html;
+        blocks.push({ element: p, tag: 'p', align: 'left', headerLevel: 0, isListItem: false });
+      }
+
+      const traverseInline = (node: Node, currentStyle: { isBold: boolean; isItalic: boolean; isUnderline: boolean }, segments: FormattedSegment[]) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent || '';
+          if (text) {
+            segments.push({ text, ...currentStyle });
+          }
+          return;
+        }
+
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tag = el.tagName.toLowerCase();
+
+          // Ignore Quill UI bullet/number spans if present inside li
+          if (el.classList.contains('ql-ui')) return;
+
+          const style = { ...currentStyle };
+          if (tag === 'b' || tag === 'strong' || el.style.fontWeight === 'bold' || parseInt(el.style.fontWeight) >= 600) {
+            style.isBold = true;
+          }
+          if (tag === 'i' || tag === 'em' || el.style.fontStyle === 'italic') {
+            style.isItalic = true;
+          }
+          if (tag === 'u' || el.style.textDecoration?.includes('underline')) {
+            style.isUnderline = true;
+          }
+
+          Array.from(el.childNodes).forEach(child => traverseInline(child, style, segments));
+        }
+      };
+
+      const formattedLines: FormattedLine[] = [];
+
+      blocks.forEach((block) => {
+        const rawSegments: FormattedSegment[] = [];
+        traverseInline(block.element, { isBold: block.headerLevel > 0, isItalic: false, isUnderline: false }, rawSegments);
+
+        const segments: FormattedSegment[] = [];
+        if (block.isListItem) {
+          const prefix = block.listType === 'ordered' ? `${block.listIndex}. ` : '• ';
+          const fullRawText = rawSegments.map(s => s.text).join('').trimStart();
+          const startsWithNumber = /^\d+[\.\)]\s/.test(fullRawText);
+          const startsWithBullet = /^[\u2022\u25CF\u2218\*\-]\s/.test(fullRawText);
+
+          if (!startsWithNumber && !startsWithBullet) {
+            segments.push({ text: prefix, isBold: false, isItalic: false, isUnderline: false });
+          }
+        }
+
+        rawSegments.forEach(s => segments.push(s));
+
+        const totalText = segments.map(s => s.text).join('').trim();
+        if (!totalText) {
+          formattedLines.push({
+            segments: [{ text: '', isBold: false, isItalic: false, isUnderline: false }],
+            align: block.align,
+            headerLevel: block.headerLevel,
+            isListItem: false,
+            isExtraSpacingAfter: true
+          });
+          return;
+        }
+
+        interface StyledWord {
+          text: string;
+          isBold: boolean;
+          isItalic: boolean;
+          isUnderline: boolean;
+        }
+
+        const words: StyledWord[] = [];
+        segments.forEach(seg => {
+          const parts = seg.text.split(/(\s+)/);
+          parts.forEach(part => {
+            if (part) {
+              words.push({
+                text: part,
+                isBold: seg.isBold,
+                isItalic: seg.isItalic,
+                isUnderline: seg.isUnderline
+              });
+            }
+          });
+        });
+
+        if (words.length === 0) return;
+
+        const maxLineWidth = pageWidth - 30; // 180mm inside 190mm box
+        let currentLineWords: StyledWord[] = [];
+        let isFirstLineOfBlock = true;
+
+        const getWordsWidth = (wordList: StyledWord[]) => {
+          let w = 0;
+          wordList.forEach(item => {
+            let fontStyle = 'normal';
+            if (item.isBold && item.isItalic) fontStyle = 'bolditalic';
+            else if (item.isBold) fontStyle = 'bold';
+            else if (item.isItalic) fontStyle = 'italic';
+
+            doc.setFont('helvetica', fontStyle);
+            doc.setFontSize(block.headerLevel > 0 ? (12 - block.headerLevel) : 9);
+            w += doc.getTextWidth(item.text);
+          });
+          return w;
+        };
+
+        const pushLine = (lineWords: StyledWord[], isFirst: boolean) => {
+          const lineSegments: FormattedSegment[] = [];
+          lineWords.forEach(w => {
+            const last = lineSegments[lineSegments.length - 1];
+            if (last && last.isBold === w.isBold && last.isItalic === w.isItalic && last.isUnderline === w.isUnderline) {
+              last.text += w.text;
+            } else {
+              lineSegments.push({ text: w.text, isBold: w.isBold, isItalic: w.isItalic, isUnderline: w.isUnderline });
+            }
+          });
+
+          formattedLines.push({
+            segments: lineSegments,
+            align: block.align,
+            isListItem: block.isListItem,
+            isFirstLineOfListItem: block.isListItem && isFirst,
+            headerLevel: block.headerLevel
+          });
+        };
+
+        words.forEach(word => {
+          const testLine = [...currentLineWords, word];
+          const allowedWidth = (block.isListItem && !isFirstLineOfBlock) ? (maxLineWidth - 5) : maxLineWidth;
+
+          if (currentLineWords.length === 0 || getWordsWidth(testLine) <= allowedWidth) {
+            currentLineWords.push(word);
+          } else {
+            pushLine(currentLineWords, isFirstLineOfBlock);
+            isFirstLineOfBlock = false;
+            if (word.text.trim() === '' && word.text.length > 0) {
+              currentLineWords = [];
+            } else {
+              currentLineWords = [word];
+            }
+          }
+        });
+
+        if (currentLineWords.length > 0) {
+          pushLine(currentLineWords, isFirstLineOfBlock);
+        }
+      });
+
+      return formattedLines;
+    };
+
+    const formattedContentLines = parseHtmlToFormattedBlocks(training.content);
+    const contentLineHeight = 5.0;
+    const contentH = Math.max(25, (formattedContentLines.length * contentLineHeight) + 10);
 
     const drawHeader = (startY: number) => {
       doc.setLineWidth(0.4);
@@ -7110,32 +7368,6 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     });
     y += rowH;
 
-    const convertHtmlToStructuredText = (html: string) => {
-      if (!html) return "";
-      // Replace list items with clean bullet markup
-      let processed = html.replace(/<li>/gi, '\n• ');
-      // Replace break lines with absolute breaks
-      processed = processed.replace(/<br\s*\/?>/gi, '\n');
-      // Replace paragraphs and block structures with spacing breaks
-      processed = processed.replace(/<\/p>/gi, '\n');
-      processed = processed.replace(/<\/div>/gi, '\n');
-      processed = processed.replace(/<\/h[1-6]>/gi, '\n');
-      
-      const parser = new DOMParser();
-      const docParsed = parser.parseFromString(processed, 'text/html');
-      const text = docParsed.body.textContent || "";
-      
-      // Keep styling nice and structured, limiting maximum consecutive blank lines to 2
-      return text.replace(/\n{3,}/g, '\n\n').trim();
-    };
-
-    // Prepare content split with constant font size 9
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const rawContent = convertHtmlToStructuredText(training.content);
-    const splitContent = doc.splitTextToSize(rawContent, pageWidth - 30);
-    const contentH = (splitContent.length * 5.0) + 9; // Dynamic spacing for size 9
-
     // Participants Rows with fixed row height of 9 and font size of 9 (no dynamic scaling)
     const totalRows = Math.max(13, training.participants.length);
     const participantRowH = 9; 
@@ -7167,7 +7399,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
 
     // Programming Content Section
     y += 4;
-    checkPageBreak(8 + 8 + contentH); // Check if the entire section (headers + content box) fits on the current page
+    checkPageBreak(16 + 25);
 
     // Programming Content Header
     doc.rect(10, y, pageWidth - 20, 8);
@@ -7178,14 +7410,93 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
 
     doc.rect(10, y, pageWidth - 20, 8);
     doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
     doc.text('Obs.: Preencha o conteúdo aplicado no treinamento ou curso', 12, y + 5);
     y += 8;
 
-    doc.rect(10, y, pageWidth - 20, contentH);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(splitContent, 15, y + 6.5);
-    y += contentH;
+    if (formattedContentLines.length > 0) {
+      const boxLeftMargin = 15;
+      const boxRightMargin = pageWidth - 15;
+      const boxWidth = pageWidth - 20;
+
+      let currentBoxStartY = y;
+
+      formattedContentLines.forEach((lineObj) => {
+        if (checkPageBreak(contentLineHeight)) {
+          currentBoxStartY = y;
+        }
+
+        const fontSize = lineObj.headerLevel ? (12 - lineObj.headerLevel) : 9;
+
+        // Calculate total width of all segments in lineObj
+        let totalLineWidth = 0;
+        lineObj.segments.forEach((seg) => {
+          let style = 'normal';
+          if (seg.isBold && seg.isItalic) style = 'bolditalic';
+          else if (seg.isBold) style = 'bold';
+          else if (seg.isItalic) style = 'italic';
+
+          doc.setFont('helvetica', style);
+          doc.setFontSize(fontSize);
+          totalLineWidth += doc.getTextWidth(seg.text);
+        });
+
+        // Determine starting X based on alignment & list item indent
+        let currentX = boxLeftMargin;
+        if (lineObj.isListItem && !lineObj.isFirstLineOfListItem) {
+          currentX = boxLeftMargin + 4;
+        }
+
+        if (lineObj.align === 'center') {
+          currentX = (pageWidth / 2) - (totalLineWidth / 2);
+        } else if (lineObj.align === 'right') {
+          currentX = boxRightMargin - totalLineWidth;
+        }
+
+        const lineY = y + 4.5;
+
+        // Render each segment in the line
+        lineObj.segments.forEach((seg) => {
+          let style = 'normal';
+          if (seg.isBold && seg.isItalic) style = 'bolditalic';
+          else if (seg.isBold) style = 'bold';
+          else if (seg.isItalic) style = 'italic';
+
+          doc.setFont('helvetica', style);
+          doc.setFontSize(fontSize);
+
+          doc.text(seg.text, currentX, lineY);
+
+          const segW = doc.getTextWidth(seg.text);
+          if (seg.isUnderline) {
+            doc.setLineWidth(0.2);
+            doc.line(currentX, lineY + 0.5, currentX + segW, lineY + 0.5);
+          }
+
+          currentX += segW;
+        });
+
+        y += contentLineHeight;
+        if (lineObj.isExtraSpacingAfter) {
+          y += 2.0;
+        }
+      });
+
+      // Ensure a minimum height for the box if lines were few
+      const renderH = y - currentBoxStartY;
+      const minBoxH = Math.max(renderH, 20);
+      doc.rect(10, currentBoxStartY, boxWidth, minBoxH);
+      if (minBoxH > renderH) {
+        y = currentBoxStartY + minBoxH;
+      }
+    } else {
+      const emptyBoxH = 25;
+      doc.rect(10, y, pageWidth - 20, emptyBoxH);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      doc.text('Obs.: Conteúdo programático não preenchido', 15, y + 6.5);
+      y += emptyBoxH;
+    }
 
     // Final Footer
     drawFooter();
@@ -8113,11 +8424,11 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                 document.documentElement.requestFullscreen().catch(() => {});
               }
             }}
-            className="p-2.5 md:p-3 px-3 md:px-4 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl md:rounded-2xl transition-all shadow-sm hover:bg-indigo-100 flex items-center gap-2 active:scale-95 cursor-pointer"
+            className="p-2 md:p-3 px-2.5 md:px-4 bg-indigo-600 text-white border border-indigo-500 rounded-xl md:rounded-2xl transition-all shadow-md hover:bg-indigo-700 flex items-center gap-1.5 md:gap-2 active:scale-95 cursor-pointer"
             title="Projetar em TV / Tela Cheia"
           >
-            <Tv size={18} className="text-indigo-600 shrink-0 md:w-5 md:h-5" />
-            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider hidden sm:inline whitespace-nowrap">Projeção TV</span>
+            <Tv size={18} className="text-indigo-200 shrink-0 md:w-5 md:h-5 animate-pulse" />
+            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider whitespace-nowrap">Projeção TV</span>
           </button>
           {canManageSettings && (
             <button onClick={() => setIsSettingsModalOpen(true)} className="p-3 md:p-3.5 text-blue-600 bg-blue-50 border border-blue-100 rounded-xl md:rounded-2xl transition-all shadow-sm active:scale-95" title="Configurações"><Settings size={20} className="md:w-[22px] md:h-[22px]" /></button>

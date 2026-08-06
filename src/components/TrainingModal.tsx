@@ -205,6 +205,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
       ['bold', 'italic', 'underline', 'strike'],
+      [{ 'align': [] }],
       [{ 'list': 'ordered' }, { 'list': 'bullet' }],
       ['clean']
     ],
@@ -382,7 +383,7 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
                   Conteúdo Programático
-                  <span className="text-[8px] font-bold text-blue-500">FORMATO TIPO WORD</span>
+                  <span className="text-[8px] font-bold text-blue-500">FORMATO TIPO WORD (ESQUERDA, CENTRO, DIREITA, JUSTIFICADO)</span>
                 </label>
                 <div className="bg-white rounded-3xl overflow-hidden border border-slate-200 min-h-[300px]">
                   <ReactQuill 
@@ -396,8 +397,20 @@ const TrainingModal: React.FC<TrainingModalProps> = ({ isOpen, onClose, onSave, 
                 <style dangerouslySetInnerHTML={{ __html: `
                   .ql-container.ql-snow { border: none !important; font-family: inherit; font-size: 14px; }
                   .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #f1f5f9 !important; background: #f8fafc; padding: 12px 24px !important; }
-                  .ql-editor { min-height: 250px; padding: 24px !important; font-weight: 500; color: #334155; }
+                  .ql-editor {
+                    min-height: 250px;
+                    padding: 24px !important;
+                    font-weight: 500;
+                    color: #334155;
+                    word-break: normal !important;
+                    overflow-wrap: break-word !important;
+                    hyphens: manual !important;
+                  }
                   .ql-editor p { margin-bottom: 1rem; }
+                  .ql-editor .ql-align-center { text-align: center !important; }
+                  .ql-editor .ql-align-right { text-align: right !important; }
+                  .ql-editor .ql-align-justify { text-align: justify !important; text-justify: inter-word !important; }
+                  .ql-editor .ql-align-left { text-align: left !important; }
                 `}} />
               </div>
 
