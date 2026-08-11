@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { ProductionEntry, RibbonCuttingEntry, Collaborator, OperatorPenalty, Employee, CompanyNotice } from '../types';
+import { GOAL_VALUE } from '../constants';
 import { CompanyNoticeModal } from './CompanyNoticeModal';
 import { WeeklyProductionSummaryModal } from './WeeklyProductionSummaryModal';
 import { Plus, Megaphone, CheckCircle2, FileText, Camera, Upload, Trash2, Presentation } from 'lucide-react';
@@ -326,7 +327,7 @@ export const ProjectionDashboard: React.FC<ProjectionDashboardProps> = ({
 
   // Calculate Metrics
   const metrics = useMemo(() => {
-    const currentGoal = goals[dashboardMonth] || 150000;
+    const currentGoal = goals[dashboardMonth] || GOAL_VALUE;
 
     // Filter current month production
     const monthProdEntries = productionData.filter(
