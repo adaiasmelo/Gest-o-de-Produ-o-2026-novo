@@ -2,12 +2,16 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, Calendar, Download, Printer, Copy, Check, Presentation, ChevronLeft, ChevronRight,
   TrendingUp, TrendingDown, Package, Clock, ShieldAlert, Award, FileSpreadsheet,
-  Layers, Cpu, Sparkles, AlertCircle, BarChart3, CheckCircle2, MessageSquare, Wrench, Share2
+  Layers, Cpu, Sparkles, AlertCircle, BarChart3, CheckCircle2, MessageSquare, Wrench, Share2,
+  Target, AlertTriangle, ArrowRight, Eye, RefreshCw, Edit3, HelpCircle, FileText, CheckSquare,
+  ShieldCheck, ArrowUpRight, Flame, Box, Users, Sliders
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ProductionEntry, RibbonCuttingEntry, Employee } from '../types';
+import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface WeeklyProductionSummaryModalProps {
   isOpen: boolean;
@@ -15,39 +19,29 @@ interface WeeklyProductionSummaryModalProps {
   productionData: ProductionEntry[];
   ribbonData: RibbonCuttingEntry[];
   employees?: Employee[];
+  goals?: Record<string, number>;
 }
 
-// Helper to format weights and numbers nicely
+// Formatters
+const formatTons = (kg: number) => {
+  const tons = (kg || 0) / 1000;
+  return tons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' T';
+};
+
 const formatKg = (val: number) => {
-  return val.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' Kg';
+  return (val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' kg';
 };
 
 const formatM2 = (val: number) => {
-  return val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' m²';
+  return (val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' m²';
 };
 
 const formatMinToHours = (min: number) => {
   if (!min) return '0h 00m';
   const h = Math.floor(min / 60);
-  const m = min % 60;
+  const m = Math.round(min % 60);
   return `${h}h ${m < 10 ? '0' : ''}${m}m`;
 };
-
-// Get ISO Week string or Date range
-function getWeekRange(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  // Set to Monday of the week
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  return { monday, sunday };
-}
 
 function formatDateISO(d: Date) {
   const yyyy = d.getFullYear();
@@ -65,102 +59,243 @@ function formatDateBR(dateStr: string) {
   return dateStr;
 }
 
+// Helper to get past 7 days (including today)
+function getPast7DaysRange(refDate: Date) {
+  const end = new Date(refDate);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(refDate);
+  start.setDate(start.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+// Helper to get Monday-Sunday week
+function getCalendarWeekRange(refDate: Date) {
+  const d = new Date(refDate);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  return { start: monday, end: sunday };
+}
+
+export interface WeeklyMeetingFormState {
+  weeklyGoalTons: number; // Meta semanal em Toneladas (padrão 300 T)
+  weeklyPlanTons: number; // Plano da semana em Toneladas (padrão 300 T)
+  notAttainedReasons: string; // Motivos de não atingir a meta
+  correctiveActions: string; // Plano de Ação Corretiva
+  lossAnalysisNotes: string; // Análise das principais perdas
+  forecastNext7DaysTons: number; // Previsão de produção para os próximos 7 dias (T)
+  rawMaterialsDemand: string; // Demanda e necessidades de matéria-prima
+  scheduledMaintenance: string; // Manutenções preventivas e intervenções programadas
+  operationalAnticipations: string; // Antecipação das necessidades da operação (pessoal, escalas, etc.)
+  priorityActions: string; // Ações prioritárias da semana seguinte
+  ribbonNotes: string; // Notas de corte de fita
+}
+
 export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModalProps> = ({
   isOpen,
   onClose,
   productionData = [],
   ribbonData = [],
   employees = [],
+  goals = {}
 }) => {
-  // Current reference week date
+  // Period Selection Mode: 'last7days' | 'calendarWeek' | 'custom'
+  const [periodMode, setPeriodMode] = useState<'last7days' | 'calendarWeek' | 'custom'>('last7days');
   const [refDate, setRefDate] = useState<Date>(() => new Date());
-  const [mode, setMode] = useState<'standard' | 'presentation'>('standard');
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return formatDateISO(d);
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => formatDateISO(new Date()));
+
+  // Presentation / Print View Mode
+  const [viewMode, setViewMode] = useState<'interactive' | 'preview'>('interactive');
+  const [activePauta, setActivePauta] = useState<'all' | 'meta' | 'losses' | 'forecast' | 'ribbon' | 'operators'>('all');
   const [copiedText, setCopiedText] = useState(false);
-  const [activeTab, setActiveTab] = useState<'consolidated' | 'extrusion' | 'ribbon' | 'notes'>('consolidated');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // Compute week bounds
-  const { monday, sunday } = useMemo(() => getWeekRange(refDate), [refDate]);
-  const mondayStr = useMemo(() => formatDateISO(monday), [monday]);
-  const sundayStr = useMemo(() => formatDateISO(sunday), [sunday]);
-
-  // Notes state saved per week in localStorage
-  const weekKey = `meeting_notes_${mondayStr}_${sundayStr}`;
-  const [meetingNotes, setMeetingNotes] = useState<string>(() => {
-    try {
-      return localStorage.getItem(weekKey) || '';
-    } catch {
-      return '';
+  // Compute Active Range
+  const { startDateStr, endDateStr, startDateObj, endDateObj } = useMemo(() => {
+    if (periodMode === 'last7days') {
+      const { start, end } = getPast7DaysRange(refDate);
+      return {
+        startDateStr: formatDateISO(start),
+        endDateStr: formatDateISO(end),
+        startDateObj: start,
+        endDateObj: end,
+      };
+    } else if (periodMode === 'calendarWeek') {
+      const { start, end } = getCalendarWeekRange(refDate);
+      return {
+        startDateStr: formatDateISO(start),
+        endDateStr: formatDateISO(end),
+        startDateObj: start,
+        endDateObj: end,
+      };
+    } else {
+      return {
+        startDateStr: customStartDate,
+        endDateStr: customEndDate,
+        startDateObj: new Date(customStartDate + 'T00:00:00'),
+        endDateObj: new Date(customEndDate + 'T23:59:59'),
+      };
     }
+  }, [periodMode, refDate, customStartDate, customEndDate]);
+
+  // Storage key for meeting data
+  const meetingStorageKey = `weekly_meeting_${startDateStr}_${endDateStr}`;
+
+  // Form State for manual inputs
+  const [formState, setFormState] = useState<WeeklyMeetingFormState>({
+    weeklyGoalTons: 300,
+    weeklyPlanTons: 300,
+    notAttainedReasons: '',
+    correctiveActions: '',
+    lossAnalysisNotes: '',
+    forecastNext7DaysTons: 300,
+    rawMaterialsDemand: '',
+    scheduledMaintenance: '',
+    operationalAnticipations: '',
+    priorityActions: '',
+    ribbonNotes: '',
   });
 
+  // Load saved meeting data from localStorage & Firestore
   useEffect(() => {
+    let isMounted = true;
     try {
-      const saved = localStorage.getItem(weekKey);
-      setMeetingNotes(saved || '');
-    } catch {
-      setMeetingNotes('');
+      const localData = localStorage.getItem(meetingStorageKey);
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        setFormState(prev => ({ ...prev, ...parsed }));
+      } else {
+        setFormState({
+          weeklyGoalTons: 300,
+          weeklyPlanTons: 300,
+          notAttainedReasons: '',
+          correctiveActions: '',
+          lossAnalysisNotes: '',
+          forecastNext7DaysTons: 300,
+          rawMaterialsDemand: '',
+          scheduledMaintenance: '',
+          operationalAnticipations: '',
+          priorityActions: '',
+          ribbonNotes: '',
+        });
+      }
+    } catch (e) {
+      console.warn('Error loading local meeting data', e);
     }
-  }, [weekKey]);
 
-  const handleNotesChange = (txt: string) => {
-    setMeetingNotes(txt);
+    // Try Firestore
+    const fetchFirestore = async () => {
+      try {
+        const docRef = doc(db, 'weekly_meetings', `${startDateStr}_${endDateStr}`);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && isMounted) {
+          const fsData = docSnap.data() as Partial<WeeklyMeetingFormState>;
+          setFormState(prev => ({ ...prev, ...fsData }));
+          try {
+            localStorage.setItem(meetingStorageKey, JSON.stringify({ ...formState, ...fsData }));
+          } catch {}
+        }
+      } catch (err) {
+        // Fallback to local only
+      }
+    };
+    fetchFirestore();
+
+    return () => { isMounted = false; };
+  }, [meetingStorageKey, startDateStr, endDateStr]);
+
+  // Handler to update form fields
+  const handleFieldChange = (field: keyof WeeklyMeetingFormState, value: any) => {
+    setFormState(prev => {
+      const updated = { ...prev, [field]: value };
+      try {
+        localStorage.setItem(meetingStorageKey, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Save to Firestore explicitly
+  const handleSaveToCloud = async () => {
+    setSaveStatus('saving');
     try {
-      localStorage.setItem(weekKey, txt);
-    } catch {}
+      localStorage.setItem(meetingStorageKey, JSON.stringify(formState));
+      const docRef = doc(db, 'weekly_meetings', `${startDateStr}_${endDateStr}`);
+      await setDoc(docRef, {
+        ...formState,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch (e) {
+      console.warn('Error saving to Firestore:', e);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    }
   };
 
-  // Week navigation
-  const handlePrevWeek = () => {
-    const prev = new Date(refDate);
-    prev.setDate(prev.getDate() - 7);
-    setRefDate(prev);
+  // Period Navigation
+  const handleShiftPeriod = (days: number) => {
+    const nextDate = new Date(refDate);
+    nextDate.setDate(nextDate.getDate() + days);
+    setRefDate(nextDate);
   };
 
-  const handleNextWeek = () => {
-    const next = new Date(refDate);
-    next.setDate(next.getDate() + 7);
-    setRefDate(next);
-  };
-
-  const handleCurrentWeek = () => {
+  const handleResetToCurrent = () => {
     setRefDate(new Date());
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    setCustomStartDate(formatDateISO(d));
+    setCustomEndDate(formatDateISO(new Date()));
   };
 
-  // --- FILTER DATA FOR SELECTED WEEK ---
-  const weeklyExtrusionData = useMemo(() => {
+  // --- FILTER PRODUCTION DATA ---
+  const filteredExtrusionData = useMemo(() => {
     return productionData.filter(item => {
       if (!item.date) return false;
-      return item.date >= mondayStr && item.date <= sundayStr;
+      return item.date >= startDateStr && item.date <= endDateStr;
     });
-  }, [productionData, mondayStr, sundayStr]);
+  }, [productionData, startDateStr, endDateStr]);
 
-  const weeklyRibbonData = useMemo(() => {
+  const filteredRibbonData = useMemo(() => {
     return ribbonData.filter(item => {
       if (!item.date) return false;
-      return item.date >= mondayStr && item.date <= sundayStr;
+      return item.date >= startDateStr && item.date <= endDateStr;
     });
-  }, [ribbonData, mondayStr, sundayStr]);
+  }, [ribbonData, startDateStr, endDateStr]);
 
-  // --- PREVIOUS WEEK DATA FOR COMPARISON ---
-  const prevMonday = useMemo(() => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() - 7);
-    return formatDateISO(d);
-  }, [monday]);
-
-  const prevSunday = useMemo(() => {
-    const d = new Date(sunday);
-    d.setDate(d.getDate() - 7);
-    return formatDateISO(d);
-  }, [sunday]);
+  // Previous 7 days period for trend comparison
+  const { prevStartDateStr, prevEndDateStr } = useMemo(() => {
+    const pStart = new Date(startDateObj);
+    pStart.setDate(pStart.getDate() - 7);
+    const pEnd = new Date(startDateObj);
+    pEnd.setDate(pEnd.getDate() - 1);
+    return {
+      prevStartDateStr: formatDateISO(pStart),
+      prevEndDateStr: formatDateISO(pEnd),
+    };
+  }, [startDateObj]);
 
   const prevExtrusionData = useMemo(() => {
-    return productionData.filter(item => item.date >= prevMonday && item.date <= prevSunday);
-  }, [productionData, prevMonday, prevSunday]);
-
-  const prevRibbonData = useMemo(() => {
-    return ribbonData.filter(item => item.date >= prevMonday && item.date <= prevSunday);
-  }, [ribbonData, prevMonday, prevSunday]);
+    return productionData.filter(item => {
+      if (!item.date) return false;
+      return item.date >= prevStartDateStr && item.date <= prevEndDateStr;
+    });
+  }, [productionData, prevStartDateStr, prevEndDateStr]);
 
   // --- EXTRUSION CALCULATIONS ---
   const extStats = useMemo(() => {
@@ -177,9 +312,13 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
     let eremaKg = 0;
     let eremaBags = 0;
 
-    const machineMap: Record<string, { netKg: number; grossKg: number; ecoA: number; borra: number }> = {};
-    const opMap: Record<string, { netKg: number; entries: number; ecoA: number; borra: number }> = {};
-    const shiftMap: Record<string, { netKg: number; entries: number }> = {};
+    let cast1NetKg = 0;
+    let cast2NetKg = 0;
+    let otherMachinesNetKg = 0;
+
+    const machineMap: Record<string, { netKg: number; grossKg: number; ecoA: number; ecoBP: number; ecoBM: number; borra: number }> = {};
+    const opMap: Record<string, { netKg: number; entries: number; ecoA: number; borra: number; scrapKg: number }> = {};
+    const shiftMap: Record<string, { netKg: number; entries: number; scrapKg: number }> = {};
     const datesSet = new Set<string>();
 
     const machineDowntimeMap: Record<string, {
@@ -195,11 +334,21 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       'Erema':  { name: 'Erema',  maintMin: 0, procMin: 0, otherMin: 0, totalStopMin: 0, reasons: [] },
     };
 
-    weeklyExtrusionData.forEach(e => {
+    // Stoppages list with specific notes
+    const stoppagesList: Array<{
+      date: string;
+      machine: string;
+      shift: string;
+      type: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho';
+      durationMin: number;
+      reason: string;
+    }> = [];
+
+    filteredExtrusionData.forEach(e => {
       if (e.date) datesSet.add(e.date);
       const isStopped = e.isMaintenanceEntry || e.isNoWorkDay;
 
-      // Track Machine Downtime by Machine Name
+      // Track Machine Downtime
       const rawM = (e.machine || '').trim().toLowerCase();
       let mKey = 'Cast 1';
       if (rawM.includes('cast 1') || rawM.includes('cast1')) mKey = 'Cast 1';
@@ -221,62 +370,109 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       machineDowntimeMap[mKey].otherMin += eOther;
       machineDowntimeMap[mKey].totalStopMin += eTotalStop;
 
-      if (e.manutencaoMotivo && e.manutencaoMotivo.trim()) {
+      if (eMaint > 0 && e.manutencaoMotivo) {
+        stoppagesList.push({
+          date: e.date,
+          machine: mKey,
+          shift: e.shift || '-',
+          type: 'Manutenção',
+          durationMin: eMaint,
+          reason: e.manutencaoMotivo.trim(),
+        });
         const r = `Manutenção: ${e.manutencaoMotivo.trim()}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
       }
-      if (e.processoMotivo && e.processoMotivo.trim()) {
+      if (eProc > 0 && e.processoMotivo) {
+        stoppagesList.push({
+          date: e.date,
+          machine: mKey,
+          shift: e.shift || '-',
+          type: 'Processo',
+          durationMin: eProc,
+          reason: e.processoMotivo.trim(),
+        });
         const r = `Processo: ${e.processoMotivo.trim()}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
       }
-      if (e.outrosMotivo && e.outrosMotivo.trim()) {
+      if (eOther > 0 && e.outrosMotivo) {
+        stoppagesList.push({
+          date: e.date,
+          machine: mKey,
+          shift: e.shift || '-',
+          type: 'Outros',
+          durationMin: eOther,
+          reason: e.outrosMotivo.trim(),
+        });
         const r = `Outros: ${e.outrosMotivo.trim()}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
       }
-      if (e.noWorkReason && e.noWorkReason.trim()) {
+      if (e.isNoWorkDay && e.noWorkReason) {
+        stoppagesList.push({
+          date: e.date,
+          machine: mKey,
+          shift: e.shift || '-',
+          type: 'Sem Trabalho',
+          durationMin: 720,
+          reason: e.noWorkReason.trim(),
+        });
         const r = `Sem Trabalho: ${e.noWorkReason.trim()}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
       }
 
       if (!isStopped) {
-        grossKg += Number(e.grossWeight || 0);
-        taraKg += Number(e.tara || 0);
-        netKg += Number(e.netWeight || 0);
-        ecoA += Number(e.ecoA || 0);
-        ecoBP += Number(e.ecoBP || 0);
-        ecoBM += Number(e.ecoBM || 0);
-        borra += Number(e.borraTotal || 0);
+        const eGross = Number(e.grossWeight || 0);
+        const eTara = Number(e.tara || 0);
+        const eNet = Number(e.netWeight || 0);
+        const eEcoA = Number(e.ecoA || 0);
+        const eEcoBP = Number(e.ecoBP || 0);
+        const eEcoBM = Number(e.ecoBM || 0);
+        const eBorra = Number(e.borraTotal || 0);
+        const eRefuse = eEcoA + eEcoBP + eEcoBM + eBorra;
+
+        grossKg += eGross;
+        taraKg += eTara;
+        netKg += eNet;
+        ecoA += eEcoA;
+        ecoBP += eEcoBP;
+        ecoBM += eEcoBM;
+        borra += eBorra;
 
         // Machine breakdown
         const m = (e.machine || 'Sem Máquina').toLowerCase().trim();
-        if (!machineMap[m]) machineMap[m] = { netKg: 0, grossKg: 0, ecoA: 0, borra: 0 };
-        machineMap[m].netKg += Number(e.netWeight || 0);
-        machineMap[m].grossKg += Number(e.grossWeight || 0);
-        machineMap[m].ecoA += Number(e.ecoA || 0);
-        machineMap[m].borra += Number(e.borraTotal || 0);
+        if (m.includes('cast 1') || m.includes('cast1')) cast1NetKg += eNet;
+        else if (m.includes('cast 2') || m.includes('cast2')) cast2NetKg += eNet;
+        else otherMachinesNetKg += eNet;
+
+        if (!machineMap[m]) machineMap[m] = { netKg: 0, grossKg: 0, ecoA: 0, ecoBP: 0, ecoBM: 0, borra: 0 };
+        machineMap[m].netKg += eNet;
+        machineMap[m].grossKg += eGross;
+        machineMap[m].ecoA += eEcoA;
+        machineMap[m].ecoBP += eEcoBP;
+        machineMap[m].ecoBM += eEcoBM;
+        machineMap[m].borra += eBorra;
 
         // Operator breakdown
         if (e.operator && e.operator !== 'PARADA' && e.operator !== 'SEM APONTAMENTO') {
           const op = e.operator;
-          if (!opMap[op]) opMap[op] = { netKg: 0, entries: 0, ecoA: 0, borra: 0 };
-          opMap[op].netKg += Number(e.netWeight || 0);
+          if (!opMap[op]) opMap[op] = { netKg: 0, entries: 0, ecoA: 0, borra: 0, scrapKg: 0 };
+          opMap[op].netKg += eNet;
           opMap[op].entries += 1;
-          opMap[op].ecoA += Number(e.ecoA || 0);
-          opMap[op].borra += Number(e.borraTotal || 0);
+          opMap[op].ecoA += eEcoA;
+          opMap[op].borra += eBorra;
+          opMap[op].scrapKg += eRefuse;
         }
 
         // Shift breakdown
         if (e.shift) {
           const sh = e.shift;
-          if (!shiftMap[sh]) shiftMap[sh] = { netKg: 0, entries: 0 };
-          shiftMap[sh].netKg += Number(e.netWeight || 0);
+          if (!shiftMap[sh]) shiftMap[sh] = { netKg: 0, entries: 0, scrapKg: 0 };
+          shiftMap[sh].netKg += eNet;
           shiftMap[sh].entries += 1;
+          shiftMap[sh].scrapKg += eRefuse;
         }
 
         // Erema recycled
-        if (m.includes('erema')) {
-          eremaKg += Number(e.netWeight || 0);
-        }
+        if (m.includes('erema')) eremaKg += eNet;
         if (e.recycledUsed) eremaKg += Number(e.recycledUsed || 0);
         if (e.recycledBags) eremaBags += Number(e.recycledBags || 0);
       }
@@ -286,48 +482,95 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       otherMin += eOther;
     });
 
+    const castNetKg = cast1NetKg + cast2NetKg;
+    const castNetTons = castNetKg / 1000;
     const activeDays = Math.max(1, datesSet.size);
     const avgDailyNetKg = netKg / activeDays;
+    const avgDailyNetTons = (netKg / 1000) / activeDays;
+    const avgDailyCastNetKg = castNetKg / activeDays;
+    const avgDailyCastNetTons = castNetTons / activeDays;
     const totalRefuseKg = ecoA + ecoBP + ecoBM + borra;
+    const totalRefuseTons = totalRefuseKg / 1000;
     const totalStopMin = maintMin + procMin + otherMin;
     const scrapRatio = grossKg > 0 ? (totalRefuseKg / grossKg) * 100 : 0;
 
-    // Sort operators
+    // Top operators
     const topOperators = Object.entries(opMap)
-      .map(([name, data]) => ({ name, ...data }))
+      .map(([name, data]) => ({ name, ...data, scrapRatio: data.netKg > 0 ? (data.scrapKg / (data.netKg + data.scrapKg)) * 100 : 0 }))
       .sort((a, b) => b.netKg - a.netKg)
       .slice(0, 5);
+
+    // Estimate production lost from stops (Assuming ~1000 kg/hour average nominal output between lines)
+    const estimatedLostKg = (totalStopMin / 60) * 900;
+    const estimatedLostTons = estimatedLostKg / 1000;
 
     return {
       grossKg,
       taraKg,
       netKg,
+      netTons: netKg / 1000,
+      castNetKg,
+      castNetTons,
+      cast1NetKg,
+      cast1NetTons: cast1NetKg / 1000,
+      cast2NetKg,
+      cast2NetTons: cast2NetKg / 1000,
+      otherMachinesNetKg,
       ecoA,
       ecoBP,
       ecoBM,
       borra,
       totalRefuseKg,
+      totalRefuseTons,
       scrapRatio,
       maintMin,
       procMin,
       otherMin,
       totalStopMin,
       eremaKg,
+      eremaTons: eremaKg / 1000,
       eremaBags,
       activeDays,
       avgDailyNetKg,
+      avgDailyNetTons,
+      avgDailyCastNetKg,
+      avgDailyCastNetTons,
       machineMap,
       shiftMap,
       topOperators,
       machineDowntimeMap,
-      entriesCount: weeklyExtrusionData.length,
+      stoppagesList,
+      estimatedLostTons,
+      entriesCount: filteredExtrusionData.length,
     };
-  }, [weeklyExtrusionData]);
+  }, [filteredExtrusionData]);
 
-  // Previous week Extrusion totals
-  const prevExtNetKg = useMemo(() => {
-    return prevExtrusionData.reduce((acc, curr) => acc + Number(curr.netWeight || 0), 0);
+  // Previous week comparison (Cast 1 and Cast 2 only, disregarding Erema for goal comparisons)
+  const prevExtCastNetKg = useMemo(() => {
+    return prevExtrusionData.reduce((acc, curr) => {
+      const m = (curr.machine || '').toLowerCase();
+      if (!m.includes('erema')) {
+        return acc + Number(curr.netWeight || 0);
+      }
+      return acc;
+    }, 0);
   }, [prevExtrusionData]);
+  const prevExtCastNetTons = prevExtCastNetKg / 1000;
+  const extTonsVariation = prevExtCastNetTons > 0 ? ((extStats.castNetTons - prevExtCastNetTons) / prevExtCastNetTons) * 100 : 0;
+  const extTonsDelta = extStats.castNetTons - prevExtCastNetTons;
+
+  // --- GOAL & PLAN METRICS (Base: 300 Toneladas por semana para Cast 1 e Cast 2) ---
+  const weeklyGoalTons = formState.weeklyGoalTons || 300;
+  const weeklyPlanTons = formState.weeklyPlanTons || 300;
+  
+  // % do plano realizado (Cast 1 + Cast 2)
+  const percentPlanRealized = weeklyPlanTons > 0 ? (extStats.castNetTons / weeklyPlanTons) * 100 : 0;
+  const deltaPlanTons = extStats.castNetTons - weeklyPlanTons;
+
+  // Meta x Realizado (Cast 1 + Cast 2)
+  const percentGoalAttained = weeklyGoalTons > 0 ? (extStats.castNetTons / weeklyGoalTons) * 100 : 0;
+  const deltaGoalTons = extStats.castNetTons - weeklyGoalTons;
+  const isGoalAttained = extStats.castNetTons >= weeklyGoalTons;
 
   // --- RIBBON CUTTING CALCULATIONS ---
   const ribbonStats = useMemo(() => {
@@ -340,12 +583,8 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
 
     const typeMap: Record<string, { jumboM2: number; producedM2: number; wasteKg: number }> = {};
     const opMap: Record<string, { producedM2: number; rejectedM2: number; wasteKg: number; entries: number }> = {};
-    const shiftMap: Record<string, { producedM2: number; entries: number }> = {};
-    const datesSet = new Set<string>();
 
-    weeklyRibbonData.forEach(item => {
-      if (item.date) datesSet.add(item.date);
-
+    filteredRibbonData.forEach(item => {
       producedM2 += Number(item.producedM2 || 0);
       rejectedM2 += Number(item.rejectedM2 || 0);
       wasteKg += Number(item.wasteWeight || 0);
@@ -355,14 +594,12 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       const stMin = Number(item.stoppedMinutes || 0) + Number(item.manutencaoMin || 0) + Number(item.processoMin || 0) + Number(item.outrosMin || 0);
       stoppedMin += stMin;
 
-      // Jumbo type breakdown
       const jt = (item.jumboType || 'Outro').toUpperCase().trim();
       if (!typeMap[jt]) typeMap[jt] = { jumboM2: 0, producedM2: 0, wasteKg: 0 };
       typeMap[jt].jumboM2 += Number(item.jumboM2 || 0);
       typeMap[jt].producedM2 += Number(item.producedM2 || 0);
       typeMap[jt].wasteKg += Number(item.wasteWeight || 0);
 
-      // Operator breakdown
       if (item.operator) {
         const op = item.operator;
         if (!opMap[op]) opMap[op] = { producedM2: 0, rejectedM2: 0, wasteKg: 0, entries: 0 };
@@ -371,22 +608,11 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
         opMap[op].wasteKg += Number(item.wasteWeight || 0);
         opMap[op].entries += 1;
       }
-
-      // Shift breakdown
-      if (item.shift) {
-        const sh = item.shift;
-        if (!shiftMap[sh]) shiftMap[sh] = { producedM2: 0, entries: 0 };
-        shiftMap[sh].producedM2 += Number(item.producedM2 || 0);
-        shiftMap[sh].entries += 1;
-      }
     });
 
-    const activeDays = Math.max(1, datesSet.size);
-    const avgDailyProducedM2 = producedM2 / activeDays;
     const yieldRate = jumboM2 > 0 ? (producedM2 / jumboM2) * 100 : 0;
-    const jumbosEquivalent = jumboM2 / 6000; // Standard jumbo approx 6000 m²
+    const jumbosEquivalent = jumboM2 / 6000;
 
-    // Top cutters
     const topCutters = Object.entries(opMap)
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.producedM2 - a.producedM2)
@@ -401,86 +627,79 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       totalRolls,
       stoppedMin,
       yieldRate,
-      activeDays,
-      avgDailyProducedM2,
       typeMap,
-      shiftMap,
       topCutters,
-      entriesCount: weeklyRibbonData.length,
+      entriesCount: filteredRibbonData.length,
     };
-  }, [weeklyRibbonData]);
+  }, [filteredRibbonData]);
 
-  // Previous week Ribbon totals
-  const prevRibbonProducedM2 = useMemo(() => {
-    return prevRibbonData.reduce((acc, curr) => acc + Number(curr.producedM2 || 0), 0);
-  }, [prevRibbonData]);
-
-  // Variations %
-  const extVariation = prevExtNetKg > 0 ? ((extStats.netKg - prevExtNetKg) / prevExtNetKg) * 100 : 0;
-  const ribbonVariation = prevRibbonProducedM2 > 0 ? ((ribbonStats.producedM2 - prevRibbonProducedM2) / prevRibbonProducedM2) * 100 : 0;
-
-  // Chart Data: Extrusion daily breakdown for the week
+  // Chart Data: Daily Extrusion in Tons
   const dailyExtrusionChart = useMemo(() => {
-    const map: Record<string, { date: string; cast1: number; cast2: number; netTotal: number }> = {};
-    weeklyExtrusionData.forEach(e => {
+    const map: Record<string, { date: string; cast1: number; cast2: number; erema: number; total: number }> = {};
+    filteredExtrusionData.forEach(e => {
       const d = formatDateBR(e.date);
-      if (!map[d]) map[d] = { date: d, cast1: 0, cast2: 0, netTotal: 0 };
+      if (!map[d]) map[d] = { date: d, cast1: 0, cast2: 0, erema: 0, total: 0 };
       const m = (e.machine || '').toLowerCase();
-      const net = Number(e.netWeight || 0);
-      map[d].netTotal += net;
-      if (m.includes('cast 1')) map[d].cast1 += net;
-      if (m.includes('cast 2')) map[d].cast2 += net;
+      const netT = (Number(e.netWeight || 0)) / 1000;
+      map[d].total += netT;
+      if (m.includes('cast 1') || m.includes('cast1')) map[d].cast1 += netT;
+      else if (m.includes('cast 2') || m.includes('cast2')) map[d].cast2 += netT;
+      else if (m.includes('erema')) map[d].erema += netT;
     });
     return Object.values(map);
-  }, [weeklyExtrusionData]);
+  }, [filteredExtrusionData]);
 
-  // Chart Data: Ribbon daily breakdown for the week
-  const dailyRibbonChart = useMemo(() => {
-    const map: Record<string, { date: string; producedM2: number; jumboM2: number }> = {};
-    weeklyRibbonData.forEach(r => {
-      const d = formatDateBR(r.date);
-      if (!map[d]) map[d] = { date: d, producedM2: 0, jumboM2: 0 };
-      map[d].producedM2 += Number(r.producedM2 || 0);
-      map[d].jumboM2 += Number(r.jumboM2 || 0);
-    });
-    return Object.values(map);
-  }, [weeklyRibbonData]);
+  // Chart Data: Losses Breakdown
+  const lossesChartData = useMemo(() => {
+    return [
+      { name: 'Eco A (Sede)', value: extStats.ecoA, fill: '#3b82f6' },
+      { name: 'Eco BP (Produção)', value: extStats.ecoBP, fill: '#6366f1' },
+      { name: 'Eco BM (Manut.)', value: extStats.ecoBM, fill: '#f59e0b' },
+      { name: 'Borra de Extrusão', value: extStats.borra, fill: '#ef4444' },
+    ].filter(i => i.value > 0);
+  }, [extStats]);
 
-  // Chart Data: Jumbo Types Pie
-  const jumboPieData = useMemo(() => {
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'];
-    return (Object.entries(ribbonStats.typeMap) as [string, { jumboM2: number; producedM2: number; wasteKg: number }][]).map(([type, val], idx) => ({
-      name: type,
-      value: val.producedM2,
-      color: COLORS[idx % COLORS.length]
-    })).filter(item => item.value > 0);
-  }, [ribbonStats.typeMap]);
-
-  // --- GENERATE PLAIN TEXT SUMMARY (FOR WHATSAPP / EMAIL) ---
+  // --- COPY WHATSAPP SUMMARY ---
   const handleCopyTextSummary = () => {
     const text = `
-📊 *RESUMO EXECUTIVO SEMANAL DE PRODUÇÃO*
-🗓️ *Período:* ${formatDateBR(mondayStr)} a ${formatDateBR(sundayStr)}
+🏭 *APRESENTAÇÃO SEMANAL DE RESULTADOS - PLANTA*
+🗓️ *Período:* ${formatDateBR(startDateStr)} a ${formatDateBR(endDateStr)}
 
-🏭 *1. EXTRUSÃO (PLÁSTICO & EREMA)*
-• Produção Líquida Total: *${formatKg(extStats.netKg)}*
-• Média Diária: *${formatKg(extStats.avgDailyNetKg)}/dia* (${extStats.activeDays} dias ativos)
-• Taxa de Sucata/Perda: *${extStats.scrapRatio.toFixed(2)}%* (Total Refugo: ${formatKg(extStats.totalRefuseKg)})
-• Reciclagem Erema: *${formatKg(extStats.eremaKg)}* (${extStats.eremaBags} bags)
-• Paradas Totais: *${formatMinToHours(extStats.totalStopMin)}* (Manut: ${formatMinToHours(extStats.maintMin)}, Proc: ${formatMinToHours(extStats.procMin)})
+📌 *PRODUÇÃO EXTRUSÃO (CAST 1 & 2 - META SEMANAL ${weeklyGoalTons.toFixed(0)} T)*
+• *Toneladas Cast 1 & 2:* ${extStats.castNetTons.toFixed(2)} T (${formatKg(extStats.castNetKg)})
+  - Cast 1: ${extStats.cast1NetTons.toFixed(2)} T (${formatKg(extStats.cast1NetKg)})
+  - Cast 2: ${extStats.cast2NetTons.toFixed(2)} T (${formatKg(extStats.cast2NetKg)})
+• *Meta Semanal x Realizado:* Meta ${weeklyGoalTons.toFixed(2)} T | Realizado ${extStats.castNetTons.toFixed(2)} T (${percentGoalAttained.toFixed(1)}% atingido | Delta: ${deltaGoalTons >= 0 ? `+${deltaGoalTons.toFixed(2)}` : deltaGoalTons.toFixed(2)} T)
+• *% do Plano Realizado:* ${percentPlanRealized.toFixed(1)}% (Plano PCP: ${weeklyPlanTons.toFixed(2)} T)
+• *Média Diária (Cast 1 & 2):* ${extStats.avgDailyCastNetTons.toFixed(2)} T/dia (${extStats.activeDays} dias ativos)
 
-🎀 *2. CORTE DE FITA ADESIVA*
-• Área Produzida Total: *${formatM2(ribbonStats.producedM2)}* (${ribbonStats.totalRolls.toLocaleString('pt-BR')} un)
-• Jumbos Consumidos: *${formatM2(ribbonStats.jumboM2)}* (~${ribbonStats.jumbosEquivalent.toFixed(1)} jumbos)
-• Rendimento da Fita: *${ribbonStats.yieldRate.toFixed(1)}%*
-• Área Não Conforme: *${formatM2(ribbonStats.rejectedM2)}*
-• Sucata em Peso: *${formatKg(ribbonStats.wasteKg)}*
+♻️ *RECICLAGEM EREMA (SEM META ESTABELECIDA)*
+• *Total Reciclado:* ${extStats.eremaTons.toFixed(2)} T (${extStats.eremaBags} bags processados)
 
-💡 *NOTAS / PAUTAS DA REUNIÃO:*
-${meetingNotes.trim() ? meetingNotes.trim() : 'Nenhuma nota registrada para esta semana.'}
+⚠️ *PRINCIPAIS PERDAS & PARADAS*
+• *Taxa de Sucata:* ${extStats.scrapRatio.toFixed(2)}% (Total Perda: ${extStats.totalRefuseTons.toFixed(2)} T / ${formatKg(extStats.totalRefuseKg)})
+  - Eco A (Sede): ${formatKg(extStats.ecoA)}
+  - Eco BP: ${formatKg(extStats.ecoBP)} | Eco BM: ${formatKg(extStats.ecoBM)} | Borra: ${formatKg(extStats.borra)}
+• *Tempo Total Parado:* ${formatMinToHours(extStats.totalStopMin)} (Manutenção: ${formatMinToHours(extStats.maintMin)} | Processo: ${formatMinToHours(extStats.procMin)})
 
-----------------------------------------
-_Relatório Gerado via Manupackaging Gestão de Produção_
+🎯 *MOTIVOS DE NÃO ATINGIR A META / GAPS OPERACIONAIS:*
+${formState.notAttainedReasons.trim() || 'Nenhum desvio crítico apontado.'}
+
+🛠️ *PLANO DE AÇÃO CORRETIVA:*
+${formState.correctiveActions.trim() || 'Sem ações pendentes registradas.'}
+
+🔮 *PREVISÃO PARA OS PRÓXIMOS 7 DIAS (ANTECIPAÇÃO):*
+• *Meta Prevista:* ${formState.forecastNext7DaysTons || 300} T
+• *Matéria-Prima / Insumos:* ${formState.rawMaterialsDemand.trim() || 'Estoque e demandas alinhadas.'}
+• *Manutenções Programadas:* ${formState.scheduledMaintenance.trim() || 'Sem intervenções de grande porte.'}
+• *Necessidades Operacionais:* ${formState.operationalAnticipations.trim() || 'Escala normal de produção.'}
+• *Ações Prioritárias:* ${formState.priorityActions.trim() || 'Manter ritmo operacional e foco no scrap.'}
+
+🎀 *CORTE DE FITA ADESIVA*
+• Área Produzida: ${formatM2(ribbonStats.producedM2)} (${ribbonStats.totalRolls.toLocaleString('pt-BR')} un) | Rendimento: ${ribbonStats.yieldRate.toFixed(1)}%
+
+------------------------------------------------
+_Relatório Padronizado de Reunião Semanal • Manupackaging Brasil_
     `.trim();
 
     navigator.clipboard.writeText(text);
@@ -488,960 +707,1232 @@ _Relatório Gerado via Manupackaging Gestão de Produção_
     setTimeout(() => setCopiedText(false), 3000);
   };
 
-  // --- GENERATE PDF REPORT ---
+  // --- PRINT WINDOW ---
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // --- DOWNLOAD PDF (jsPDF + autoTable in pristine light layout) ---
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Header Background
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, pageWidth, 35, 'F');
+    // Top Header - Clean Timbre
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.rect(0, 0, pageWidth, 28, 'F');
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.line(0, 28, pageWidth, 28);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(255, 255, 255);
-    doc.text('MANUPACKAGING BRASIL', 14, 15);
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text('MANUPACKAGING BRASIL', 14, 11);
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(148, 163, 184);
-    doc.text('RELATÓRIO SEMANAL EXECUTIVO DE PRODUÇÃO', 14, 22);
-
-    doc.setFontSize(9);
-    doc.setTextColor(59, 130, 246);
-    doc.text(`Período: ${formatDateBR(mondayStr)} a ${formatDateBR(sundayStr)}`, 14, 29);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235); // blue-600
+    doc.text('REUNIÃO SEMANAL DE RESULTADOS • APRESENTAÇÃO DA PLANTA', 14, 18);
 
     doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth - 14, 29, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Período Avaliado (Últimos 7 Dias): ${formatDateBR(startDateStr)} a ${formatDateBR(endDateStr)}`, 14, 24);
+    doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, pageWidth - 14, 24, { align: 'right' });
 
-    let currentY = 42;
+    let currentY = 34;
 
-    // Extrusion Summary Box
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text('1. RESUMO DE EXTRUSÃO', 14, currentY);
-    currentY += 4;
-
-    const extTableData = [
-      ['Produção Líquida Total (Kg)', formatKg(extStats.netKg), 'Média Diária (Kg/dia)', formatKg(extStats.avgDailyNetKg)],
-      ['Produção Bruta (Kg)', formatKg(extStats.grossKg), 'Taxa de Sucata/Rejeito (%)', `${extStats.scrapRatio.toFixed(2)}%`],
-      ['Total Refugo / Perda (Kg)', formatKg(extStats.totalRefuseKg), 'Reciclagem Erema (Kg)', formatKg(extStats.eremaKg)],
-      ['Refugo Eco A (Sede)', formatKg(extStats.ecoA), 'Refugo Eco BP', formatKg(extStats.ecoBP)],
-      ['Refugo Eco BM', formatKg(extStats.ecoBM), 'Borra Total', formatKg(extStats.borra)],
-      ['Tempo Total Paradas', formatMinToHours(extStats.totalStopMin), 'Paradas Manutenção', formatMinToHours(extStats.maintMin)],
-    ];
-
-    autoTable(doc, {
-      startY: currentY,
-      body: extTableData,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2.5 },
-      headStyles: { fillColor: [30, 41, 59] },
-      columnStyles: {
-        0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-        1: { fontStyle: 'bold', textColor: [37, 99, 235] },
-        2: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-        3: { fontStyle: 'bold' },
-      },
-    });
-
-    currentY = (doc as any).lastAutoTable.finalY + 8;
-
-    // Ribbon Summary Box
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text('2. RESUMO DE CORTE DE FITA ADESIVA', 14, currentY);
-    currentY += 4;
-
-    const ribbonTableData = [
-      ['Área Produzida Total (m²)', formatM2(ribbonStats.producedM2), 'Rendimento da Fita (%)', `${ribbonStats.yieldRate.toFixed(1)}%`],
-      ['Jumbos Consumidos (m²)', formatM2(ribbonStats.jumboM2), 'Equivalente em Jumbos', `~${ribbonStats.jumbosEquivalent.toFixed(1)} Qtd`],
-      ['Total de Rollos (unidades)', `${ribbonStats.totalRolls.toLocaleString('pt-BR')} un`, 'Área Não Conforme (m²)', formatM2(ribbonStats.rejectedM2)],
-      ['Sucata em Peso (Kg)', formatKg(ribbonStats.wasteKg), 'Tempo de Paradas', formatMinToHours(ribbonStats.stoppedMin)],
-    ];
-
-    autoTable(doc, {
-      startY: currentY,
-      body: ribbonTableData,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2.5 },
-      columnStyles: {
-        0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-        1: { fontStyle: 'bold', textColor: [16, 185, 129] },
-        2: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-        3: { fontStyle: 'bold' },
-      },
-    });
-
-    currentY = (doc as any).lastAutoTable.finalY + 8;
-
-    // Operator Rankings Table
+    // SECTION 1: PRODUÇÃO & METAS PRINCIPAIS (Cast 1 & 2 com meta, Erema sem meta)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text('3. OPERADORES DESTAQUE DA SEMANA', 14, currentY);
+    doc.text('1. INDICADORES CHAVE DE PRODUÇÃO & METAS (CAST 1 & 2)', 14, currentY);
     currentY += 4;
 
-    const opRows = [];
-    const maxLen = Math.max(extStats.topOperators.length, ribbonStats.topCutters.length);
-    for (let i = 0; i < Math.min(5, maxLen); i++) {
-      const extOp = extStats.topOperators[i];
-      const ribOp = ribbonStats.topCutters[i];
-      opRows.push([
-        `#${i + 1} Extrusão`,
-        extOp ? extOp.name : '-',
-        extOp ? formatKg(extOp.netKg) : '-',
-        `#${i + 1} Fita`,
-        ribOp ? ribOp.name : '-',
-        ribOp ? formatM2(ribOp.producedM2) : '-',
-      ]);
+    const prodSummaryData = [
+      ['Produção Cast 1 & 2 (Com Meta)', `${extStats.castNetTons.toFixed(2)} T (${formatKg(extStats.castNetKg)})`, 'Meta Semanal (Cast 1 & 2)', `${weeklyGoalTons.toFixed(2)} T`],
+      ['% da Meta Atingida', `${percentGoalAttained.toFixed(1)}% (${deltaGoalTons >= 0 ? `+${deltaGoalTons.toFixed(2)} T` : `${deltaGoalTons.toFixed(2)} T`})`, 'Plano Semanal PCP', `${weeklyPlanTons.toFixed(2)} T`],
+      ['% do Plano Realizado', `${percentPlanRealized.toFixed(1)}% (${deltaPlanTons >= 0 ? `+${deltaPlanTons.toFixed(2)} T` : `${deltaPlanTons.toFixed(2)} T`})`, 'Média Diária (Cast 1 & 2)', `${extStats.avgDailyCastNetTons.toFixed(2)} T/dia (${extStats.activeDays} dias)`],
+      ['Produção Cast 1', `${extStats.cast1NetTons.toFixed(2)} T (${formatKg(extStats.cast1NetKg)})`, 'Produção Cast 2', `${extStats.cast2NetTons.toFixed(2)} T (${formatKg(extStats.cast2NetKg)})`],
+      ['Reciclagem Erema (Sem Meta)', `${extStats.eremaTons.toFixed(2)} T (${extStats.eremaBags} bags)`, 'Taxa de Sucata / Perda', `${extStats.scrapRatio.toFixed(2)}% (${extStats.totalRefuseTons.toFixed(2)} T)`],
+      ['Tempo Total Parado', formatMinToHours(extStats.totalStopMin), 'Paradas Manutenção', formatMinToHours(extStats.maintMin)],
+    ];
+
+    autoTable(doc, {
+      startY: currentY,
+      body: prodSummaryData,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2.2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [248, 250, 252], cellWidth: 45 },
+        1: { fontStyle: 'bold', textColor: [37, 99, 235], cellWidth: 50 },
+        2: { fontStyle: 'bold', fillColor: [248, 250, 252], cellWidth: 45 },
+        3: { fontStyle: 'bold', cellWidth: 45 },
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // SECTION 2: MOTIVOS DE NÃO ATINGIR A META & PLANO DE AÇÃO
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('2. ANÁLISE DOS MOTIVOS DE NÃO ATINGIMENTO DA META & AÇÕES CORRETIVAS', 14, currentY);
+    currentY += 4;
+
+    const reasonsTable = [
+      ['Motivos Principais / Justificativas:', formState.notAttainedReasons.trim() || 'Meta atingida conforme planejado ou sem anomalias críticas registradas.'],
+      ['Plano de Ação Corretiva Definido:', formState.correctiveActions.trim() || 'Ações operacionais padrão mantidas.'],
+    ];
+
+    autoTable(doc, {
+      startY: currentY,
+      body: reasonsTable,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 3, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [254, 242, 242], textColor: [185, 28, 28], cellWidth: 55 },
+        1: { textColor: [51, 65, 85] },
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // SECTION 3: PRINCIPAIS PERDAS & INDISPONIBILIDADE
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('3. DETALHAMENTO DE PERDAS E PARADAS DE MÁQUINA', 14, currentY);
+    currentY += 4;
+
+    const lossesTableData = [
+      ['Eco A (Sede Curitiba)', formatKg(extStats.ecoA), 'Manutenção Cast 1', formatMinToHours(extStats.machineDowntimeMap['Cast 1']?.maintMin || 0)],
+      ['Eco BP (Produção)', formatKg(extStats.ecoBP), 'Manutenção Cast 2', formatMinToHours(extStats.machineDowntimeMap['Cast 2']?.maintMin || 0)],
+      ['Eco BM (Manutenção)', formatKg(extStats.ecoBM), 'Processo / Ajustes', formatMinToHours(extStats.procMin)],
+      ['Borra de Extrusão', formatKg(extStats.borra), 'Outros Motivos', formatMinToHours(extStats.otherMin)],
+      ['Total de Refugo Gerado', `${formatKg(extStats.totalRefuseKg)} (${extStats.totalRefuseTons.toFixed(2)} T)`, 'Impacto Estimado Paradas', `~${extStats.estimatedLostTons.toFixed(2)} T não produzidas`],
+    ];
+
+    autoTable(doc, {
+      startY: currentY,
+      body: lossesTableData,
+      theme: 'grid',
+      styles: { fontSize: 7.5, cellPadding: 2, textColor: [30, 41, 59] },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
+        1: { fontStyle: 'bold', textColor: [220, 38, 38] },
+        2: { fontStyle: 'bold', fillColor: [248, 250, 252] },
+        3: { fontStyle: 'bold', textColor: [217, 119, 6] },
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // Check page space for Forecast section or add page
+    if (currentY > 210) {
+      doc.addPage();
+      currentY = 20;
     }
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Posição', 'Operador Extrusão', 'Produção (Kg)', 'Posição', 'Operador Fita', 'Produção (m²)']],
-      body: opRows,
-      theme: 'striped',
-      headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 2 },
-    });
-
-    currentY = (doc as any).lastAutoTable.finalY + 8;
-
-    // Machine Downtime Table
+    // SECTION 4: PREVISÃO PARA OS PRÓXIMOS 7 DIAS (ANTECIPAÇÃO)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text('4. INDISPONIBILIDADE DE MÁQUINAS (CAST 1, CAST 2 E EREMA)', 14, currentY);
+    doc.text('4. PREVISÃO E ANTECIPAÇÃO PARA OS PRÓXIMOS 7 DIAS', 14, currentY);
     currentY += 4;
 
-    const downtimePdfRows = ['Cast 1', 'Cast 2', 'Erema'].map(mName => {
-      const dt = extStats.machineDowntimeMap[mName] || { maintMin: 0, procMin: 0, otherMin: 0, totalStopMin: 0, reasons: [] };
-      return [
-        mName,
-        formatMinToHours(dt.maintMin),
-        formatMinToHours(dt.procMin),
-        formatMinToHours(dt.otherMin),
-        formatMinToHours(dt.totalStopMin)
-      ];
-    });
+    const forecastData = [
+      ['Meta Prevista Próximos 7 Dias:', `${formState.forecastNext7DaysTons || 300} Toneladas`],
+      ['Demandas de Matéria-Prima & Insumos:', formState.rawMaterialsDemand.trim() || 'Necessidades de resinas, caixas e tubetes em conformidade com o estoque.'],
+      ['Manutenções Preventivas & Programadas:', formState.scheduledMaintenance.trim() || 'Nenhuma intervenção mecânica/elétrica de parada prolongada prevista.'],
+      ['Necessidades da Operação & Equipe:', formState.operationalAnticipations.trim() || 'Escalas completas e revezamentos alinhados.'],
+      ['Ações Prioritárias da Planta:', formState.priorityActions.trim() || 'Foco em estabilidade de processo, produtividade e redução de scrap.'],
+    ];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Máquina', 'Manutenção', 'Processo', 'Outros', 'Total Parado']],
-      body: downtimePdfRows,
+      body: forecastData,
       theme: 'grid',
-      headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
-      styles: { fontSize: 7.5, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 41, 59] },
       columnStyles: {
-        0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-        4: { fontStyle: 'bold', textColor: [217, 119, 6] },
+        0: { fontStyle: 'bold', fillColor: [239, 246, 255], textColor: [29, 78, 216], cellWidth: 60 },
+        1: { textColor: [51, 65, 85] },
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // SECTION 5: CORTE DE FITA ADESIVA & DESTAQUES (IF SPACE ALLOWS)
+    if (ribbonStats.producedM2 > 0) {
+      if (currentY > 240) {
+        doc.addPage();
+        currentY = 20;
       }
-    });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
-
-    // Meeting Notes Section
-    if (meetingNotes.trim()) {
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setTextColor(15, 23, 42);
-      doc.text('5. ATA DA REUNIÃO & PLANO DE AÇÃO', 14, currentY);
-      currentY += 5;
+      doc.text('5. RESULTADOS DE CORTE DE FITA ADESIVA', 14, currentY);
+      currentY += 3.5;
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(51, 65, 85);
+      const ribbonTable = [
+        ['Área Produzida (m²)', formatM2(ribbonStats.producedM2), 'Rendimento da Fita (%)', `${ribbonStats.yieldRate.toFixed(1)}%`],
+        ['Jumbos Consumidos (m²)', formatM2(ribbonStats.jumboM2), 'Total de Rolos (un)', `${ribbonStats.totalRolls.toLocaleString('pt-BR')} un`],
+        ['Sucata Gerada (Kg)', formatKg(ribbonStats.wasteKg), 'Tempo sob Paradas', formatMinToHours(ribbonStats.stoppedMin)],
+      ];
 
-      const splitText = doc.splitTextToSize(meetingNotes, pageWidth - 28);
-      doc.text(splitText, 14, currentY);
+      autoTable(doc, {
+        startY: currentY,
+        body: ribbonTable,
+        theme: 'grid',
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        columnStyles: {
+          0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
+          1: { fontStyle: 'bold', textColor: [16, 185, 129] },
+          2: { fontStyle: 'bold', fillColor: [248, 250, 252] },
+          3: { fontStyle: 'bold' },
+        },
+      });
     }
 
-    // Save PDF
-    doc.save(`Resumo_Semanal_Producao_${mondayStr}_a_${sundayStr}.pdf`);
+    doc.save(`Apresentacao_Reuniao_Semanal_${startDateStr}_a_${endDateStr}.pdf`);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all animate-in fade-in duration-200 ${
-      mode === 'presentation' ? 'p-0 sm:p-0 md:p-0' : ''
-    }`}>
-      <div className={`bg-slate-900 border border-slate-800 text-white rounded-3xl shadow-2xl flex flex-col w-full overflow-hidden transition-all duration-300 ${
-        mode === 'presentation' 
-          ? 'h-screen w-screen rounded-none border-none' 
-          : 'max-w-6xl max-h-[92vh] h-[92vh]'
-      }`}>
+    <div id="weekly-meeting-modal" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all animate-in fade-in duration-200">
+      
+      {/* Print-only CSS injection */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #weekly-meeting-modal, #weekly-meeting-modal * {
+            visibility: visible;
+          }
+          #weekly-meeting-modal {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: auto;
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            z-index: 99999 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-full-card {
+            box-shadow: none !important;
+            border: 1px solid #cbd5e1 !important;
+            break-inside: avoid;
+          }
+        }
+      `}</style>
+
+      {/* Main Container - Crisp Light Theme */}
+      <div className="bg-slate-50 border border-slate-200 text-slate-800 rounded-3xl shadow-2xl flex flex-col w-full max-w-7xl max-h-[94vh] h-[94vh] overflow-hidden">
         
-        {/* TOP BAR / HEADER */}
-        <div className="bg-slate-950/90 border-b border-slate-800/80 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        {/* HEADER BAR (LIGHT THEME) */}
+        <div className="bg-white border-b border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs no-print">
           
-          {/* Title & Badge */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 text-white border border-blue-400/30">
+          {/* Title & Brand */}
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-md shadow-blue-500/20 border border-blue-500">
               <Presentation className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg md:text-xl font-black uppercase tracking-wider text-slate-100">
-                  Resumo Geral Semanal de Produção
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base sm:text-lg md:text-xl font-black uppercase tracking-tight text-slate-900">
+                  Reunião Semanal de Resultados
                 </h2>
-                <span className="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-black uppercase rounded-full tracking-widest hidden sm:inline-block">
-                  Apresentação de Reunião
+                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase rounded-full tracking-wider">
+                  Padronização da Planta
                 </span>
+                {saveStatus === 'saved' && (
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase rounded-full tracking-wider flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Salvo
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 flex items-center gap-2">
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5 flex items-center gap-2">
                 <span>Manupackaging Brasil</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-emerald-400">Semana Ativa</span>
+                <span className="text-slate-300">•</span>
+                <span className="text-slate-700 font-bold">Foco em Resultados, Análise de Gaps & Antecipação</span>
               </p>
             </div>
           </div>
 
-          {/* Week Selector Bar */}
-          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl">
-            <button
-              onClick={handlePrevWeek}
-              className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-all active:scale-95"
-              title="Semana Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <div className="px-3 py-1.5 bg-slate-950 rounded-xl border border-slate-800 text-center min-w-[170px]">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Semana ({formatDateBR(mondayStr)} a {formatDateBR(sundayStr)})
-              </div>
+          {/* Period Selector Controller */}
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            {/* Mode Selectors */}
+            <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+              <button
+                onClick={() => setPeriodMode('last7days')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                  periodMode === 'last7days' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Últimos 7 Dias
+              </button>
+              <button
+                onClick={() => setPeriodMode('calendarWeek')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                  periodMode === 'calendarWeek' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Semana (Seg-Dom)
+              </button>
+              <button
+                onClick={() => setPeriodMode('custom')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                  periodMode === 'custom' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Personalizado
+              </button>
             </div>
 
-            <button
-              onClick={handleNextWeek}
-              className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-white transition-all active:scale-95"
-              title="Próxima Semana"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={handleCurrentWeek}
-              className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
-            >
-              Esta Semana
-            </button>
+            {/* Navigation or Date Inputs */}
+            {periodMode !== 'custom' ? (
+              <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-xl border border-slate-200">
+                <button
+                  onClick={() => handleShiftPeriod(-7)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-all active:scale-95"
+                  title="Período Anterior (-7 dias)"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="px-2 text-center">
+                  <span className="text-xs font-black text-slate-800">
+                    {formatDateBR(startDateStr)} <span className="text-slate-400">até</span> {formatDateBR(endDateStr)}
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleShiftPeriod(7)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-all active:scale-95"
+                  title="Próximo Período (+7 dias)"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleResetToCurrent}
+                  className="ml-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-md tracking-wider transition-all"
+                >
+                  Atual
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-slate-200">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="text-xs font-bold text-slate-800 bg-transparent border border-slate-200 rounded-lg px-2 py-1 outline-hidden"
+                />
+                <span className="text-xs text-slate-400 font-bold">até</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="text-xs font-bold text-slate-800 bg-transparent border border-slate-200 rounded-lg px-2 py-1 outline-hidden"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Toolbar */}
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <button
+              onClick={() => setViewMode(v => v === 'interactive' ? 'preview' : 'interactive')}
+              className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border flex items-center gap-1.5 active:scale-95 ${
+                viewMode === 'preview' 
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+              title="Alternar entre modo interativo e visualização de documento limpo"
+            >
+              <Eye className="w-4 h-4" />
+              <span className="hidden sm:inline">{viewMode === 'preview' ? 'Modo Interativo' : 'Prévia Impressão'}</span>
+            </button>
+
+            {/* Copy Summary Text */}
             <button
               onClick={handleCopyTextSummary}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-slate-700 flex items-center gap-1.5 active:scale-95"
-              title="Copiar Resumo em Texto para WhatsApp ou Email"
+              className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-slate-200 shadow-2xs flex items-center gap-1.5 active:scale-95"
+              title="Copiar Resumo em Texto Formatado para WhatsApp"
             >
-              {copiedText ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {copiedText ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
               <span className="hidden sm:inline">{copiedText ? 'Copiado!' : 'Copiar Texto'}</span>
             </button>
 
+            {/* Print Directly */}
+            <button
+              onClick={handlePrint}
+              className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all border border-slate-200 shadow-2xs flex items-center gap-1.5 active:scale-95"
+              title="Imprimir Relatório Completo"
+            >
+              <Printer className="w-4 h-4 text-slate-600" />
+              <span className="hidden sm:inline">Imprimir</span>
+            </button>
+
+            {/* PDF Export */}
             <button
               onClick={handleDownloadPDF}
-              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 active:scale-95"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
               title="Baixar Relatório Executivo em PDF"
             >
               <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Baixar PDF</span>
+              <span className="hidden sm:inline">Salvar PDF</span>
             </button>
 
-            <button
-              onClick={() => setMode(mode === 'standard' ? 'presentation' : 'standard')}
-              className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border flex items-center gap-1.5 active:scale-95 ${
-                mode === 'presentation'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg'
-                  : 'bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border-indigo-500/30'
-              }`}
-              title="Alternar Modo Apresentação em Tela Cheia"
-            >
-              <Presentation className="w-4 h-4" />
-              <span className="hidden md:inline">{mode === 'presentation' ? 'Sair do Modo TV' : 'Modo TV / Slide'}</span>
-            </button>
-
+            {/* Close */}
             <button
               onClick={onClose}
-              className="p-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-xl transition-all"
-              title="Fechar"
+              className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl transition-all active:scale-95 ml-1"
+              title="Fechar Janela"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* SUB NAVIGATION TABS */}
-        <div className="bg-slate-950/60 border-b border-slate-800/80 px-6 py-2.5 flex items-center gap-2 overflow-x-auto shrink-0">
-          <button
-            onClick={() => setActiveTab('consolidated')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 ${
-              activeTab === 'consolidated'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Visão Consolidada</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('extrusion')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 ${
-              activeTab === 'extrusion'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Cpu className="w-4 h-4" />
-            <span>Extrusão (Plástico)</span>
-            <span className="px-2 py-0.5 bg-blue-900/60 text-blue-200 text-[10px] rounded-lg border border-blue-700/50">
-              {formatKg(extStats.netKg)}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ribbon')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 ${
-              activeTab === 'ribbon'
-                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Corte de Fita</span>
-            <span className="px-2 py-0.5 bg-emerald-900/60 text-emerald-200 text-[10px] rounded-lg border border-emerald-700/50">
-              {formatM2(ribbonStats.producedM2)}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 ${
-              activeTab === 'notes'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Pautas & Ata da Reunião</span>
-            {meetingNotes.trim() && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            )}
-          </button>
-        </div>
-
-        {/* MAIN SCROLLABLE CONTENT BODY */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
-
-          {/* TAB 1: CONSOLIDATED EXECUTIVE OVERVIEW */}
-          {activeTab === 'consolidated' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              
-              {/* COMPARISON BANNER */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Extrusion Card */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/80 rounded-3xl p-6 border border-blue-500/30 shadow-xl relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-blue-500/20 text-blue-400 rounded-2xl border border-blue-500/30">
-                        <Cpu className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-slate-100 uppercase tracking-wider">Setor de Extrusão</h3>
-                        <p className="text-xs text-slate-400 font-bold">Resumo Geral Semanal</p>
-                      </div>
-                    </div>
-
-                    <div className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 border ${
-                      extVariation >= 0
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                        : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                    }`}>
-                      {extVariation >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      <span>{extVariation >= 0 ? `+${extVariation.toFixed(1)}%` : `${extVariation.toFixed(1)}%`} vs sem. ant.</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Produção Líquida</span>
-                      <span className="text-lg font-black text-blue-400">{formatKg(extStats.netKg)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Média Diária</span>
-                      <span className="text-lg font-black text-slate-100">{formatKg(extStats.avgDailyNetKg)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Índice Refugo</span>
-                      <span className={`text-lg font-black ${extStats.scrapRatio > 5 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {extStats.scrapRatio.toFixed(2)}%
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Reciclagem Erema</span>
-                      <span className="text-lg font-black text-emerald-400">{formatKg(extStats.eremaKg)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Total Paradas</span>
-                      <span className="text-lg font-black text-amber-400">{formatMinToHours(extStats.totalStopMin)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Dias Ativos</span>
-                      <span className="text-lg font-black text-slate-200">{extStats.activeDays} dias</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ribbon Card */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/80 rounded-3xl p-6 border border-emerald-500/30 shadow-xl relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
-                        <Layers className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-slate-100 uppercase tracking-wider">Corte de Fita Adesiva</h3>
-                        <p className="text-xs text-slate-400 font-bold">Resumo Geral Semanal</p>
-                      </div>
-                    </div>
-
-                    <div className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 border ${
-                      ribbonVariation >= 0
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                        : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                    }`}>
-                      {ribbonVariation >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      <span>{ribbonVariation >= 0 ? `+${ribbonVariation.toFixed(1)}%` : `${ribbonVariation.toFixed(1)}%`} vs sem. ant.</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Área Produzida</span>
-                      <span className="text-lg font-black text-emerald-400">{formatM2(ribbonStats.producedM2)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Total de Rollos</span>
-                      <span className="text-lg font-black text-slate-100">{ribbonStats.totalRolls.toLocaleString('pt-BR')} un</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Rendimento Fita</span>
-                      <span className={`text-lg font-black ${ribbonStats.yieldRate < 85 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {ribbonStats.yieldRate.toFixed(1)}%
-                      </span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Jumbos Utilizados</span>
-                      <span className="text-lg font-black text-blue-400">~{ribbonStats.jumbosEquivalent.toFixed(1)} jumbos</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Não Conforme</span>
-                      <span className="text-lg font-black text-rose-400">{formatM2(ribbonStats.rejectedM2)}</span>
-                    </div>
-
-                    <div className="bg-slate-950/60 rounded-2xl p-3 border border-slate-800">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Sucata Lixo (Kg)</span>
-                      <span className="text-lg font-black text-slate-300">{formatKg(ribbonStats.wasteKg)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* TOP OPERATORS OF THE WEEK RANKING */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Top Extrusion Operators */}
-                <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-lg space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-5 h-5 text-amber-400" />
-                      <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">Top Operadores de Extrusão</h4>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Semana Ativa</span>
-                  </div>
-
-                  {extStats.topOperators.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic text-center py-4">Sem lançamentos de operadores na semana.</p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {extStats.topOperators.map((op, idx) => (
-                        <div key={op.name} className="flex items-center justify-between p-3 bg-slate-950/80 rounded-2xl border border-slate-800/80">
-                          <div className="flex items-center gap-3">
-                            <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black ${
-                              idx === 0 ? 'bg-amber-400 text-slate-950' : idx === 1 ? 'bg-slate-300 text-slate-950' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'
-                            }`}>
-                              #{idx + 1}
-                            </span>
-                            <div>
-                              <p className="text-xs font-black text-slate-200">{op.name}</p>
-                              <p className="text-[10px] text-slate-400 font-medium">{op.entries} apontamento(s)</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-blue-400">{formatKg(op.netKg)}</span>
-                            {op.borra > 0 && (
-                              <p className="text-[9px] text-rose-400 font-bold">Borra: {formatKg(op.borra)}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Top Ribbon Cutters */}
-                <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-lg space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-5 h-5 text-emerald-400" />
-                      <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">Top Cortadores de Fita</h4>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Semana Ativa</span>
-                  </div>
-
-                  {ribbonStats.topCutters.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic text-center py-4">Sem lançamentos no setor de fita na semana.</p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {ribbonStats.topCutters.map((op, idx) => (
-                        <div key={op.name} className="flex items-center justify-between p-3 bg-slate-950/80 rounded-2xl border border-slate-800/80">
-                          <div className="flex items-center gap-3">
-                            <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black ${
-                              idx === 0 ? 'bg-emerald-400 text-slate-950' : idx === 1 ? 'bg-slate-300 text-slate-950' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'
-                            }`}>
-                              #{idx + 1}
-                            </span>
-                            <div>
-                              <p className="text-xs font-black text-slate-200">{op.name}</p>
-                              <p className="text-[10px] text-slate-400 font-medium">{op.entries} apontamento(s)</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-black text-emerald-400">{formatM2(op.producedM2)}</span>
-                            {op.rejectedM2 > 0 && (
-                              <p className="text-[9px] text-rose-400 font-bold">Perda: {formatM2(op.rejectedM2)}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* MACHINE DOWNTIME SUMMARY FOR CAST 1, CAST 2, AND EREMA */}
-              <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-lg space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Wrench className="w-5 h-5 text-amber-400" />
-                    <div>
-                      <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">
-                        Indisponibilidade de Máquinas na Semana (Cast 1, Cast 2 e Erema)
-                      </h4>
-                      <p className="text-xs text-slate-400 font-medium">Tempo de paradas acumulado por categoria (Manutenção, Processo e Outros)</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-black text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 uppercase">
-                    Total: {formatMinToHours(extStats.totalStopMin)}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {['Cast 1', 'Cast 2', 'Erema'].map((mName) => {
-                    const dt = extStats.machineDowntimeMap[mName] || {
-                      maintMin: 0, procMin: 0, otherMin: 0, totalStopMin: 0, reasons: []
-                    };
-                    const isHighStop = dt.totalStopMin > 180; // > 3 horas
-                    return (
-                      <div key={mName} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-black text-slate-100 uppercase tracking-wide flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${dt.totalStopMin > 0 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-                              {mName}
-                            </span>
-                            <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${
-                              dt.totalStopMin === 0 
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                : isHighStop 
-                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            }`}>
-                              {formatMinToHours(dt.totalStopMin)}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-1.5 text-center my-1">
-                            <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-[9px] font-bold text-slate-400 block uppercase">Manut.</span>
-                              <span className="text-xs font-black text-amber-400">{formatMinToHours(dt.maintMin)}</span>
-                            </div>
-                            <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-[9px] font-bold text-slate-400 block uppercase">Proc.</span>
-                              <span className="text-xs font-black text-blue-400">{formatMinToHours(dt.procMin)}</span>
-                            </div>
-                            <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-[9px] font-bold text-slate-400 block uppercase">Outros</span>
-                              <span className="text-xs font-black text-slate-300">{formatMinToHours(dt.otherMin)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* MEETING NOTES SUMMARY BOX IN CONSOLIDATED TAB */}
-              <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-amber-400" />
-                    <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">Ata e Observações da Reunião de Resultados</h4>
-                  </div>
-                  <button
-                    onClick={() => setActiveTab('notes')}
-                    className="text-xs font-black text-amber-400 hover:underline uppercase"
-                  >
-                    Editar Pautas →
-                  </button>
-                </div>
-
-                {meetingNotes.trim() ? (
-                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-slate-300 text-xs leading-relaxed whitespace-pre-wrap font-medium">
-                    {meetingNotes}
-                  </div>
-                ) : (
-                  <div className="p-6 bg-slate-950/60 rounded-2xl border border-dashed border-slate-800 text-center space-y-2">
-                    <p className="text-xs text-slate-500 font-medium">Nenhum plano de ação ou observação digitado para esta semana.</p>
-                    <button
-                      onClick={() => setActiveTab('notes')}
-                      className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase rounded-xl transition-all"
-                    >
-                      Escrever Notas da Reunião
-                    </button>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 2: EXTRUSION DETAILED ANALYSIS */}
-          {activeTab === 'extrusion' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              
-              {/* Extrusion Key Stats Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Produção Bruta</span>
-                  <span className="text-2xl font-black text-slate-100 mt-1 block">{formatKg(extStats.grossKg)}</span>
-                  <span className="text-[10px] text-slate-500 mt-1 block">Tara: {formatKg(extStats.taraKg)}</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Produção Líquida</span>
-                  <span className="text-2xl font-black text-blue-400 mt-1 block">{formatKg(extStats.netKg)}</span>
-                  <span className="text-[10px] text-blue-300/70 mt-1 block">Média: {formatKg(extStats.avgDailyNetKg)}/dia</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Refugo / Sucata</span>
-                  <span className={`text-2xl font-black mt-1 block ${extStats.scrapRatio > 5 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {extStats.scrapRatio.toFixed(2)}%
-                  </span>
-                  <span className="text-[10px] text-slate-400 mt-1 block">Total: {formatKg(extStats.totalRefuseKg)}</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Erema Reciclagem</span>
-                  <span className="text-2xl font-black text-emerald-400 mt-1 block">{formatKg(extStats.eremaKg)}</span>
-                  <span className="text-[10px] text-emerald-300/70 mt-1 block">{extStats.eremaBags} Bags Utilizados</span>
-                </div>
-              </div>
-
-              {/* Extrusion Chart: Daily Output */}
-              <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">Evolução Diária de Produção na Semana</h4>
-                    <p className="text-xs text-slate-400 font-medium">Comparativo Cast 1 vs Cast 2 (Kg)</p>
-                  </div>
-                  <span className="text-[10px] font-black uppercase bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full border border-blue-500/30">
-                    Cast 1 / Cast 2
-                  </span>
-                </div>
-
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyExtrusionChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
-                      <YAxis stroke="#64748b" fontSize={11} />
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }} />
-                      <Legend />
-                      <Bar dataKey="cast1" name="Cast 1 (Kg)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="cast2" name="Cast 2 (Kg)" fill="#10b981" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Refuse Breakdown & Downtime Breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Refuse breakdown */}
-                <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-4">
-                  <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider border-b border-slate-800 pb-3">
-                    Detalhamento do Refugo de Extrusão
-                  </h4>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div>
-                        <p className="text-xs font-black text-slate-200 uppercase">Eco A (Envio Sede)</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Aparas limpas de extrusão</p>
-                      </div>
-                      <span className="text-sm font-black text-blue-400">{formatKg(extStats.ecoA)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div>
-                        <p className="text-xs font-black text-slate-200 uppercase">Eco BP (Pequeno)</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Bordas e refugo pequeno</p>
-                      </div>
-                      <span className="text-sm font-black text-amber-400">{formatKg(extStats.ecoBP)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div>
-                        <p className="text-xs font-black text-slate-200 uppercase">Eco BM (Médio)</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Bordas e refugo médio</p>
-                      </div>
-                      <span className="text-sm font-black text-amber-500">{formatKg(extStats.ecoBM)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div>
-                        <p className="text-xs font-black text-rose-300 uppercase">Borra Total</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Material purgado inoperável</p>
-                      </div>
-                      <span className="text-sm font-black text-rose-400">{formatKg(extStats.borra)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Downtime Breakdown */}
-                <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-4">
-                  <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider border-b border-slate-800 pb-3">
-                    Tempo de Paradas na Extrusão
-                  </h4>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <Wrench className="w-4 h-4 text-amber-400" />
-                        <div>
-                          <p className="text-xs font-black text-slate-200 uppercase">Paradas por Manutenção</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Preventiva e corretiva</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-black text-amber-400">{formatMinToHours(extStats.maintMin)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-blue-400" />
-                        <div>
-                          <p className="text-xs font-black text-slate-200 uppercase">Paradas de Processo</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Ajustes e trocas</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-black text-blue-400">{formatMinToHours(extStats.procMin)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-950 rounded-2xl border border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-slate-400" />
-                        <div>
-                          <p className="text-xs font-black text-slate-200 uppercase">Outras Paradas</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Diversas e sem energia</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-black text-slate-300">{formatMinToHours(extStats.otherMin)}</span>
-                    </div>
-
-                    <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-center">
-                      <span className="text-xs font-bold text-amber-300">
-                        Total Geral de Inoperatividade: {formatMinToHours(extStats.totalStopMin)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 3: RIBBON CUTTING DETAILED ANALYSIS */}
-          {activeTab === 'ribbon' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              
-              {/* Ribbon Key Stats Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Área Produzida</span>
-                  <span className="text-2xl font-black text-emerald-400 mt-1 block">{formatM2(ribbonStats.producedM2)}</span>
-                  <span className="text-[10px] text-emerald-300/70 mt-1 block">Média: {formatM2(ribbonStats.avgDailyProducedM2)}/dia</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Rendimento Fita</span>
-                  <span className="text-2xl font-black text-blue-400 mt-1 block">{ribbonStats.yieldRate.toFixed(1)}%</span>
-                  <span className="text-[10px] text-slate-400 mt-1 block">Meta: {'>'} 85%</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Jumbos Consumidos</span>
-                  <span className="text-2xl font-black text-slate-100 mt-1 block">{formatM2(ribbonStats.jumboM2)}</span>
-                  <span className="text-[10px] text-slate-400 mt-1 block">~{ribbonStats.jumbosEquivalent.toFixed(1)} jumbos equiv.</span>
-                </div>
-
-                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Perda Não Conforme</span>
-                  <span className="text-2xl font-black text-rose-400 mt-1 block">{formatM2(ribbonStats.rejectedM2)}</span>
-                  <span className="text-[10px] text-slate-400 mt-1 block">Sucata: {formatKg(ribbonStats.wasteKg)}</span>
-                </div>
-              </div>
-
-              {/* Ribbon Chart & Jumbo Pie Breakdown */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Daily Bar Chart */}
-                <div className="lg:col-span-2 bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider">Produção Diária de Fita (m²)</h4>
-                      <p className="text-xs text-slate-400 font-medium">Jumbo vs Produzido</p>
-                    </div>
-                  </div>
-
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dailyRibbonChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
-                        <YAxis stroke="#64748b" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }} />
-                        <Legend />
-                        <Bar dataKey="jumboM2" name="Jumbo (m²)" fill="#64748b" radius={[6, 6, 0, 0]} />
-                        <Bar dataKey="producedM2" name="Produzido (m²)" fill="#10b981" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Jumbo Types Pie Chart */}
-                <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 space-y-4 flex flex-col justify-between">
-                  <h4 className="text-sm font-black text-slate-100 uppercase tracking-wider border-b border-slate-800 pb-3">
-                    Consumo por Tipo de Jumbo
-                  </h4>
-
-                  {jumboPieData.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic text-center py-8">Sem registros de tipo de jumbo na semana.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {jumboPieData.map(item => (
-                        <div key={item.name} className="flex items-center justify-between p-2.5 bg-slate-950 rounded-2xl border border-slate-800">
-                          <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></span>
-                            <span className="text-xs font-black text-slate-200">{item.name}</span>
-                          </div>
-                          <span className="text-xs font-black text-emerald-400">{formatM2(item.value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 4: MEETING NOTES & ACTION ITEMS */}
-          {activeTab === 'notes' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
-                      <MessageSquare className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-slate-100 uppercase tracking-wider">Ata da Reunião de Resultados</h3>
-                      <p className="text-xs text-slate-400 font-bold">Defina pautas, apontamentos e planos de ação para esta semana</p>
-                    </div>
-                  </div>
-
-                  <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
-                    Salvo Automaticamente
-                  </span>
-                </div>
-
-                <textarea
-                  value={meetingNotes}
-                  onChange={(e) => handleNotesChange(e.target.value)}
-                  placeholder="Digite aqui as pautas da reunião, decisões tomadas, ações preventivas e observações sobre os operadores/máquinas nesta semana..."
-                  rows={12}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-medium leading-relaxed custom-scrollbar"
-                />
-
-                <div className="flex items-center justify-between pt-2 text-xs text-slate-400">
-                  <span>As notas escritas acima serão incluídas no relatório PDF e no resumo de texto para WhatsApp/E-mail.</span>
-                  <button
-                    onClick={handleCopyTextSummary}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl uppercase tracking-wider text-xs transition-all flex items-center gap-2"
-                  >
-                    <Copy className="w-4 h-4" />
-                    <span>Copiar Resumo Completo</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* FOOTER */}
-        <div className="bg-slate-950 border-t border-slate-800 p-4 px-6 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px]">
-            <span>Manupackaging Gestão de Produção</span>
-            <span>•</span>
-            <span className="text-slate-400">Reunião Semanal Executiva</span>
+        {/* SUB-HEADER / TAB NAVIGATION */}
+        <div className="bg-white border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
+          <div className="flex items-center gap-1 overflow-x-auto py-1">
+            <button
+              onClick={() => setActivePauta('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                activePauta === 'all' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Visão Completa
+            </button>
+            <button
+              onClick={() => setActivePauta('meta')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activePauta === 'meta' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              1. Meta x Realizado
+            </button>
+            <button
+              onClick={() => setActivePauta('losses')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activePauta === 'losses' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              2. Principais Perdas
+            </button>
+            <button
+              onClick={() => setActivePauta('forecast')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activePauta === 'forecast' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              3. Previsão Próximos 7 Dias
+            </button>
+            <button
+              onClick={() => setActivePauta('ribbon')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activePauta === 'ribbon' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              4. Corte de Fita
+            </button>
+            <button
+              onClick={() => setActivePauta('operators')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activePauta === 'operators' ? 'bg-slate-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              5. Destaques
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 text-xs text-slate-500 font-bold">
+            <span>Período: <strong className="text-slate-800">{formatDateBR(startDateStr)} a {formatDateBR(endDateStr)}</strong></span>
+            <span className="text-slate-300">|</span>
+            <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-extrabold border border-blue-200">
+              Meta Semanal: 300 Toneladas (Cast 1 & 2)
+            </span>
+          </div>
+        </div>
+
+        {/* SCROLLABLE MAIN CONTENT AREA (LIGHT THEME) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+
+          {/* ========================================================================= */}
+          {/* SECTION: 4 BIG KEY EXECUTIVE METRICS CARDS (PRODUÇÃO) */}
+          {/* ========================================================================= */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print-full-card">
+            
+            {/* Card 1: Toneladas Produzidas Cast 1 & 2 */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    Produção Cast 1 & 2
+                  </span>
+                  <span className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                    Com Meta
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl lg:text-4xl font-black text-slate-900 font-mono tracking-tight">
+                    {extStats.castNetTons.toFixed(2)}
+                  </span>
+                  <span className="text-base font-black text-blue-600 font-mono">T</span>
+                </div>
+                <p className="text-xs text-slate-500 font-bold font-mono mt-1">
+                  {formatKg(extStats.castNetKg)} líquido (Cast 1 + 2)
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
+                <div className="text-slate-600">
+                  <span className="text-slate-400">Média:</span> <strong>{extStats.avgDailyCastNetTons.toFixed(2)} T/dia</strong>
+                </div>
+                <div className={`flex items-center gap-1 font-bold ${extTonsVariation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {extTonsVariation >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                  <span>{extTonsVariation >= 0 ? `+${extTonsVariation.toFixed(1)}%` : `${extTonsVariation.toFixed(1)}%`}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Meta x Realizado */}
+            <div className={`bg-white p-5 rounded-2xl border shadow-xs transition-all flex flex-col justify-between ${
+              isGoalAttained ? 'border-emerald-200 hover:border-emerald-300' : 'border-amber-200 hover:border-amber-300'
+            }`}>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Target className="w-4 h-4 text-emerald-600" />
+                    Meta x Realizado
+                  </span>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                    isGoalAttained 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {isGoalAttained ? 'Meta Batida' : 'Abaixo da Meta'}
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl lg:text-4xl font-black text-slate-900 font-mono tracking-tight">
+                    {percentGoalAttained.toFixed(1)}%
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">atingido</span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-100 h-2 rounded-full mt-2.5 overflow-hidden border border-slate-200/60">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ${isGoalAttained ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                    style={{ width: `${Math.min(100, percentGoalAttained)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-600 font-semibold">
+                  Meta Cast 1 & 2: <strong>{weeklyGoalTons.toFixed(1)} T</strong>
+                </span>
+                <span className={`font-black font-mono ${deltaGoalTons >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {deltaGoalTons >= 0 ? `+${deltaGoalTons.toFixed(2)} T` : `${deltaGoalTons.toFixed(2)} T`}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 3: % do Plano Realizado */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-indigo-600" />
+                    % Plano Realizado
+                  </span>
+                  <span className="text-[10px] font-black uppercase bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">
+                    Aderência PCP
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl lg:text-4xl font-black text-indigo-950 font-mono tracking-tight">
+                    {percentPlanRealized.toFixed(1)}%
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">do plano</span>
+                </div>
+
+                <p className="text-xs text-slate-500 font-bold mt-1">
+                  Planejado: <strong className="text-slate-800">{weeklyPlanTons.toFixed(1)} T</strong> ({formatKg(weeklyPlanTons * 1000)})
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-600 font-semibold">Desvio PCP:</span>
+                <span className={`font-black font-mono ${deltaPlanTons >= 0 ? 'text-emerald-700' : 'text-indigo-700'}`}>
+                  {deltaPlanTons >= 0 ? `+${deltaPlanTons.toFixed(2)} T` : `${deltaPlanTons.toFixed(2)} T`}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: Principais Perdas & Rendimento */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-rose-300 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-rose-600" />
+                    Principais Perdas
+                  </span>
+                  <span className="text-[10px] font-black uppercase bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-100">
+                    Scrap Rate
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl lg:text-4xl font-black text-slate-900 font-mono tracking-tight">
+                    {extStats.scrapRatio.toFixed(2)}%
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">perda</span>
+                </div>
+
+                <p className="text-xs text-slate-500 font-bold font-mono mt-1">
+                  Total refugo: <strong className="text-rose-600">{extStats.totalRefuseTons.toFixed(2)} T</strong> ({formatKg(extStats.totalRefuseKg)})
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-600 font-semibold">Paradas:</span>
+                <span className="font-bold text-amber-700 font-mono">
+                  {formatMinToHours(extStats.totalStopMin)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* PRODUCTION BREAKDOWN STRIP (CAST 1, CAST 2, TOTAL CAST, EREMA) */}
+          {/* ========================================================================= */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 print-full-card">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-blue-600" />
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Divisão Operacional por Linha de Produção
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold">
+                  Meta aplicada para Cast 1 e Cast 2. Erema opera como processo de reciclagem.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 max-w-4xl">
+              {/* Cast 1 */}
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Cast 1</span>
+                  <div className="text-base font-black text-slate-900 font-mono">{extStats.cast1NetTons.toFixed(2)} T</div>
+                </div>
+                <span className="text-xs font-bold text-slate-500 font-mono">{formatKg(extStats.cast1NetKg)}</span>
+              </div>
+
+              {/* Cast 2 */}
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Cast 2</span>
+                  <div className="text-base font-black text-slate-900 font-mono">{extStats.cast2NetTons.toFixed(2)} T</div>
+                </div>
+                <span className="text-xs font-bold text-slate-500 font-mono">{formatKg(extStats.cast2NetKg)}</span>
+              </div>
+
+              {/* Total Cast 1 & 2 (Com Meta) */}
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-700">Total Cast 1 & 2</span>
+                  <div className="text-base font-black text-blue-950 font-mono">{extStats.castNetTons.toFixed(2)} T</div>
+                </div>
+                <span className="text-xs font-bold text-blue-700 font-mono">{percentGoalAttained.toFixed(1)}% meta</span>
+              </div>
+
+              {/* Erema Reciclado (Sem Meta) */}
+              <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-700">Erema (Reciclado)</span>
+                    <span className="text-[9px] font-bold bg-purple-200 text-purple-800 px-1 py-0.5 rounded">Sem Meta</span>
+                  </div>
+                  <div className="text-base font-black text-purple-900 font-mono">{extStats.eremaTons.toFixed(2)} T</div>
+                </div>
+                <span className="text-xs font-bold text-purple-700 font-mono">{extStats.eremaBags} bags</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* PAUTA 1: MOTIVOS DE NÃO ATINGIR A META & PLANO DE AÇÃO CORRETIVA */}
+          {/* ========================================================================= */}
+          {(activePauta === 'all' || activePauta === 'meta') && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-full-card">
+              <div className="bg-gradient-to-r from-blue-50 to-slate-50 border-b border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                      Pauta 1: Meta x Realizado & Motivos de Não Atingimento da Meta
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      Nossa meta semanal é de <strong className="text-blue-700 font-black">300 Toneladas</strong> (1.200 T/mês) exclusiva para as linhas <strong className="text-slate-800">Cast 1 e Cast 2</strong> (Erema atua como processo de reciclagem, sem meta direta de produção). Registre os motivos dos desvios e o plano de ação.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase text-slate-500">Ajuste de Meta / Plano (T):</span>
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1">
+                    <input
+                      type="number"
+                      value={formState.weeklyGoalTons}
+                      onChange={(e) => handleFieldChange('weeklyGoalTons', Number(e.target.value))}
+                      className="w-16 text-xs font-bold text-slate-900 text-center outline-hidden"
+                      title="Meta semanal em Toneladas"
+                    />
+                    <span className="text-xs font-bold text-slate-400">T</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 space-y-6">
+                
+                {/* Automatic Stoppages Breakdown from System */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600" />
+                      Diagnóstico Automático do Sistema • Paradas e Indisponibilidade Registradas
+                    </h4>
+                    <span className="text-xs text-slate-500 font-semibold">
+                      Impacto estimado das paradas: <strong className="text-rose-600">~{extStats.estimatedLostTons.toFixed(2)} T</strong> não produzidas
+                    </span>
+                  </div>
+
+                  {extStats.stoppagesList.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {['Cast 1', 'Cast 2', 'Erema'].map((mName) => {
+                        const dt = extStats.machineDowntimeMap[mName] || { maintMin: 0, procMin: 0, otherMin: 0, totalStopMin: 0, reasons: [] };
+                        return (
+                          <div key={mName} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-black uppercase tracking-wider text-slate-800">{mName}</span>
+                                <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-mono">
+                                  {formatMinToHours(dt.totalStopMin)} parado
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1 text-[11px] text-slate-600 mb-3 border-y border-slate-200 py-1.5">
+                                <div>Manut: <strong className="text-slate-800">{formatMinToHours(dt.maintMin)}</strong></div>
+                                <div>Proc: <strong className="text-slate-800">{formatMinToHours(dt.procMin)}</strong></div>
+                                <div>Outros: <strong className="text-slate-800">{formatMinToHours(dt.otherMin)}</strong></div>
+                              </div>
+                              
+                              {/* Reasons list */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Motivos Apontados:</span>
+                                {dt.reasons.length > 0 ? (
+                                  <ul className="text-xs text-slate-700 space-y-1 max-h-24 overflow-y-auto pr-1">
+                                    {dt.reasons.map((r, rIdx) => (
+                                      <li key={rIdx} className="bg-white px-2 py-1 rounded border border-slate-200 text-[11px] font-medium flex items-start gap-1">
+                                        <span className="text-amber-500 font-bold">•</span>
+                                        <span>{r}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-xs text-slate-400 italic">Nenhum motivo específico registrado.</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-500 font-semibold">
+                      Nenhuma parada crítica registrada nos apontamentos do período.
+                    </div>
+                  )}
+                </div>
+
+                {/* Structured Inputs for Meeting Discussions */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                  
+                  {/* Motivos de Não Atingir a Meta (Input) */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        Motivos Principais de Desvio / Não Atingimento da Meta:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold">Edição da Reunião</span>
+                    </label>
+                    <textarea
+                      value={formState.notAttainedReasons}
+                      onChange={(e) => handleFieldChange('notAttainedReasons', e.target.value)}
+                      placeholder="Ex: Parada de 6h na Cast 1 por quebra de rolamento do puxador; Instabilidade de temperatura na matriz da Cast 2 gerando oscilação de espessura; Troca de formulação LC3 para ATX com setup demorado..."
+                      className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[120px]"
+                    />
+                  </div>
+
+                  {/* Plano de Ação Corretiva (Input) */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                        Ações Corretivas Definidas & Responsáveis:
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold">Ata & Compromissos</span>
+                    </label>
+                    <textarea
+                      value={formState.correctiveActions}
+                      onChange={(e) => handleFieldChange('correctiveActions', e.target.value)}
+                      placeholder="Ex: 1. Manutenção: Substituição preventiva dos mancais da Cast 1 (Resp: Carlos - até 30/08); 2. Processo: Padronizar rampa de aquecimento para troca de resina; 3. Produção: Treinar equipe do Turno B no alinhamento de bobinas..."
+                      className="w-full bg-white border border-slate-300 focus:border-emerald-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[120px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end no-print">
+                  <button
+                    onClick={handleSaveToCloud}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Check className="w-4 h-4" />
+                    Salvar Pauta 1
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* PAUTA 2: PRINCIPAIS PERDAS & RENDIMENTO */}
+          {/* ========================================================================= */}
+          {(activePauta === 'all' || activePauta === 'losses') && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-full-card">
+              <div className="bg-gradient-to-r from-amber-50 to-slate-50 border-b border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-black">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                      Pauta 2: Análise das Principais Perdas & Rendimento de Matéria-Prima
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      Acompanhamento minucioso de refugo (Eco A, Eco BP, Eco BM e Borra) e eficiência da planta.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-bold">
+                  <span className="bg-rose-50 text-rose-700 px-3 py-1 rounded-xl border border-rose-200 font-mono">
+                    Perda Total: {extStats.totalRefuseTons.toFixed(2)} T ({formatKg(extStats.totalRefuseKg)})
+                  </span>
+                  <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200 font-mono">
+                    Scrap: {extStats.scrapRatio.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 space-y-6">
+                
+                {/* Losses Breakdown Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Eco A */}
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Refugo Eco A (Sede)</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatKg(extStats.ecoA)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                      {extStats.grossKg > 0 ? ((extStats.ecoA / extStats.grossKg) * 100).toFixed(2) : 0}% da produção bruta
+                    </p>
+                  </div>
+
+                  {/* Eco BP */}
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Refugo Eco B (Produção)</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatKg(extStats.ecoBP)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                      {extStats.grossKg > 0 ? ((extStats.ecoBP / extStats.grossKg) * 100).toFixed(2) : 0}% da produção bruta
+                    </p>
+                  </div>
+
+                  {/* Eco BM */}
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-wider">Refugo Eco B (Manutenção)</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatKg(extStats.ecoBM)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                      {extStats.grossKg > 0 ? ((extStats.ecoBM / extStats.grossKg) * 100).toFixed(2) : 0}% da produção bruta
+                    </p>
+                  </div>
+
+                  {/* Borra */}
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-rose-600 uppercase tracking-wider">Borra de Extrusão</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatKg(extStats.borra)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                      {extStats.grossKg > 0 ? ((extStats.borra / extStats.grossKg) * 100).toFixed(2) : 0}% da produção bruta
+                    </p>
+                  </div>
+                </div>
+
+                {/* Losses Chart & Analysis */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-1 bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-700 mb-2">
+                      Composição das Perdas (%)
+                    </span>
+                    <div className="h-44 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={lossesChartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={65}
+                            innerRadius={35}
+                            paddingAngle={3}
+                          >
+                            {lossesChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: any) => formatKg(Number(value))} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Input for Losses Analysis */}
+                  <div className="lg:col-span-2 space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                      <span>Análise Técnica de Perdas & Ações para Redução de Scrap:</span>
+                      <span className="text-[10px] text-slate-400 font-bold">Edição da Reunião</span>
+                    </label>
+                    <textarea
+                      value={formState.lossAnalysisNotes}
+                      onChange={(e) => handleFieldChange('lossAnalysisNotes', e.target.value)}
+                      placeholder="Ex: Elevado refugo Eco B no início da semana decorrente de oscilação na dosagem de pigmento; Ação para reutilização dos aparas diretamente no moinho do Erema; Ajuste nas matrizes para reduzir a formação de borra nos arranques..."
+                      className="w-full bg-white border border-slate-300 focus:border-amber-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[140px]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* PAUTA 3: PREVISÃO & ANTECIPAÇÃO PARA OS PRÓXIMOS 7 DIAS */}
+          {/* ========================================================================= */}
+          {(activePauta === 'all' || activePauta === 'forecast') && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-full-card">
+              <div className="bg-gradient-to-r from-emerald-50 to-slate-50 border-b border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                      Pauta 3: Previsão & Antecipação das Necessidades da Operação (Próximos 7 Dias)
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      Planejamento proativo, alinhamento de insumos, manutenções programadas e garantia do cumprimento da meta.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase text-slate-600">Meta Projetada (T):</span>
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1">
+                    <input
+                      type="number"
+                      value={formState.forecastNext7DaysTons}
+                      onChange={(e) => handleFieldChange('forecastNext7DaysTons', Number(e.target.value))}
+                      className="w-16 text-xs font-bold text-slate-900 text-center outline-hidden"
+                      title="Previsão em Toneladas para os próximos 7 dias"
+                    />
+                    <span className="text-xs font-bold text-slate-400">T</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  
+                  {/* 1. Demandas de Matéria-Prima & Insumos */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Box className="w-4 h-4 text-blue-600" />
+                      1. Demandas de Matéria-Prima & Insumos Críticos:
+                    </label>
+                    <textarea
+                      value={formState.rawMaterialsDemand}
+                      onChange={(e) => handleFieldChange('rawMaterialsDemand', e.target.value)}
+                      placeholder="Ex: Necessidade de recebimento de 40T de Resina Buteno até quarta-feira; Tubetes de 3 polegadas com estoque baixo (solicitada entrega emergencial de 2000 un); Estoque de caixas para filme stretch suficiente para 10 dias..."
+                      className="w-full bg-white border border-slate-300 focus:border-blue-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[95px]"
+                    />
+                  </div>
+
+                  {/* 2. Manutenções Preventivas & Programadas */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Wrench className="w-4 h-4 text-amber-600" />
+                      2. Manutenções Preventivas & Intervenções Programadas:
+                    </label>
+                    <textarea
+                      value={formState.scheduledMaintenance}
+                      onChange={(e) => handleFieldChange('scheduledMaintenance', e.target.value)}
+                      placeholder="Ex: Parada programada de 4h na Cast 2 na quinta-feira às 08h para troca de filtros e limpeza de rolos de resfriamento; Revisão elétrica do painel do Erema programada para sábado..."
+                      className="w-full bg-white border border-slate-300 focus:border-amber-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[95px]"
+                    />
+                  </div>
+
+                  {/* 3. Necessidades Operacionais & Pessoal */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      3. Necessidades Operacionais, Pessoal & Escalas:
+                    </label>
+                    <textarea
+                      value={formState.operationalAnticipations}
+                      onChange={(e) => handleFieldChange('operationalAnticipations', e.target.value)}
+                      placeholder="Ex: Cobertura de férias de 2 operadores no Turno C; Treinamento DDP agendado para terça-feira sobre redução de perda de borda; Reforço de equipe no setor de embalagem..."
+                      className="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[95px]"
+                    />
+                  </div>
+
+                  {/* 4. Ações Prioritárias da Planta */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Target className="w-4 h-4 text-emerald-600" />
+                      4. Ações Prioritárias & Compromissos da Semana:
+                    </label>
+                    <textarea
+                      value={formState.priorityActions}
+                      onChange={(e) => handleFieldChange('priorityActions', e.target.value)}
+                      placeholder="Ex: 1. Atingir a meta de 300 Toneladas na semana; 2. Reduzir a taxa de sucata global para abaixo de 4,0%; 3. Manter disponibilidade das linhas Cast 1 e Cast 2 acima de 95%..."
+                      className="w-full bg-white border border-slate-300 focus:border-emerald-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[95px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end no-print">
+                  <button
+                    onClick={handleSaveToCloud}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Check className="w-4 h-4" />
+                    Salvar Pauta 3
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* PAUTA 4: CORTE DE FITA ADESIVA (MÓDULO COMPLEMENTAR) */}
+          {/* ========================================================================= */}
+          {(activePauta === 'all' || activePauta === 'ribbon') && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-full-card">
+              <div className="bg-gradient-to-r from-purple-50 to-slate-50 border-b border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black">
+                    4
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                      Pauta 4: Resultados do Corte de Fita Adesiva
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      Acompanhamento de metros quadrados cortados, rendimento de jumbos e refugo.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-bold">
+                  <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-xl border border-purple-200 font-mono">
+                    {formatM2(ribbonStats.producedM2)}
+                  </span>
+                  <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-xl border border-emerald-200 font-mono">
+                    Rendimento: {ribbonStats.yieldRate.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Área Produzida</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatM2(ribbonStats.producedM2)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">{ribbonStats.totalRolls.toLocaleString('pt-BR')} rolos</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Jumbos Consumidos</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatM2(ribbonStats.jumboM2)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">~{ribbonStats.jumbosEquivalent.toFixed(1)} jumbos equiv.</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">Rendimento de Corte</span>
+                    <div className="text-xl font-black text-emerald-700 font-mono mt-1">{ribbonStats.yieldRate.toFixed(1)}%</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">Aproveitamento jumbo</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                    <span className="text-[10px] font-black text-rose-600 uppercase tracking-wider">Sucata em Peso</span>
+                    <div className="text-xl font-black text-slate-900 font-mono mt-1">{formatKg(ribbonStats.wasteKg)}</div>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1">Não conforme: {formatM2(ribbonStats.rejectedM2)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-800">
+                    Anotações e Pautas da Operação de Fita Adesiva:
+                  </label>
+                  <textarea
+                    value={formState.ribbonNotes}
+                    onChange={(e) => handleFieldChange('ribbonNotes', e.target.value)}
+                    placeholder="Ex: Ritmo de corte de jumbos de 48mm estabilizado; Ajuste nas navalhas de corte para reduzir aparas laterais; Programação de jumbos transparentes para a próxima semana..."
+                    className="w-full bg-white border border-slate-300 focus:border-purple-500 rounded-xl p-3.5 text-xs text-slate-800 leading-relaxed outline-hidden transition-all shadow-2xs min-h-[85px]"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* PAUTA 5: DESTAQUES OPERACIONAIS */}
+          {/* ========================================================================= */}
+          {(activePauta === 'all' || activePauta === 'operators') && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-full-card">
+              <div className="bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-200 p-4 sm:p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center font-black">
+                    5
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                      Pauta 5: Operadores Destaque do Período
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold">
+                      Reconhecimento das melhores performances em volume produzido e controle de perdas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Extrusão */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-700 mb-3 flex items-center gap-1.5">
+                    <Award className="w-4 h-4" /> Top 5 Operadores de Extrusão
+                  </h4>
+                  <div className="space-y-2">
+                    {extStats.topOperators.map((op, idx) => (
+                      <div key={idx} className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-xs ${
+                            idx === 0 ? 'bg-amber-400 text-slate-950 font-extrabold' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            #{idx + 1}
+                          </span>
+                          <span className="font-bold text-slate-900">{op.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-slate-700 font-mono">{formatKg(op.netKg)}</span>
+                          <span className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {op.scrapRatio.toFixed(1)}% scrap
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {extStats.topOperators.length === 0 && (
+                      <p className="text-xs text-slate-400 italic">Nenhum operador com apontamento no período.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Fita */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 mb-3 flex items-center gap-1.5">
+                    <Award className="w-4 h-4" /> Top 5 Cortadores de Fita
+                  </h4>
+                  <div className="space-y-2">
+                    {ribbonStats.topCutters.map((op, idx) => (
+                      <div key={idx} className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-xs ${
+                            idx === 0 ? 'bg-purple-500 text-white font-extrabold' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            #{idx + 1}
+                          </span>
+                          <span className="font-bold text-slate-900">{op.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-slate-700 font-mono">{formatM2(op.producedM2)}</span>
+                          <span className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {formatKg(op.wasteKg)} lixo
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {ribbonStats.topCutters.length === 0 && (
+                      <p className="text-xs text-slate-400 italic">Nenhum apontamento de corte no período.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* BOTTOM FOOTER BAR (LIGHT THEME) */}
+        <div className="bg-white border-t border-slate-200 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Relatório executivo integrado • Dados sincronizados com apontamentos de fábrica</span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={onClose}
-              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              onClick={handleSaveToCloud}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
             >
-              Fechar
+              <Check className="w-4 h-4" />
+              Salvar Todas as Pautas
+            </button>
+            <button
+              onClick={handlePrint}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir Apresentação
             </button>
           </div>
         </div>
