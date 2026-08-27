@@ -299,7 +299,12 @@ const getStoppageReason = (entry: ProductionEntry): string => {
         if (text.startsWith('[') && text.endsWith(']')) {
           const parsed = JSON.parse(text);
           if (Array.isArray(parsed)) {
-            const reasons = parsed.map((p: any) => p.motivo).filter((m: any) => m && m.trim() !== '');
+            const reasons = parsed.map((p: any) => {
+              const m = (p.motivo || p.keyword || '').trim();
+              const exp = (p.explicacao || p.justification || p.observacao || p.observacoes || p.descricao || '').trim();
+              if (m && exp && m.toLowerCase() !== exp.toLowerCase()) return `${m} (${exp})`;
+              return exp || m;
+            }).filter((m: any) => m && m.trim() !== '');
             if (reasons.length > 0) return reasons.join('; ');
           }
         }
@@ -570,11 +575,13 @@ const formatStoppageMotiveClean = (motivoRaw: string | undefined): string => {
       return parsed.map((item: any) => {
         const de = (item.de || '').trim();
         const ate = (item.ate || '').trim();
-        const motivo = (item.motivo || '').trim();
-        const explicacao = (item.explicacao || item.observacao || '').trim();
-        let fullDesc = motivo;
-        if (explicacao) {
-          fullDesc = motivo ? `${motivo} (${explicacao})` : explicacao;
+        const motivo = (item.motivo || item.keyword || '').trim();
+        const explicacao = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+        let fullDesc = '';
+        if (motivo && explicacao && motivo.toLowerCase() !== explicacao.toLowerCase()) {
+          fullDesc = `${motivo} (${explicacao})`;
+        } else {
+          fullDesc = explicacao || motivo || '';
         }
         if (de && ate) {
           return `${de} √†s ${ate}${fullDesc ? `: ${fullDesc}` : ''}`;
@@ -2828,8 +2835,10 @@ export const App: React.FC = () => {
             id: item.id || `stop-${idx}-${Date.now()}-${Math.random()}`,
             de: item.de || '',
             ate: item.ate || '',
-            motivo: item.motivo || '',
-            explicacao: item.explicacao || item.observacao || ''
+            motivo: item.motivo || item.keyword || '',
+            keyword: item.keyword || item.motivo || '',
+            explicacao: item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '',
+            justification: item.justification || item.explicacao || item.observacao || item.observacoes || item.descricao || ''
           }));
         }
       }
@@ -3878,11 +3887,18 @@ Gerado automaticamente pelo Sistema de Gest√£o Manupackaging.`;
           return parsed.map((item: any) => {
             const de = (item.de || '').trim();
             const ate = (item.ate || '').trim();
-            const motivo = (item.motivo || '').trim();
-            if (de && ate) {
-              return `${de} √†s ${ate}${motivo ? `: ${motivo}` : ''}`;
+            const motivo = (item.motivo || item.keyword || '').trim();
+            const explicacao = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+            let desc = '';
+            if (motivo && explicacao && motivo.toLowerCase() !== explicacao.toLowerCase()) {
+              desc = `${motivo} (${explicacao})`;
+            } else {
+              desc = explicacao || motivo || 'Sem motivo';
             }
-            return motivo || 'Sem motivo';
+            if (de && ate) {
+              return `${de} √†s ${ate}${desc ? `: ${desc}` : ''}`;
+            }
+            return desc || 'Sem motivo';
           }).filter(Boolean).join('; ');
         }
       } catch (e) {
@@ -4351,12 +4367,21 @@ Gerado automaticamente pelo Sistema de Gest√£o Manupackaging.`;
           const parsed = JSON.parse(reasonInput);
           if (Array.isArray(parsed) && parsed.length > 0) {
             parsed.forEach((item: any) => {
-              const de = item.de || '';
-              const ate = item.ate || '';
-              const motivo = item.motivo || 'N√£o informado';
+              const de = (item.de || '').trim();
+              const ate = (item.ate || '').trim();
+              const motivo = (item.motivo || item.keyword || '').trim();
+              const explicacao = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+              
+              let desc = '';
+              if (motivo && explicacao && motivo.toLowerCase() !== explicacao.toLowerCase()) {
+                desc = `${motivo} - ${explicacao}`;
+              } else {
+                desc = explicacao || motivo || 'N√£o informado';
+              }
+              
               const itemMin = de && ate ? getDiffMinutes(de, ate) : 0;
               
-              const reasonStr = de && ate ? `${de} √†s ${ate} - ${motivo}` : motivo;
+              const reasonStr = de && ate ? `${de} √†s ${ate} - ${desc}` : desc;
               
               results[machine].motifs.push({ 
                 type, 
@@ -4373,7 +4398,7 @@ Gerado automaticamente pelo Sistema de Gest√£o Manupackaging.`;
         // Fallback
       }
       
-      results[machine].motifs.push({ type, min: minInput, reason: reasonInput, operator, date });
+      results[machine].motifs.push({ type, min: minInput, reason: reasonInput || 'N√£o informado', operator, date });
     };
 
     filteredDashboardData.forEach(e => {
@@ -11045,6478 +11070,255 @@ Atenciosamente,
                                 radius={[0, 8, 8, 0]}
                                 name={selectedMetricDef.label}
                                 onClick={(data: any) => {
-                                  if (biDynamicGroup === 'operator' || biDynamicGroup === 'machine' || biDynamicGroup === 'shift') {
-                                    handleOpenDrilldown(biDynamicGroup, data.name);
-                                  }
-                                }}
-                                className="cursor-zoom-in"
-                              >
-                                {dynamicChartData.map((_, i) => (
-                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">N√£o h√° lan√ßamentos de produ√ß√£o compat√≠veis</div>
-                        )}
-                      </div>
-
-                      {/* Rank Sidebar Details */}
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col justify-between">
-                        <div className="space-y-3">
-                          <h5 className="text-[10px] font-black uppercase text-slate-700 tracking-wider">L√≠deres de Desempenho</h5>
-                          <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                            {dynamicChartData.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-[11px] py-1.5 border-b border-slate-100 last:border-b-0">
-                                <div className="flex items-center gap-2 font-bold text-slate-700">
-                                  <span className={`w-4 h-4 text-[9px] text-white font-black rounded flex items-center justify-center ${idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-slate-350'}`}>{idx + 1}</span>
-                                  <span className="truncate max-w-[100px]">{item.name}</span>
-                                  {biDynamicGroup === 'operator' && (
-                                    <div className="flex gap-1 items-center ml-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => exportSingleOperatorPDF(item.name)}
-                                        className="text-indigo-600 hover:text-indigo-800 transition-colors p-0.5 cursor-pointer"
-                                        title={`Baixar PDF exclusivo de ${item.name}`}
-                                      >
-                                        <FileText size={11} className="inline" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="font-extrabold text-slate-900">{selectedMetricDef.formatter(item.value)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-100">
-                          <p className="text-[9px] text-slate-400 font-medium italic leading-normal flex items-start gap-1">
-                            <Info size={11} className="mt-0.5 shrink-0 text-indigo-500" />
-                            Clique em qualquer barra do gr√°fico acima ou operador √† esquerda para realizar o Drill-down de inatividades.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* stop reasons summary and drill-down trigger table */}
-                  <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative space-y-6">
-                    <div className="flex items-center justify-between border-b border-slate-50 pb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center border border-orange-100">
-                          <AlertCircle size={20} />
-                        </div>
-                        <div>
-                          <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight">Rela√ß√£o Geral de Paradas (Per√≠odo)</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Visualiza√ß√£o detalhada das 15 maiores paradas registradas</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      {sortedCompiledStops.length > 0 ? (
-                        <table className="w-full text-left text-[11px] border-collapse">
-                          <thead>
-                            <tr className="border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              <th className="py-2.5">Data/Turno</th>
-                              <th>Equipamento</th>
-                              <th>Operador</th>
-                              <th>Tipo Parada</th>
-                              <th>Dura√ß√£o</th>
-                              <th>Motivo</th>
-                              <th className="text-right">A√ß√£o</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50 font-medium text-slate-600">
-                            {sortedCompiledStops.map((stop, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-3 font-semibold text-slate-800">
-                                  <span>{stop.date.split('-').reverse().join('/')}</span>
-                                  <span className="block text-[8px] text-slate-400 font-bold uppercase">{stop.shift}</span>
-                                </td>
-                                <td className="font-bold text-slate-700">{stop.machine}</td>
-                                <td>{stop.operator}</td>
-                                <td>
-                                  <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase inline-block ${stop.type === 'Manuten√ß√£o' ? 'bg-rose-50 text-rose-600 border border-rose-100' : stop.type === 'Processo' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-100 text-slate-600'}`}>{stop.type}</span>
-                                </td>
-                                <td className="font-extrabold text-slate-800">{formatMinutes(stop.minutes)}</td>
-                                <td className="max-w-xs truncate italic text-slate-500" title={stop.motive}>{stop.motive}</td>
-                                <td className="text-right">
-                                  <button 
-                                    onClick={() => handleOpenDrilldown('machine', stop.machine)}
-                                    className="px-2.5 py-1 text-[8px] font-black uppercase text-blue-600 bg-blue-50 border border-blue-100 rounded-lg shrink-0 transition-opacity whitespace-nowrap hover:bg-blue-600 hover:text-white"
-                                  >
-                                    Drill-down
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <div className="py-8 text-center text-slate-350 text-xs font-bold uppercase">Sem registros de paradas no per√≠odo selecionado</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Drill-down Modal overlay with background blur */}
-                  <AnimatePresence>
-                    {biDrilldownModal.isOpen && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        {/* backdrop */}
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          onClick={() => setBiDrilldownModal(prev => ({ ...prev, isOpen: false }))}
-                          className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-                        />
-
-                        {/* modal content body */}
-                        <motion.div 
-                          initial={{ scale: 0.95, y: 15, opacity: 0 }}
-                          animate={{ scale: 1, y: 0, opacity: 1 }}
-                          exit={{ scale: 0.95, y: 15, opacity: 0 }}
-                          transition={{ type: "spring", damping: 25, stiffness: 350 }}
-                          className="relative bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl border border-slate-100 flex flex-col"
-                        >
-                          <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
-                            <div>
-                              <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest leading-none block mb-1">M√≥dulo Interno de Rastreamento (BI)</span>
-                              <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider">{biDrilldownModal.title}</h4>
-                            </div>
-                            <button 
-                              onClick={() => setBiDrilldownModal(prev => ({ ...prev, isOpen: false }))}
-                              className="p-1.5 bg-slate-800 text-slate-400 hover:text-slate-100 rounded-xl transition-all"
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-
-                          <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                            {/* Drilldown high level statistics banner */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-150">
-                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ocorr√™ncias Totais</span>
-                                <p className="text-xl font-black text-slate-800 mt-1">{biDrilldownModal.stops.length} paradas</p>
-                              </div>
-                              <div className="bg-rose-50/50 rounded-2xl p-4 border border-rose-100">
-                                <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest">Tempo Total Perdido</span>
-                                <p className="text-xl font-black text-rose-600 mt-1">
-                                  {formatMinutes(biDrilldownModal.stops.reduce((acc, curr) => acc + curr.minutes, 0))}
-                                </p>
-                              </div>
-                              <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100 animate-pulse">
-                                <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">Gravidade M√©dia</span>
-                                <p className="text-xl font-black text-amber-700 mt-1">
-                                  {biDrilldownModal.stops.length > 0 
-                                    ? formatMinutes(Math.round(biDrilldownModal.stops.reduce((acc, curr) => acc + curr.minutes, 0) / biDrilldownModal.stops.length)) 
-                                    : '0 min'} / op
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* compiled list of exact reasons from backend/csv records */}
-                            <div className="space-y-3">
-                              <h5 className="text-[10px] font-black uppercase text-slate-700 tracking-wider">Minutagem de Causas e Apontamentos</h5>
-                              <div className="border border-slate-150 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-[250px] overflow-y-auto">
-                                {biDrilldownModal.stops.length > 0 ? (
-                                  biDrilldownModal.stops.map((item, idx) => (
-                                    <div key={idx} className="p-3 sm:px-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[11px]">
-                                      <div className="space-y-0.5">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-extrabold text-slate-800">{item.date.split('-').reverse().join('/')}</span>
-                                          <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${item.severity === 'high' ? 'bg-red-100 text-red-600' : item.severity === 'medium' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>{item.type}</span>
-                                          <span className="text-[9px] text-slate-400 font-bold uppercase">({item.shift})</span>
-                                        </div>
-                                        <p className="text-slate-500 font-medium italic pr-4">Causa: {item.motive}</p>
-                                      </div>
-                                      <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
-                                        <span className="text-[9px] text-slate-400 font-bold uppercase">Operador: <span className="text-slate-700 font-black">{item.operator}</span></span>
-                                        <span className="font-black text-rose-500 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg shrink-0">{formatMinutes(item.minutes)}</span>
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="p-6 text-center text-slate-350 text-xs font-bold uppercase">N√£o constam paradas registradas para esta sele√ß√£o espec√≠fica</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="p-4 bg-slate-50 border-t border-slate-150 flex justify-end gap-3 rounded-b-3xl">
-                            <button 
-                              type="button" 
-                              onClick={() => setBiDrilldownModal(prev => ({ ...prev, isOpen: false }))}
-                              className="px-6 py-2.5 bg-slate-800 text-white hover:bg-slate-900 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
-                            >
-                              Fechar Visualiza√ß√£o
-                            </button>
-                          </div>
-                        </motion.div>
-                      </div>
-                    )}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {fullscreenChart && ['bi-chart-composed', 'bi-chart-scatter', 'bi-chart-stacked', 'bi-chart-donut', 'bi-chart-dynamic'].includes(fullscreenChart) && (
-                      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-                        <motion.div 
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.95, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="bg-white rounded-[2rem] shadow-2xl border border-slate-200 w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden text-left"
-                        >
-                          {/* Header */}
-                          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <div>
-                              <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">
-                                {fullscreenChart === 'bi-chart-composed' && 'Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida'}
-                                {fullscreenChart === 'bi-chart-scatter' && 'Dispers√£o: Produ√ß√£o vs Res√≠duos Operador'}
-                                {fullscreenChart === 'bi-chart-stacked' && 'Distribui√ß√£o Proporcional de Paradas'}
-                                {fullscreenChart === 'bi-chart-donut' && 'Balan√ßo de Massa: Res√≠duo vs Reciclado'}
-                                {fullscreenChart === 'bi-chart-dynamic' && 'Ranking e M√©tricas Din√¢micas'}
-                              </h3>
-                              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                {fullscreenChart === 'bi-chart-composed' && 'Barras (Eco B P+M + Borra) vs Linha de Produ√ß√£o (Eixo Secund√°rio)'}
-                                {fullscreenChart === 'bi-chart-scatter' && 'X = Produ√ß√£o (kg) | Y = Res√≠duos (kg) | Tamanho = Paradas de Processo (min)'}
-                                {fullscreenChart === 'bi-chart-stacked' && 'Exibe a porcentagem do tempo de inatividade dividido por motivos'}
-                                {fullscreenChart === 'bi-chart-donut' && 'Rela√ß√£o direta de mat√©ria coletada na extrusora vs reprocessada no Erema'}
-                                {fullscreenChart === 'bi-chart-dynamic' && `Agrupado por: ${biDynamicGroup === 'operator' ? 'üë§ Operador' : biDynamicGroup === 'machine' ? 'üéüÔ∏è Equipamento' : 'üïí Turno'} | M√©trica: ${selectedMetricDef.label}`}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => downloadChartAsPNG(fullscreenChart, 'Gr√°fico Ampliado')}
-                                className="p-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-xl transition-all cursor-pointer border border-slate-200"
-                                title="Baixar Imagem"
-                              >
-                                <Download size={18} />
-                              </button>
-                              <button 
-                                onClick={() => setFullscreenChart(null)}
-                                className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-all cursor-pointer border border-rose-100"
-                                title="Fechar"
-                              >
-                                <X size={18} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Content body */}
-                          <div className="flex-1 p-8 overflow-y-auto">
-                            <div className="w-full h-full min-h-[450px]">
-                              {fullscreenChart === 'bi-chart-composed' && (
-                                dailyTrendData.length > 0 ? (
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={dailyTrendData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
-                                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                      <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                      <YAxis stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
-                                      <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" kg" />
-                                      <RechartsTooltip shared={false} content={<BiComposedTooltip formatWeight={formatWeight} />} cursor={false} />
-                                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                                      <Bar dataKey="ecoBP" name="Eco B Produ√ß√£o" stackId="loss" fill="#3b82f6" />
-                                      <Bar dataKey="ecoBM" name="Eco B Manuten√ß√£o" stackId="loss" fill="#8b5cf6" />
-                                      <Bar dataKey="borra" name="Res√≠duo Borra" stackId="loss" fill="#f43f5e" />
-                                      <Line yAxisId="right" type="monotone" dataKey="prod" name="Produ√ß√£o L√≠quida" stroke="#10b981" strokeWidth={4} dot={<CustomBiDot />} activeDot={false} />
-                                    </ComposedChart>
-                                  </ResponsiveContainer>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o per√≠odo</div>
-                                )
-                              )}
-
-                              {fullscreenChart === 'bi-chart-scatter' && (
-                                scatterData.length > 0 ? (
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: -10 }}>
-                                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                      <XAxis type="number" dataKey="prod" name="Produ√ß√£o L√≠quida" unit=" kg" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                      <YAxis type="number" dataKey="wastes" name="Desperd√≠cio Total" unit=" kg" stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                      <ZAxis type="number" dataKey="stopsProcess" range={[100, 1000]} name="Ajuste Processo" unit=" min" />
-                                      <RechartsTooltip 
-                                        cursor={{ strokeDasharray: '3 3' }}
-                                        formatter={(value: any, name: any) => [name === 'Ajuste Processo' ? `${value} min` : formatWeight(Number(value)), name]}
-                                      />
-                                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                                      <Scatter name="Operadores" data={scatterData} fill="#4f46e5">
-                                        {scatterData.map((_entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                      </Scatter>
-                                    </ScatterChart>
-                                  </ResponsiveContainer>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o per√≠odo</div>
-                                )
-                              )}
-
-                              {fullscreenChart === 'bi-chart-stacked' && (
-                                proportionalStopsData.length > 0 ? (
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={proportionalStopsData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
-                                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                      <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                      <YAxis tickFormatter={(tick) => `${tick}%`} stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                      <RechartsTooltip formatter={(val: any) => `${Number(val).toFixed(1)}%`} />
-                                      <Legend wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                                      <Bar dataKey="Ajuste Processo" stackId="a" fill="#3b82f6" />
-                                      <Bar dataKey="Troca de Bobina" stackId="a" fill="#10b981" />
-                                      <Bar dataKey="Limpeza" stackId="a" fill="#f59e0b" />
-                                      <Bar dataKey="Manuten√ß√£o El√©trica" stackId="a" fill="#ef4444" />
-                                      <Bar dataKey="Manuten√ß√£o Mec√¢nica" stackId="a" fill="#8b5cf6" />
-                                      <Bar dataKey="Falta de Mat√©ria-Prima" stackId="a" fill="#ec4899" />
-                                      <Bar dataKey="Troca de Facas" stackId="a" fill="#14b8a6" />
-                                      <Bar dataKey="Outros" stackId="a" fill="#64748b" />
-                                    </BarChart>
-                                  </ResponsiveContainer>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados de paradas registrados</div>
-                                )
-                              )}
-
-                              {fullscreenChart === 'bi-chart-donut' && (
-                                massBalanceData.length > 0 ? (
-                                  <div className="flex flex-col md:flex-row items-center justify-around h-full gap-8">
-                                    <div className="w-full md:w-1/2 h-[350px]">
-                                      <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                          <Pie 
-                                            data={massBalanceData} 
-                                            cx="50%" 
-                                            cy="50%" 
-                                            innerRadius={90} 
-                                            outerRadius={130} 
-                                            dataKey="value"
-                                            nameKey="name"
-                                            label={(props) => {
-                                              const RADIAN = Math.PI / 180;
-                                              const { cx, cy, midAngle, innerRadius, outerRadius, value, name } = props;
-                                              const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                              const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                              const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                                              return (
-                                                <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" className="text-xs font-black uppercase">
-                                                  {name}: {formatWeight(value)}
-                                                </text>
-                                              );
-                                            }}
-                                            paddingAngle={3}
-                                          >
-                                            <Cell fill="#f59e0b" stroke="none" />
-                                            <Cell fill="#10b981" stroke="none" />
-                                          </Pie>
-                                          <RechartsTooltip formatter={(val: any) => formatWeight(Number(val))} />
-                                        </PieChart>
-                                      </ResponsiveContainer>
-                                    </div>
-                                    <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-[2rem] space-y-4 max-w-sm w-full shadow-sm">
-                                      <h4 className="text-xs font-black uppercase text-indigo-950 tracking-wider">M√©tricas de Aproveitamento</h4>
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white p-3 rounded-2xl border border-slate-100">
-                                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Eco B</span>
-                                          <span className="text-sm font-black text-amber-500 font-mono block">{formatWeight(massBalanceData[0]?.value || 0)}</span>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-2xl border border-slate-100">
-                                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Erema</span>
-                                          <span className="text-sm font-black text-emerald-500 font-mono block">{formatWeight(massBalanceData[1]?.value || 0)}</span>
-                                        </div>
-                                      </div>
-                                      <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
-                                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-wide">Aproveitamento Real</span>
-                                        <span className="text-base font-black text-amber-700 font-mono">
-                                          {massBalanceData[0]?.value > 0 ? ((massBalanceData[1]?.value / massBalanceData[0]?.value) * 100).toFixed(1) : 0}%
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados de balan√ßo de massa</div>
-                                )
-                              )}
-
-                              {fullscreenChart === 'bi-chart-dynamic' && (
-                                dynamicChartData.length > 0 ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 h-full">
-                                    <div className="md:col-span-2 h-[350px]">
-                                      <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={dynamicChartData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-                                          <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" />
-                                          <XAxis type="number" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                          <YAxis type="category" dataKey="name" stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                                          <RechartsTooltip formatter={(val: any) => selectedMetricDef.formatter(val)} />
-                                          <Bar 
-                                            dataKey="value" 
-                                            fill="#4f46e5" 
-                                            radius={[0, 10, 10, 0]}
-                                            name={selectedMetricDef.label}
-                                          >
-                                            {dynamicChartData.map((_, i) => (
-                                              <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                                            ))}
-                                          </Bar>
-                                        </BarChart>
-                                      </ResponsiveContainer>
-                                    </div>
-                                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col justify-between h-full">
-                                      <div className="space-y-4">
-                                        <h5 className="text-xs font-black uppercase text-slate-700 tracking-wider">L√≠deres de Desempenho Ampliado</h5>
-                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                                          {dynamicChartData.map((item, idx) => (
-                                            <div key={idx} className="flex items-center justify-between text-xs py-2.5 border-b border-slate-100 last:border-b-0">
-                                              <div className="flex items-center gap-3 font-bold text-slate-700">
-                                                <span className={`w-5 h-5 text-[10px] text-white font-black rounded flex items-center justify-center ${idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-slate-350'}`}>{idx + 1}</span>
-                                                <span className="truncate max-w-[120px]">{item.name}</span>
-                                              </div>
-                                              <span className="font-mono font-bold text-indigo-600">{selectedMetricDef.formatter(item.value)}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">N√£o h√° dados suficientes para renderizar o gr√°fico</div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      </div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })()}
-
-        {activeTab === 'extrusion' && extrusionSubTab === 'dashboard' && dashboardSubTab === 'comparison' && (
-          <BiAnalyticsView 
-            productionData={productionData}
-            goals={goals}
-            employees={employees}
-            onOpenDowntimeAnalytics={() => setIsDowntimeAnalyticsModalOpen(true)}
-            onOpenDowntimeReasons={() => setIsDowntimeReasonsModalOpen(true)}
-          />
-        )}
-
-        {/* Card: Rela√ß√£o de Paradas e Motivos */}
-        {dashboardSubTab === 'summary' && (
-          <div id="stops-motifs-card" className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-sm relative group animate-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center border border-orange-100 shrink-0">
-                            <AlertCircle size={24} />
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Rela√ß√£o de Paradas e Motivos</h3>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              Detalhamento por Equipamento {stopsSearchTerm ? `‚Ä¢ Filtrado por "${stopsSearchTerm}"` : ''}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 no-print self-end md:self-auto">
-                        <button 
-                            onClick={exportStopsToCSV} 
-                            className="chart-download-btn p-3 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100 shadow-sm"
-                            title="Exportar CSV (Excel)"
-                        >
-                            <FileSpreadsheet size={20} />
-                        </button>
-                        <button 
-                            onClick={() => downloadChartAsPNG('stops-motifs-card', 'Rela√ß√£o de Paradas e Motivos')} 
-                            className="chart-download-btn p-3 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100 shadow-sm"
-                            title="Baixar PNG"
-                        >
-                            <Download size={20} />
-                        </button>
-                        <button 
-                            onClick={() => setFullscreenChart('stops-motifs-card')} 
-                            className="chart-download-btn p-3 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100 shadow-sm"
-                            title="Visualizar em Tela Cheia"
-                        >
-                            <Maximize2 size={20} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Interactive Search Bar for Motifs */}
-                <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
-                  <div className="relative flex-1">
-                    <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Pesquisar motivo de parada... (ex: eixo, motor, troca, faca, vazamento)"
-                      value={stopsSearchTerm}
-                      onChange={(e) => setStopsSearchTerm(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-xs"
-                    />
-                    {stopsSearchTerm && (
-                      <button
-                        onClick={() => setStopsSearchTerm('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
-                        title="Limpar pesquisa"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-
-                  {stopsSearchTerm && (
-                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl shrink-0">
-                      <Filter size={14} className="text-blue-600" />
-                      <span className="text-[11px] font-black text-blue-700">
-                        {filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.motifs.length, 0)} parada(s) ({formatMinutes(filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.total, 0))})
-                      </span>
-                      <button
-                        onClick={() => setStopsSearchTerm('')}
-                        className="text-[10px] font-black uppercase text-blue-600 hover:underline ml-1"
-                      >
-                        Limpar
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {filteredMachineStopsDetails.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredMachineStopsDetails.map(([machine, data]) => (
-                      <div key={machine} className="bg-slate-50 rounded-[1.8rem] p-5 border border-slate-100 hover:border-blue-200 transition-all">
-                        <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
-                          <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{machine}</span>
-                          <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                            <Clock size={12} className="text-blue-500"/>
-                            <span className="text-[11px] font-black text-blue-600">{formatMinutes(data.total)}</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2.5 max-h-60 overflow-y-auto custom-scrollbar pr-2">
-                          {data.motifs.map((m, idx) => (
-                            <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-                                <div className="flex justify-between items-center">
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
-                                        m.type === 'Manuten√ß√£o' ? 'bg-orange-100 text-orange-600' :
-                                        m.type === 'Processo' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'
-                                    }`}>
-                                        {m.type}
-                                    </span>
-                                    <span className="text-[10px] font-black text-slate-700">{m.min} min</span>
-                                </div>
-                                <p className="text-[11px] font-bold text-slate-600 leading-tight">"{m.reason}"</p>
-                                <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-50">
-                                    <span className="text-[8px] font-bold text-slate-400 uppercase">{m.operator}</span>
-                                    <span className="text-[8px] font-bold text-slate-300">{m.date.split('-').reverse().join('/')}</span>
-                                </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-16 flex flex-col items-center justify-center text-slate-400 gap-3">
-                      <Activity size={48} className="opacity-20 text-slate-400" />
-                      <p className="font-black uppercase text-xs tracking-wider">
-                        {stopsSearchTerm 
-                          ? `Nenhuma parada encontrada para "${stopsSearchTerm}"` 
-                          : 'Sem registros de parada no per√≠odo'}
-                      </p>
-                      {stopsSearchTerm && (
-                        <button
-                          onClick={() => setStopsSearchTerm('')}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-500 transition-all shadow-sm"
-                        >
-                          Limpar Pesquisa
-                        </button>
-                      )}
-                  </div>
-                )}
-            </div>
-        )}
-      </div>
-    )}
-
-        {activeTab === 'extrusion' && extrusionSubTab === 'reports' && (
-          <div className="space-y-6 animate-in fade-in duration-300 select-none cursor-default">
-            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none" />
-              </div>
-              <div className="flex gap-2 flex-wrap md:flex-nowrap">
-                {selectedEntries.length > 0 && canEditProduction && (
-                  <button 
-                    onClick={handleDeleteSelected}
-                    className="px-6 py-3.5 bg-red-600 text-white rounded-2xl font-black text-[11px] uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-100 transition-all active:scale-95 animate-in zoom-in duration-200"
-                  >
-                    <Trash2 size={18}/> Excluir Selecionados ({selectedEntries.length})
-                  </button>
-                )}
-                <button onClick={exportToCSV} className="px-8 py-3.5 bg-emerald-600 text-white rounded-2xl font-black text-[11px] uppercase flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 transition-all active:scale-95 whitespace-nowrap">
-                  <FileDown size={18}/> Exportar Excel
-                </button>
-                <button onClick={downloadBackup} className="px-8 py-3.5 bg-indigo-600 text-white hover:bg-indigo-750 rounded-2xl font-black text-[11px] uppercase flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 transition-all active:scale-95 whitespace-nowrap" title="Extrair Backup Completo em formato JSON">
-                  <Database size={18}/> Extrair Backup (JSON)
-                </button>
-              </div>
-            </div>
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left border-collapse select-none cursor-default">
-                        <thead className="bg-slate-50 border-b border-slate-100 whitespace-nowrap">
-                            <tr>
-                              <th className="px-4 py-5 text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={selectedEntries.length === filteredReportData.length && filteredReportData.length > 0}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedEntries(filteredReportData.map(e => e.id));
-                                      } else {
-                                        setSelectedEntries([]);
-                                      }
-                                    }}
-                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                    title="Selecionar Todos"
-                                  />
-                                  {canEditProduction && <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Editar</span>}
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1 select-none">
-                                  Data
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full left-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Dia correspondente ao registro.
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1 select-none">
-                                  Operador
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full left-0 mt-1.5 w-40 bg-slate-900 border border-slate-755 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Profissional encarregado da m√°quina.
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1 select-none">
-                                  M√°quina
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full left-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Equipamento extrusor de origem.
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1 select-none">
-                                  Turno
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full left-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Turno operacional correspondente (A, B, C, Geral).
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1 select-none">
-                                  Motivo
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full left-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Justificativa apontada para inatividades ou condi√ß√µes do dia.
-                                    </span>
-                                  </span>
-                                </span>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Peso Bruto
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Peso total incluindo n√∫cleo e bobina.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Tara
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-755 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Peso da embalagem e suportes.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  P. L√≠quido
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-blue-300 hover:text-blue-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Peso acabado real (Bruto menos Tara).
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-emerald-600 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Uso Reciclado
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-emerald-400 hover:text-emerald-600 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Peso de composto granulado reciclado consumido.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-orange-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Eco A
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-orange-300 hover:text-orange-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Bobinas com varia√ß√£o enviadas para a Sede (Curitiba) para rebobinamento e venda.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-orange-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Eco B(P)
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-orange-300 hover:text-orange-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Bobinas inutiliz√°veis de qualquer tamanho geradas no processo de produ√ß√£o destinadas √† reciclagem (EREMA).
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-orange-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Eco B(M)
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-orange-300 hover:text-orange-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Bobinas inutiliz√°veis de qualquer tamanho geradas por causas de manuten√ß√£o destinadas √† reciclagem (EREMA).
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-red-500 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Borra
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-red-300 hover:text-red-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Expurgos polim√©ricos s√≥lidos do in√≠cio do ciclo.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Manut(m)
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Minutos parados por falha/manuten√ß√£o mec√¢nica ou el√©trica.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Proc(m)
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Minutos parados para setup ou acerto de processo.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">
-                                <div className="flex items-center justify-end gap-1 select-none">
-                                  Outros(m)
-                                  <span className="group relative inline-block cursor-help align-middle">
-                                    <Info size={10} className="text-slate-300 hover:text-slate-500 inline" />
-                                    <span className="pointer-events-none absolute top-full right-0 mt-1.5 w-40 bg-slate-900 border border-slate-750 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                      Interrup√ß√µes por outros fatores log√≠sticos/organizacionais.
-                                    </span>
-                                  </span>
-                                </div>
-                              </th>
-                              <th className="px-4 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">A√ß√µes</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 text-[10px] whitespace-nowrap">
-                            {filteredReportData.map(entry => {
-                              const isStopped = entry.isNoWorkDay || entry.isMaintenanceEntry;
-                              return (
-                                <tr key={entry.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedEntries.includes(entry.id) ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-3 text-center">
-                                      <div className="flex items-center justify-center gap-2">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={selectedEntries.includes(entry.id)}
-                                          onChange={() => {
-                                            if (selectedEntries.includes(entry.id)) {
-                                              setSelectedEntries(selectedEntries.filter(id => id !== entry.id));
-                                            } else {
-                                              setSelectedEntries([...selectedEntries, entry.id]);
-                                            }
-                                          }}
-                                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
-                                        />
-                                        {canEditProduction && (
-                                          <button 
-                                            onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }} 
-                                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
-                                            title="Editar este dia"
-                                          >
-                                            <Edit2 size={12}/>
-                                            <span>Editar</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3 font-bold text-slate-700">{entry.date.split('-').reverse().join('/')}</td>
-                                    <td className="px-4 py-3 font-bold uppercase">
-                                      {isStopped ? (
-                                        <span className="bg-red-50 text-red-650 px-1.5 py-0.5 rounded text-[9px] font-black border border-red-100">
-                                          (PROCESSO PARADO)
-                                        </span>
-                                      ) : (
-                                        <span className="font-medium text-slate-600">{entry.operator}</span>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 font-bold text-slate-400">{entry.machine}</td>
-                                    <td className="px-4 py-3 text-slate-500 uppercase">{entry.shift}</td>
-                                    <td className="px-4 py-3 text-slate-600 font-bold max-w-[150px] truncate" title={getStoppageReason(entry)}>{getStoppageReason(entry) || '-'}</td>
-                                    <td className="px-4 py-3 text-right font-medium text-slate-500">{formatWeight(entry.grossWeight)}</td>
-                                    <td className="px-4 py-3 text-right font-medium text-slate-500">{formatWeight(entry.tara)}</td>
-                                    <td className="px-4 py-3 text-right font-black text-blue-600 bg-blue-50/20">
-                                       <div className="font-black text-blue-600">{formatWeight(entry.netWeight)}</div>
-                                       {((entry.volumes || 0) > 0 || (entry.tubetes || 0) > 0 || (entry.tubetesEcoB || 0) > 0) && (
-                                         <div className="text-[8px] text-slate-400 font-bold whitespace-nowrap mt-0.5 select-none leading-none">
-                                           {(entry.volumes || 0) > 0 ? `${entry.volumes} Vol` : ''}
-                                           {(entry.tubetes || 0) > 0 ? ` ‚Ä¢ ${entry.tubetes} Tub` : ''}
-                                           {(entry.tubetesEcoB || 0) > 0 ? ` ‚Ä¢ ${entry.tubetesEcoB} Tub Eco B` : ''}
-                                         </div>
-                                       )}
-                                     </td>
-                                    <td className="px-4 py-3 text-right font-bold text-emerald-600 bg-emerald-50/15">
-                                      {entry.recycledBags ? `${entry.recycledBags.toString().replace('.', ',')} bags` : entry.recycledUsed ? `${(entry.recycledUsed / 1100).toFixed(1).replace('.', ',')} bags` : ''}
-                                      {entry.recycledUsed ? ` (${formatWeight(entry.recycledUsed)})` : ''}
-                                      {!entry.recycledBags && !entry.recycledUsed ? '0' : ''}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-bold text-orange-600">
-                                      <div>{formatWeight(entry.ecoA)}</div>
-                                      {entry.ecoA > 0 && entry.ecoAMotivo && (
-                                        <div className="text-[9px] text-[#9a3412]/80 bg-orange-50/70 border border-orange-100/50 rounded px-1 py-0.5 mt-1 font-medium max-w-[140px] truncate ml-auto" title={entry.ecoAMotivo}>
-                                          ‚úçÔ∏è {entry.ecoAMotivo}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-bold text-orange-600">
-                                      <div>{formatWeight(entry.ecoBP)}</div>
-                                      {entry.ecoBP > 0 && entry.ecoBPMotivo && (
-                                        <div className="text-[9px] text-[#9a3412]/80 bg-orange-50/70 border border-orange-100/50 rounded px-1 py-0.5 mt-1 font-medium max-w-[140px] truncate ml-auto" title={entry.ecoBPMotivo}>
-                                          ‚úçÔ∏è {entry.ecoBPMotivo}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-bold text-orange-600">
-                                      <div>{formatWeight(entry.ecoBM)}</div>
-                                      {entry.ecoBM > 0 && entry.ecoBMMotivo && (
-                                        <div className="text-[9px] text-[#9a3412]/80 bg-orange-50/70 border border-orange-100/50 rounded px-1 py-0.5 mt-1 font-medium max-w-[140px] truncate ml-auto" title={entry.ecoBMMotivo}>
-                                          ‚úçÔ∏è {entry.ecoBMMotivo}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-black text-red-650 bg-red-50/15">
-                                      <div>{formatWeight(entry.borraTotal)}</div>
-                                      {entry.borraTotal > 0 && entry.borraTotalMotivo && (
-                                        <div className="text-[9px] text-red-750 bg-red-100/40 border border-red-205/30 rounded px-1 py-0.5 mt-1 font-medium max-w-[140px] truncate ml-auto" title={entry.borraTotalMotivo}>
-                                          ‚úçÔ∏è {entry.borraTotalMotivo}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-3 text-right text-slate-600">{entry.manutencaoMin}</td>
-                                    <td className="px-4 py-3 text-right text-slate-600">{entry.processoMin}</td>
-                                    <td className="px-4 py-3 text-right text-slate-600">{entry.outrosMin}</td>
-                                    <td className="px-4 py-3 text-center">
-                                          {canEditProduction && (
-                                            <div className="flex items-center justify-center gap-1">
-                                              <button onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-100 bg-blue-50/80 rounded-lg border border-blue-100" title="Editar Lan√ßamento"><Edit2 size={13}/></button>
-                                              <button onClick={() => { 
-                                                openConfirm(
-                                                  'Confirmar Exclus√£o',
-                                                  isStopped ? 'Deseja realmente excluir este lan√ßamento de parada?' : `Deseja realmente excluir este lan√ßamento de ${entry.operator}?`,
-                                                  async () => {
-                                                    try {
-                                                      await deleteDoc(doc(db, 'productionEntries', entry.id));
-                                                    } catch(e) { console.error(e); }
-                                                  }
-                                                );
-                                              }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={13}/></button>
-                                            </div>
-                                          )}
-                                    </td>
-                                </tr>
-                              );
-                            })}
-                        </tbody>
-                        <tfoot className="bg-slate-800 text-white font-black text-[10px] whitespace-nowrap sticky bottom-0 border-t border-slate-700">
-                            <tr>
-                              <td colSpan={6} className="px-4 py-4 text-center uppercase tracking-widest bg-slate-900 border-r border-slate-700">Somat√≥ria Total</td>
-                              <td className="px-4 py-4 text-right">{formatWeight(reportTotals.grossWeight)}</td>
-                              <td className="px-4 py-4 text-right">{formatWeight(reportTotals.tara)}</td>
-                              <td className="px-4 py-4 text-right text-blue-400 bg-slate-900/50">{formatWeight(reportTotals.netWeight)}</td>
-                              <td className="px-4 py-4 text-right text-emerald-400 bg-slate-900/50">
-                                {reportTotals.recycledBags > 0 ? `${reportTotals.recycledBags.toFixed(1).replace('.', ',')} bags ` : ''}
-                                ({formatWeight(reportTotals.recycledUsed)})
-                              </td>
-                              <td className="px-4 py-4 text-right">{formatWeight(reportTotals.ecoA)}</td>
-                              <td className="px-4 py-4 text-right">{formatWeight(reportTotals.ecoBP)}</td>
-                              <td className="px-4 py-4 text-right">{formatWeight(reportTotals.ecoBM)}</td>
-                              <td className="px-4 py-4 text-right text-red-400 bg-slate-900/50">{formatWeight(reportTotals.borraTotal)}</td>
-                              <td className="px-4 py-4 text-right">{reportTotals.manutencaoMin}</td>
-                              <td className="px-4 py-4 text-right">{reportTotals.processoMin}</td>
-                              <td className="px-4 py-4 text-right">{reportTotals.outrosMin}</td>
-                              <td className="px-4 py-4 bg-slate-900"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'extrusion' && extrusionSubTab === 'stock' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Header / Banner */}
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-xl relative overflow-hidden border border-slate-800">
-              <div className="absolute right-0 top-0 -mt-12 -mr-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="relative z-10 space-y-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 rounded-full text-xs font-black uppercase tracking-widest text-indigo-300 border border-indigo-500/30">
-                  <FileSpreadsheet size={12} /> Controle Di√°rio de Mat√©ria-Prima
-                </div>
-                <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight">Gest√£o de Estoque e Concilia√ß√£o</h2>
-                <p className="text-slate-300 text-sm md:text-base max-w-2xl font-medium leading-relaxed">
-                  Realize o upload di√°rio das planilhas de contagem do estoque f√≠sico de mat√©ria-prima. O sistema calcula o consumo f√≠sico di√°rio e o concilia com os apontamentos das extrusoras Cast 1 e Cast 2.
-                </p>
-                <div className="pt-2">
-                  <button 
-                    onClick={downloadTemplate}
-                    type="button"
-                    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500/30 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm"
-                  >
-                    <Download size={14} /> Baixar Modelo de Excel
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Upload Area & Historical Entries */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left Column: Import Panel */}
-              <div className="lg:col-span-1 bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm space-y-6 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-md font-black uppercase tracking-tight text-slate-800 mb-2">Importar Contagem F√≠sica</h3>
-                  <p className="text-slate-400 text-[11px] leading-relaxed mb-6 font-medium">
-                    Carregue a contagem do dia para registrar o estoque f√≠sico atualizado. O arquivo deve ter uma coluna de material e outra de quantidade f√≠sica.
-                  </p>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Data da Contagem de Estoque</label>
-                      <input 
-                        type="date"
-                        value={stockReferenceDate}
-                        onChange={(e) => setStockReferenceDate(e.target.value)}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 transition-all bg-slate-50/50"
-                      />
-                    </div>
-
-                    <div 
-                      onDragEnter={handleDrag}
-                      onDragOver={handleDrag}
-                      onDragLeave={handleDrag}
-                      onDrop={handleDrop}
-                      className={`border-2 border-dashed rounded-[2rem] p-8 text-center transition-all relative flex flex-col items-center justify-center min-h-[170px] ${
-                        dragActive ? 'border-indigo-500 bg-indigo-50/50 scale-[0.98]' : 'border-slate-200 hover:border-slate-300 bg-slate-50/20'
-                      }`}
-                    >
-                      <Upload className={`w-8 h-8 mb-3 transition-colors ${dragActive ? 'text-indigo-500 animate-bounce' : 'text-slate-400'}`} />
-                      <p className="text-xs font-extrabold text-slate-700 uppercase tracking-tight mb-1">Arraste a Planilha Aqui</p>
-                      <p className="text-[10px] text-slate-400 font-bold mb-4">...ou se preferir, clique abaixo</p>
-                      
-                      <label className="cursor-pointer bg-white border border-slate-200 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 shadow-sm transition-all">
-                        Selecionar Arquivo
-                        <input 
-                          type="file"
-                          accept=".xlsx,.xls"
-                          onChange={handleExcelUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {pendingUpload && (
-                  <div className="pt-6 border-t border-slate-50 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex items-start gap-2.5">
-                      <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={16} />
-                      <div className="space-y-1 w-full">
-                        <p className="text-[11px] font-black text-amber-800 uppercase tracking-tight">Planilha Identificada</p>
-                        <p className="text-[10px] text-amber-700/90 font-bold break-all">{pendingUpload.fileName}</p>
-                        <p className="text-[10px] text-amber-900 font-extrabold mt-1">
-                          Total Detectado: {formatWeight(pendingUpload.totalWeight)} em {pendingUpload.items.length} itens.
-                        </p>
-                        
-                        <div className="mt-3 pt-3 border-t border-amber-200/40 max-h-[140px] overflow-y-auto space-y-1.5 pr-1">
-                          {pendingUpload.items.map((it, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-[9px] bg-white/65 p-2 rounded-lg border border-amber-200/20">
-                              <span className="font-extrabold text-[#78350f] uppercase truncate max-w-[130px]" title={it.name}>
-                                {it.code ? `[${it.code}] ` : ''}{it.name}
-                              </span>
-                              <div className="text-right space-x-1.5 font-mono">
-                                <span className="bg-amber-100 text-amber-800 text-[8px] px-1 py-0.5 rounded font-sans font-black uppercase">{it.location || 'F√°brica'}</span>
-                                <span className="font-extrabold text-amber-950">{formatWeight(it.quantity)}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => setPendingUpload(null)}
-                        type="button"
-                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors"
-                      >
-                        Descartar
-                      </button>
-                      <button 
-                        onClick={handleSaveStock}
-                        type="button"
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-indigo-100"
-                      >
-                        Salvar Estoque
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Column: Physical Stock Breakdown List */}
-              <div className="lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm flex flex-col justify-between">
-                <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <h3 className="text-md font-black uppercase tracking-tight text-slate-800">Visualizar Registros Salvos</h3>
-                      <p className="text-slate-400 text-[11px] font-medium leading-relaxed">
-                        Selecione um dia com contagem registrada para analisar o consumo e ver detalhes das mat√©rias-primas.
-                      </p>
-                    </div>
-
-                    {stockEntries.length > 0 && (
-                      <div className="min-w-[170px]">
-                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Selecione a Data</label>
-                        <select 
-                          value={selectedStockDate}
-                          onChange={(e) => setSelectedStockDate(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 bg-white"
-                        >
-                          {stockEntries.map(entry => (
-                            <option key={entry.date} value={entry.date}>
-                              üìä {entry.date.split('-').reverse().join('/')} ({formatWeight(entry.totalWeight)})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedStockDate ? (
-                     (() => {
-                       const entry = stockEntries.find(e => e.date === selectedStockDate);
-                       const sortedEntries = [...stockEntries].sort((a, b) => a.date.localeCompare(b.date));
-                       const selectedIdx = sortedEntries.findIndex(e => e.date === selectedStockDate);
-                       const previousEntry = selectedIdx > 0 ? sortedEntries[selectedIdx - 1] : null;
-                       if (!entry) return <p className="text-xs text-slate-400 font-bold">Registro para esta data n√£o encontrado.</p>;
-
-                       // Calcula data do dia anterior e busca os lan√ßamentos de produ√ß√£o da p√°gina de relat√≥rio
-                       let prevProdDate = '';
-                       if (selectedStockDate) {
-                         const sDate = new Date(selectedStockDate + 'T12:00:00');
-                         sDate.setDate(sDate.getDate() - 1);
-                         prevProdDate = sDate.toISOString().split('T')[0];
-                       }
-
-                       // Registros de produ√ß√£o do dia anterior ou per√≠odo do final de semana
-                       const prevDayProdEntries = (previousEntry && selectedStockDate)
-                         ? productionData.filter(e => e.date >= previousEntry.date && e.date < selectedStockDate && !e.machine.toLowerCase().includes('erema'))
-                         : (prevProdDate ? productionData.filter(e => e.date === prevProdDate && !e.machine.toLowerCase().includes('erema')) : []);
-
-                       let totalWeightLC3 = 0;
-                       let totalWeightATX = 0;
-                       let totalWeightLC2 = 0;
-                       let totalWeightATXPlus = 0;
-                       let totalWeightOther = 0;
-
-                       prevDayProdEntries.forEach(e => {
-                         const weight = (e.netWeight || 0) + (e.ecoA || 0) + (e.ecoBP || 0) + (e.ecoBM || 0);
-                         const mType = (e.materialType || 'LC3').trim().toUpperCase();
-                         if (mType === 'LC3') {
-                           totalWeightLC3 += weight;
-                         } else if (mType === 'ATX') {
-                           totalWeightATX += weight;
-                         } else if (mType === 'LC2') {
-                           totalWeightLC2 += weight;
-                         } else if (mType === 'ATX PLUS' || mType === 'ATXPLUS') {
-                           totalWeightATXPlus += weight;
-                         } else {
-                           totalWeightOther += weight;
-                         }
-                       });
-
-                       const consumedButeno = (totalWeightLC3 * 0.95) + (totalWeightATX * 0.05) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.05);
-                       const consumedMetaloceno = (totalWeightLC3 * 0.05) + (totalWeightATX * 0.10) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.10);
-                       const consumedHexeno = (totalWeightATX * 0.85) + (totalWeightATXPlus * 0.85);
-                       const consumedReciclado = (totalWeightLC2 * 0.90);
-                       const consumedOther = totalWeightOther;
-                       
-                       // sortedEntries, selectedIdx and previousEntry are already declared above
-
-                       const groupedItems: { 
-                         [key: string]: { 
-                           code: string; 
-                           name: string; 
-                           fabrica: number; 
-                           galpao: number; 
-                           total: number; 
-                           prevTotal: number;
-                         } 
-                       } = {};
-
-                       entry.items.forEach(item => {
-                         const codeKey = (item.code || '').trim();
-                         const nameKey = (item.name || '').trim().toUpperCase();
-                         const key = codeKey ? codeKey : nameKey;
-                         
-                         if (!groupedItems[key]) {
-                           groupedItems[key] = {
-                             code: item.code || '',
-                             name: item.name || '',
-                             fabrica: 0,
-                             galpao: 0,
-                             total: 0,
-                             prevTotal: 0
-                           };
-                         }
-                         
-                         const locName = (item.location || 'F√°brica').trim().toUpperCase();
-                         if (locName.includes('GALP')) {
-                           groupedItems[key].galpao += item.quantity;
-                         } else {
-                           groupedItems[key].fabrica += item.quantity;
-                         }
-                         groupedItems[key].total += item.quantity;
-                       });
-
-                       if (previousEntry) {
-                         previousEntry.items.forEach(item => {
-                           const codeKey = (item.code || '').trim();
-                           const nameKey = (item.name || '').trim().toUpperCase();
-                           const key = codeKey ? codeKey : nameKey;
-                           
-                           if (!groupedItems[key]) {
-                             groupedItems[key] = {
-                               code: item.code || '',
-                               name: item.name || '',
-                               fabrica: 0,
-                               galpao: 0,
-                               total: 0,
-                               prevTotal: 0
-                             };
-                           }
-                           groupedItems[key].prevTotal += item.quantity;
-                         });
-                       }
-
-                       return (
-                         <div className="space-y-4">
-                           <div className="overflow-x-auto rounded-3xl border border-slate-200 shadow-sm bg-white">
-                             <table className="w-full border-collapse border border-slate-200 text-left text-xs font-sans">
-                               <thead>
-                                 <tr className="bg-slate-100/95 text-slate-800 font-extrabold text-[11px] uppercase tracking-wider border-b border-slate-200">
-                                   <th className="border border-slate-200 px-4 py-3 text-slate-700 whitespace-nowrap">C√ìDIGO</th>
-                                   <th className="border border-slate-200 px-4 py-3 text-slate-700">DESCRI√á√ÉO</th>
-                                   <th className="border border-slate-200 px-4 py-3 text-right text-slate-700 whitespace-nowrap">F√ÅBRICA</th>
-                                   <th className="border border-slate-200 px-4 py-3 text-right text-slate-700 whitespace-nowrap">GALP√ÉO</th>
-                                   <th className="border border-slate-200 px-4 py-3 text-right text-slate-700 whitespace-nowrap bg-slate-50/75">TOTAL</th>
-                                   
-                                 </tr>
-                               </thead>
-                               <tbody className="divide-y divide-slate-150">
-                                 {Object.values(groupedItems).map((gItem, idx) => {
-                                   const consumo = gItem.prevTotal - gItem.total;
-                                    const normName = (gItem.name || '').trim().toUpperCase();
-                                    const normCode = (gItem.code || '').trim().toUpperCase();
-                                    let itemConsumo = 0;
-                                    
-                                    if (normName.includes('BUTENO') || normCode.includes('BUT')) {
-                                      itemConsumo = consumedButeno;
-                                    } else if (normName.includes('HEXENO') || normCode.includes('HEX')) {
-                                      itemConsumo = consumedHexeno;
-                                    } else if (normName.includes('METALOCENO') || normName.includes('METALOGENO') || normCode.includes('MET')) {
-                                      itemConsumo = consumedMetaloceno;
-                                    } else if (normName.includes('RECICLADO') || normName.includes('RECICLA') || normCode.includes('REC') || normName.includes('PELLETS') || normName.includes('EREMA')) {
-                                      itemConsumo = consumedReciclado;
-                                    } else if (normName.includes('OUTRO') || normName.includes('RESINA') || normCode.includes('OUTR')) {
-                                      itemConsumo = consumedOther;
-                                    }
-                                   return (
-                                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                       <td className="border border-slate-200 px-4 py-2.5 font-mono text-[11px] text-slate-500 font-bold whitespace-nowrap">
-                                         {gItem.code || '-'}
-                                       </td>
-                                       <td className="border border-slate-200 px-4 py-2.5 font-black text-slate-700 uppercase text-[11px]">
-                                         {gItem.name}
-                                       </td>
-                                       <td className="border border-slate-200 px-4 py-2.5 text-right font-mono text-[11px] font-bold text-slate-600 whitespace-nowrap">
-                                         {formatWeight(gItem.fabrica)}
-                                       </td>
-                                       <td className="border border-slate-200 px-4 py-2.5 text-right font-mono text-[11px] font-bold text-slate-600 whitespace-nowrap">
-                                         {formatWeight(gItem.galpao)}
-                                       </td>
-                                       <td className="border border-slate-200 px-4 py-2.5 text-right font-mono text-[11px] font-black text-slate-800 bg-slate-50/40 whitespace-nowrap">
-                                         {formatWeight(gItem.total)}
-                                       </td>
-                                       
-                                     </tr>
-                                   );
-                                 })}
-                               </tbody>
-                             </table>
-                           </div>
-
-                           <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-3xl mt-4">
-                             <span className="text-xs font-black uppercase tracking-widest">Estoque F√≠sico Total</span>
-                             <span className="text-sm font-black whitespace-nowrap font-mono">{formatWeight(entry.totalWeight)}</span>
-                           </div>
-
-                          <div className="flex justify-between items-center pt-2">
-                            <button
-                              onClick={() => setIsPreviewConciliationOpen(true)}
-                              type="button"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
-                            >
-                              <Eye size={13} /> Visualizar & Justificar Consumo
-                            </button>
-                            <button 
-                              onClick={() => {
-                                openConfirm(
-                                  'Confirmar Exclus√£o',
-                                  `Tem certeza que deseja excluir o registro de estoque para o dia ${selectedStockDate.split('-').reverse().join('/')}? Esta a√ß√£o n√£o pode ser desfeita.`,
-                                  async () => {
-                                    try {
-                                      await deleteDoc(doc(db, 'stock_entries', selectedStockDate));
-                                      alert('Registro exclu√≠do com sucesso.');
-                                      setSelectedStockDate('');
-                                      setHasAutoSelectedStock(true);
-                                    } catch (err) {
-                                      console.error('Erro ao excluir registro:', err);
-                                      alert('Erro ao excluir registro.');
-                                    }
-                                  },
-                                  'danger'
-                                );
-                              }}
-                              type="button"
-                              className="text-red-500 hover:text-red-700 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-2xl transition-all"
-                            >
-                              <Trash2 size={13} /> Excluir Contagem F√≠sica
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <div className="text-center py-12 border border-slate-100 rounded-[2rem] bg-slate-50/30 flex flex-col items-center justify-center space-y-3">
-                      <FileSpreadsheet className="text-slate-300 w-12 h-12 animate-pulse" />
-                      <div className="space-y-1">
-                        <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Nenhum Estoque Di√°rio Carregado</p>
-                        <p className="text-[10px] text-slate-400 font-bold max-w-sm">Use a √°rea de importa√ß√£o para carregar o seu arquivo de estoque f√≠sico do dia.</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Reconciliation and Performance Cards */}
-            {selectedStockDate && (
-              (() => {
-                const sortedEntries = [...stockEntries].sort((a, b) => a.date.localeCompare(b.date));
-                const selectedIdx = sortedEntries.findIndex(e => e.date === selectedStockDate);
-                const currentEntry = selectedIdx !== -1 ? sortedEntries[selectedIdx] : null;
-                const previousEntry = selectedIdx > 0 ? sortedEntries[selectedIdx - 1] : null;
-
-                const dayProduction = productionData.filter(e => e.date === selectedStockDate && (e.machine === 'Cast 1' || e.machine === 'Cast 2'));
-                const prodNet = dayProduction.reduce((sum, e) => sum + (e.netWeight || 0), 0);
-                const prodEcoA = dayProduction.reduce((sum, e) => sum + (e.ecoA || 0), 0);
-                const prodEcoB = dayProduction.reduce((sum, e) => sum + (e.ecoBP || 0) + (e.ecoBM || 0), 0);
-                const totalProdPointed = prodNet + prodEcoA + prodEcoB;
-
-                const consumption = previousEntry && currentEntry 
-                  ? previousEntry.totalWeight - currentEntry.totalWeight 
-                  : 0;
-
-                // Busca o dia de produ√ß√£o anterior ao selectedStockDate (sempre relacionado ao dia anterior)
-                let prevProdDate = '';
-                if (selectedStockDate) {
-                  const sDate = new Date(selectedStockDate + 'T12:00:00');
-                  sDate.setDate(sDate.getDate() - 1);
-                  prevProdDate = sDate.toISOString().split('T')[0];
-                }
-
-                const prevDayProdEntries = (previousEntry && selectedStockDate)
-                  ? productionData.filter(e => e.date >= previousEntry.date && e.date < selectedStockDate && !e.machine.toLowerCase().includes('erema'))
-                  : (prevProdDate ? productionData.filter(e => e.date === prevProdDate && !e.machine.toLowerCase().includes('erema')) : []);
-                const prevProdNet = prevDayProdEntries.reduce((sum, e) => sum + (e.netWeight || 0), 0);
-                const prevProdEcoA = prevDayProdEntries.reduce((sum, e) => sum + (e.ecoA || 0), 0);
-                const prevProdEcoB = prevDayProdEntries.reduce((sum, e) => sum + (e.ecoBP || 0) + (e.ecoBM || 0), 0);
-                const prevTotalProduced = prevProdNet + prevProdEcoA + prevProdEcoB;
-
-                const diffStockVsPrevProd = currentEntry && prevTotalProduced > 0
-                  ? currentEntry.totalWeight - prevTotalProduced
-                  : 0;
-
-                // Classifica√ß√£o resiliente para os materiais do estoque
-                const classifyMaterial = (nameStr: string, codeStr: string) => {
-                  const normName = (nameStr || '').trim().toUpperCase();
-                  const normCode = (codeStr || '').trim().toUpperCase();
-                  if (normName.includes('BUTENO') || normCode.includes('BUT')) {
-                    return 'BUTENO';
-                  }
-                  if (normName.includes('HEXENO') || normCode.includes('HEX')) {
-                    return 'HEXENO';
-                  }
-                  if (normName.includes('METALOCENO') || normName.includes('METALOGENO') || normCode.includes('MET')) {
-                    return 'METALOCENO';
-                  }
-                  if (normName.includes('RECICLADO') || normName.includes('RECICLA') || normCode.includes('REC') || normName.includes('PELLETS') || normName.includes('EREMA')) {
-                    return 'RECICLADO';
-                  }
-                  return 'OUTROS';
-                };
-
-                const normalizeLoc = (locStr: string) => {
-                  const norm = (locStr || '').trim().toUpperCase();
-                  if (norm.includes('GALP')) {
-                    return 'GALP√ÉO';
-                  }
-                  return 'F√ÅBRICA';
-                };
-
-                const matData = {
-                  BUTENO: { prevFabrica: 0, prevGalpao: 0, prevTotal: 0, currFabrica: 0, currGalpao: 0, currTotal: 0 },
-                  HEXENO: { prevFabrica: 0, prevGalpao: 0, prevTotal: 0, currFabrica: 0, currGalpao: 0, currTotal: 0 },
-                  METALOCENO: { prevFabrica: 0, prevGalpao: 0, prevTotal: 0, currFabrica: 0, currGalpao: 0, currTotal: 0 },
-                  RECICLADO: { prevFabrica: 0, prevGalpao: 0, prevTotal: 0, currFabrica: 0, currGalpao: 0, currTotal: 0 },
-                  OUTROS: { prevFabrica: 0, prevGalpao: 0, prevTotal: 0, currFabrica: 0, currGalpao: 0, currTotal: 0 },
-                };
-
-                if (previousEntry) {
-                  previousEntry.items.forEach(i => {
-                    const cat = classifyMaterial(i.name, i.code || '');
-                    const loc = normalizeLoc(i.location || 'F√°brica');
-                    if (loc === 'GALP√ÉO') {
-                      matData[cat].prevGalpao += (i.quantity || 0);
-                    } else {
-                      matData[cat].prevFabrica += (i.quantity || 0);
-                    }
-                    matData[cat].prevTotal += (i.quantity || 0);
-                  });
-                }
-
-                if (currentEntry) {
-                  currentEntry.items.forEach(i => {
-                    const cat = classifyMaterial(i.name, i.code || '');
-                    const loc = normalizeLoc(i.location || 'F√°brica');
-                    if (loc === 'GALP√ÉO') {
-                      matData[cat].currGalpao += (i.quantity || 0);
-                    } else {
-                      matData[cat].currFabrica += (i.quantity || 0);
-                    }
-                    matData[cat].currTotal += (i.quantity || 0);
-                  });
-                }
-
-                let totalWeightLC3 = 0;
-                let totalWeightATX = 0;
-                let totalWeightLC2 = 0;
-                let totalWeightATXPlus = 0;
-                let totalWeightOther = 0;
-
-                prevDayProdEntries.forEach(e => {
-                  const weight = (e.netWeight || 0) + (e.ecoA || 0) + (e.ecoBP || 0) + (e.ecoBM || 0);
-                  const mType = (e.materialType || 'LC3').trim().toUpperCase();
-                  if (mType === 'LC3') {
-                    totalWeightLC3 += weight;
-                  } else if (mType === 'ATX') {
-                    totalWeightATX += weight;
-                  } else if (mType === 'LC2') {
-                    totalWeightLC2 += weight;
-                  } else if (mType === 'ATX PLUS' || mType === 'ATXPLUS') {
-                    totalWeightATXPlus += weight;
-                  } else {
-                    totalWeightOther += weight;
-                  }
-                });
-
-                const theoreticalButeno = (totalWeightLC3 * 0.95) + (totalWeightATX * 0.05) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.05);
-                const theoreticalMetaloceno = (totalWeightLC3 * 0.05) + (totalWeightATX * 0.10) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.10);
-                const theoreticalHexeno = (totalWeightATX * 0.85) + (totalWeightATXPlus * 0.85);
-                const theoreticalReciclado = (totalWeightLC2 * 0.90);
-                const theoreticalOther = totalWeightOther;
-
-                interface ReconciliationItem {
-                  name: string;
-                  prevFabrica: number;
-                  prevGalpao: number;
-                  prevTotal: number;
-                  currFabrica: number;
-                  currGalpao: number;
-                  currTotal: number;
-                  physicalFabrica: number;
-                  physicalGalpao: number;
-                  physical: number;
-                  theoretical: number;
-                  diff: number;
-                  formula: string;
-                }
-
-                const materialReconciliationList: ReconciliationItem[] = [
-                  {
-                    name: 'BUTENO',
-                    prevFabrica: matData.BUTENO.prevFabrica,
-                    prevGalpao: matData.BUTENO.prevGalpao,
-                    prevTotal: matData.BUTENO.prevTotal,
-                    currFabrica: matData.BUTENO.currFabrica,
-                    currGalpao: matData.BUTENO.currGalpao,
-                    currTotal: matData.BUTENO.currTotal,
-                    physicalFabrica: matData.BUTENO.prevFabrica - matData.BUTENO.currFabrica,
-                    physicalGalpao: matData.BUTENO.prevGalpao - matData.BUTENO.currGalpao,
-                    physical: matData.BUTENO.prevTotal - matData.BUTENO.currTotal,
-                    theoretical: theoreticalButeno,
-                    diff: (matData.BUTENO.prevTotal - matData.BUTENO.currTotal) - theoreticalButeno,
-                    formula: 'LC3: 95%, LC2: 5%, ATX: 5%, ATX Plus: 5%'
-                  },
-                  {
-                    name: 'HEXENO',
-                    prevFabrica: matData.HEXENO.prevFabrica,
-                    prevGalpao: matData.HEXENO.prevGalpao,
-                    prevTotal: matData.HEXENO.prevTotal,
-                    currFabrica: matData.HEXENO.currFabrica,
-                    currGalpao: matData.HEXENO.currGalpao,
-                    currTotal: matData.HEXENO.currTotal,
-                    physicalFabrica: matData.HEXENO.prevFabrica - matData.HEXENO.currFabrica,
-                    physicalGalpao: matData.HEXENO.prevGalpao - matData.HEXENO.currGalpao,
-                    physical: matData.HEXENO.prevTotal - matData.HEXENO.currTotal,
-                    theoretical: theoreticalHexeno,
-                    diff: (matData.HEXENO.prevTotal - matData.HEXENO.currTotal) - theoreticalHexeno,
-                    formula: 'ATX: 85%, ATX Plus: 85%'
-                  },
-                  {
-                    name: 'METALOCENO',
-                    prevFabrica: matData.METALOCENO.prevFabrica,
-                    prevGalpao: matData.METALOCENO.prevGalpao,
-                    prevTotal: matData.METALOCENO.prevTotal,
-                    currFabrica: matData.METALOCENO.currFabrica,
-                    currGalpao: matData.METALOCENO.currGalpao,
-                    currTotal: matData.METALOCENO.currTotal,
-                    physicalFabrica: matData.METALOCENO.prevFabrica - matData.METALOCENO.currFabrica,
-                    physicalGalpao: matData.METALOCENO.prevGalpao - matData.METALOCENO.currGalpao,
-                    physical: matData.METALOCENO.prevTotal - matData.METALOCENO.currTotal,
-                    theoretical: theoreticalMetaloceno,
-                    diff: (matData.METALOCENO.prevTotal - matData.METALOCENO.currTotal) - theoreticalMetaloceno,
-                    formula: 'LC3: 5%, LC2: 5%, ATX: 10%, ATX Plus: 10%'
-                  },
-                  {
-                    name: 'RECICLADO',
-                    prevFabrica: matData.RECICLADO.prevFabrica,
-                    prevGalpao: matData.RECICLADO.prevGalpao,
-                    prevTotal: matData.RECICLADO.prevTotal,
-                    currFabrica: matData.RECICLADO.currFabrica,
-                    currGalpao: matData.RECICLADO.currGalpao,
-                    currTotal: matData.RECICLADO.currTotal,
-                    physicalFabrica: matData.RECICLADO.prevFabrica - matData.RECICLADO.currFabrica,
-                    physicalGalpao: matData.RECICLADO.prevGalpao - matData.RECICLADO.currGalpao,
-                    physical: matData.RECICLADO.prevTotal - matData.RECICLADO.currTotal,
-                    theoretical: theoreticalReciclado,
-                    diff: (matData.RECICLADO.prevTotal - matData.RECICLADO.currTotal) - theoreticalReciclado,
-                    formula: 'LC2: 90%'
-                  },
-                  {
-                    name: 'OUTROS / OUTRAS RESINAS',
-                    prevFabrica: matData.OUTROS.prevFabrica,
-                    prevGalpao: matData.OUTROS.prevGalpao,
-                    prevTotal: matData.OUTROS.prevTotal,
-                    currFabrica: matData.OUTROS.currFabrica,
-                    currGalpao: matData.OUTROS.currGalpao,
-                    currTotal: matData.OUTROS.currTotal,
-                    physicalFabrica: matData.OUTROS.prevFabrica - matData.OUTROS.currFabrica,
-                    physicalGalpao: matData.OUTROS.prevGalpao - matData.OUTROS.currGalpao,
-                    physical: matData.OUTROS.prevTotal - matData.OUTROS.currTotal,
-                    theoretical: theoreticalOther,
-                    diff: (matData.OUTROS.prevTotal - matData.OUTROS.currTotal) - theoreticalOther,
-                    formula: '100% Outros Apontamentos'
-                  }
-                ].filter(m => m.prevTotal !== 0 || m.currTotal !== 0 || m.theoretical !== 0 || m.name !== 'OUTROS / OUTRAS RESINAS');
-
-                // Calcular dados detalhados para insumos antes do return para us√°-los na tabela e no painel Power BI
-                let consolidatedMaterialsCalculated: any[] = [];
-                let sumButenoMetalocenoDiffCalculated = 0;
-
-                if (previousEntry && currentEntry) {
-                  // Calcular a produ√ß√£o do dia anterior ou per√≠odo do final de semana para obter o consumo dele
-                  const prevDayProdForDetailed = (previousEntry && currentEntry)
-                    ? productionData.filter(e => e.date >= previousEntry.date && e.date < currentEntry.date && !e.machine.toLowerCase().includes('erema'))
-                    : [];
-                  let detailedLC3 = 0;
-                  let detailedATX = 0;
-                  let detailedLC2 = 0;
-                  let detailedATXPlus = 0;
-                  let detailedOther = 0;
-
-                  prevDayProdForDetailed.forEach(e => {
-                    const weight = (e.netWeight || 0) + (e.ecoA || 0) + (e.ecoBP || 0) + (e.ecoBM || 0);
-                    const mType = (e.materialType || 'LC3').trim().toUpperCase();
-                    if (mType === 'LC3') {
-                      detailedLC3 += weight;
-                    } else if (mType === 'ATX') {
-                      detailedATX += weight;
-                    } else if (mType === 'LC2') {
-                      detailedLC2 += weight;
-                    } else if (mType === 'ATX PLUS' || mType === 'ATXPLUS') {
-                      detailedATXPlus += weight;
-                    } else {
-                      detailedOther += weight;
-                    }
-                  });
-
-                  const detailedButeno = (detailedLC3 * 0.95) + (detailedATX * 0.05) + (detailedLC2 * 0.05) + (detailedATXPlus * 0.05);
-                  const detailedMetaloceno = (detailedLC3 * 0.05) + (detailedATX * 0.10) + (detailedLC2 * 0.05) + (detailedATXPlus * 0.10);
-                  const detailedHexeno = (detailedATX * 0.85) + (detailedATXPlus * 0.85);
-                  const detailedReciclado = (detailedLC2 * 0.90);
-                  const detailedOtherRes = detailedOther;
-
-                  const getTheoreticalForMat = (nameStr: string, codeStr: string) => {
-                    const normName = (nameStr || '').trim().toUpperCase();
-                    const normCode = (codeStr || '').trim().toUpperCase();
-                    if (normName.includes('BUTENO') || normCode.includes('BUT')) {
-                      return detailedButeno;
-                    } else if (normName.includes('HEXENO') || normCode.includes('HEX')) {
-                      return detailedHexeno;
-                    } else if (normName.includes('METALOCENO') || normName.includes('METALOGENO') || normCode.includes('MET')) {
-                      return detailedMetaloceno;
-                    } else if (normName.includes('RECICLADO') || normName.includes('RECICLA') || normCode.includes('REC') || normName.includes('PELLETS') || normName.includes('EREMA')) {
-                      return detailedReciclado;
-                    } else if (normName.includes('OUTRO') || normName.includes('RESINA') || normCode.includes('OUTR')) {
-                      return detailedOtherRes;
-                    }
-                    return 0;
-                  };
-
-                  // Unificar todas as Chaves de Materiais do per√≠odo corrente e anterior
-                  const materialKeysSet = new Set<string>();
-                  currentEntry.items.forEach(i => materialKeysSet.add((i.code || i.name || '').trim().toUpperCase()));
-                  previousEntry.items.forEach(i => materialKeysSet.add((i.code || i.name || '').trim().toUpperCase()));
-                  
-                  consolidatedMaterialsCalculated = Array.from(materialKeysSet).map(key => {
-                    const sampleCurrent = currentEntry.items.find(i => (i.code || i.name || '').trim().toUpperCase() === key);
-                    const samplePrev = previousEntry.items.find(i => (i.code || i.name || '').trim().toUpperCase() === key);
-                    const code = sampleCurrent?.code || samplePrev?.code || '';
-                    const name = sampleCurrent?.name || samplePrev?.name || '';
-                    
-                    // Detalhes do per√≠odo atual
-                    const currentLocs: { [loc: string]: number } = {};
-                    let currentTotal = 0;
-                    currentEntry.items.forEach(i => {
-                      if ((i.code || i.name || '').trim().toUpperCase() === key) {
-                        const loc = (i.location || 'F√°brica').trim();
-                        currentLocs[loc] = (currentLocs[loc] || 0) + i.quantity;
-                        currentTotal += i.quantity;
-                      }
-                    });
-                    
-                    // Detalhes do per√≠odo anterior
-                    const prevLocs: { [loc: string]: number } = {};
-                    let prevTotal = 0;
-                    previousEntry.items.forEach(i => {
-                      if ((i.code || i.name || '').trim().toUpperCase() === key) {
-                        const loc = (i.location || 'F√°brica').trim();
-                        prevLocs[loc] = (prevLocs[loc] || 0) + i.quantity;
-                        prevTotal += i.quantity;
-                      }
-                    });
-                    
-                    const consumption = getTheoreticalForMat(name, code);
-                    const expectedStock = prevTotal - consumption;
-                    
-                    // Diferen√ßa de F√≠sico (F√≠sico Anterior - F√≠sico Autal = Consumo F√≠sico Real)
-                    const physicalDiff = prevTotal - currentTotal;
-
-                    // Diferen√ßa de Desvio (F√≠sico Atual - Esperado)
-                    const diffKgT = currentTotal - expectedStock;
-                    const diffPercent = expectedStock > 0 ? (diffKgT / expectedStock) * 100 : 0;
-                    
-                    // % de consumo real sobre F√≠sico original
-                    const consumptionPercent = prevTotal > 0 ? (physicalDiff / prevTotal) * 100 : 0;
-
-                    return {
-                      key,
-                      code,
-                      name,
-                      currentTotal,
-                      currentLocs,
-                      prevTotal,
-                      prevLocs,
-                      consumption,
-                      expectedStock,
-                      physicalDiff,
-                      diffKgT,
-                      diffPercent,
-                      consumptionPercent
-                    };
-                  });
-
-                  // Calcular a soma de consumo real de buteno e metaloceno especificamente para o c√°lculo proporcional de 100%
-                  let totalButenoDiff = 0;
-                  let totalMetalocenoDiff = 0;
-                  consolidatedMaterialsCalculated.forEach(m => {
-                    const nm = (m.name || '').toUpperCase();
-                    const cd = (m.code || '').toUpperCase();
-                    if (nm.includes('BUTENO') || cd.includes('BUT')) {
-                      totalButenoDiff += m.physicalDiff;
-                    } else if (nm.includes('METALOCENO') || nm.includes('METALOGENO') || cd.includes('MET')) {
-                      totalMetalocenoDiff += m.physicalDiff;
-                    }
-                  });
-                  sumButenoMetalocenoDiffCalculated = totalButenoDiff + totalMetalocenoDiff;
-                }
-
-                // C√°lculo das Somas para KPIs Corporativos do Gr√°fico
-                let totalPhysicalDiffSum = 0;
-                let totalTheoreticalConsumptionSum = 0;
-                let totalDeviationSum = 0;
-                if (consolidatedMaterialsCalculated.length > 0) {
-                  consolidatedMaterialsCalculated.forEach(m => {
-                    totalPhysicalDiffSum += m.physicalDiff > 0 ? m.physicalDiff : 0;
-                    totalTheoreticalConsumptionSum += m.consumption;
-                    totalDeviationSum += m.diffKgT;
-                  });
-                }
-
-                // Dados formatados para o Power BI Chart (filtrando itens sem valores para n√£o poluir os gr√°ficos)
-                const biChartsData = consolidatedMaterialsCalculated
-                  .filter(c => c.prevTotal > 0 || c.currentTotal > 0 || c.consumption > 0 || Math.abs(c.physicalDiff) > 0)
-                  .map(c => {
-                    const nm = (c.name || '').toUpperCase();
-                    const cd = (c.code || '').toUpperCase();
-                    let displayGroup = nm;
-                    if (nm.includes('BUTENO') || cd.includes('BUT')) displayGroup = 'BUTENO';
-                    else if (nm.includes('HEXENO') || cd.includes('HEX')) displayGroup = 'HEXENO';
-                    else if (nm.includes('METALOCENO') || nm.includes('METALOGENO') || cd.includes('MET')) displayGroup = 'METALOCENO';
-                    else if (nm.includes('RECICLADO') || nm.includes('RECICLA') || cd.includes('REC') || nm.includes('PELLETS') || nm.includes('EREMA')) displayGroup = 'RECICLADO';
-                    else if (nm.includes('OUTRO') || nm.includes('RESINA') || cd.includes('OUTR')) displayGroup = 'OUTROS';
-
-                    return {
-                      name: displayGroup,
-                      fullName: c.name,
-                      code: c.code,
-                      consumptionReal: c.physicalDiff, // F√≠sico Real Consumido
-                      consumptionTeorico: c.consumption, // Te√≥rico
-                      deviation: c.diffKgT, // Desvio Real vs Esperado
-                      deviationPercent: c.diffPercent
-                    };
-                  });
-
-                // Participa√ß√£o de Consumo de Buteno vs Metaloceno
-                const totalButenoCons = biChartsData.filter(d => d.name === 'BUTENO').reduce((acc, curr) => acc + curr.consumptionReal, 0);
-                const totalMetalocenoCons = biChartsData.filter(d => d.name === 'METALOCENO').reduce((acc, curr) => acc + curr.consumptionReal, 0);
-                const sumButenoMetaloceno = totalButenoCons + totalMetalocenoCons;
-
-                const pieData = [
-                  { 
-                    name: 'BUTENO', 
-                    value: totalButenoCons > 0 ? totalButenoCons : 0,
-                    percent: sumButenoMetaloceno > 0 ? (totalButenoCons / sumButenoMetaloceno) * 100 : 95
-                  },
-                  { 
-                    name: 'METALOCENO', 
-                    value: totalMetalocenoCons > 0 ? totalMetalocenoCons : 0,
-                    percent: sumButenoMetaloceno > 0 ? (totalMetalocenoCons / sumButenoMetaloceno) * 100 : 5
-                  }
-                ];
-
-                return (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm space-y-8">
-                      {/* Items Consumptions Breakdown Table */}
-                      {previousEntry && currentEntry && (
-                        <div className="space-y-8">
-                          <div>
-                            <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider mb-4">Consumo F√≠sico Detalhado por Insumo/Material</h4>
-                            <div className="overflow-x-auto rounded-3xl border border-slate-100">
-                              <table className="w-full border-collapse text-left text-xs bg-white">
-                                  <thead>
-                                    <tr className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase tracking-wider border-b border-slate-100">
-                                      <th className="px-5 py-4 whitespace-nowrap">Insumo / Mat√©ria-Prima</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap">F√≠sico Real {previousEntry.date.split('-').reverse().join('/')}</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap font-black text-amber-650 bg-amber-50/20">Consumo {previousEntry.date.split('-').reverse().join('/')}</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap font-black text-indigo-650 bg-indigo-50/20">Estoque Esperado {currentEntry.date.split('-').reverse().join('/')}</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap">F√≠sico Real {currentEntry.date.split('-').reverse().join('/')}</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap text-amber-650 bg-amber-50/10">Dif. F√≠sico Real (Consumo)</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap">Desvio Real vs Esp (Kg / T)</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap">Desvio Real vs Esp (%)</th>
-                                      <th className="px-5 py-4 text-right whitespace-nowrap font-black text-amber-650 bg-amber-50/30">% Consumo F√≠sico Real</th>
-                                    </tr>
-                                  </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                  {consolidatedMaterialsCalculated.map((cMat, idindex) => {
-                                    // Obter lista √∫nica de todos os locais envolvidos (F√°brica, Galp√£o, etc)
-                                    const allUniqueLocs = Array.from(new Set([
-                                      ...Object.keys(cMat.currentLocs),
-                                      ...Object.keys(cMat.prevLocs)
-                                    ])).sort();
-
-                                    const nm = (cMat.name || '').toUpperCase();
-                                    const cd = (cMat.code || '').toUpperCase();
-                                    const isBut = nm.includes('BUTENO') || cd.includes('BUT');
-                                    const isMet = nm.includes('METALOCENO') || nm.includes('METALOGENO') || cd.includes('MET');
-                                    
-                                    let displayConsumptionPercent = cMat.consumptionPercent;
-                                    if ((isBut || isMet) && sumButenoMetalocenoDiffCalculated > 0) {
-                                      displayConsumptionPercent = (cMat.physicalDiff / sumButenoMetalocenoDiffCalculated) * 100;
-                                    }
-
-                                    return (
-                                      <tr key={idindex} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-5 py-4">
-                                          <div className="flex items-center gap-1.5">
-                                            {cMat.code && (
-                                              <span className="text-[9px] font-mono font-bold text-indigo-500 bg-indigo-50 px-1 py-0.5 rounded">
-                                                {cMat.code}
-                                              </span>
-                                            )}
-                                            <span className="font-black text-slate-700 uppercase tracking-tight">{cMat.name}</span>
-                                          </div>
-                                          {allUniqueLocs.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 mt-1">
-                                              {allUniqueLocs.map((loc, lIdx) => (
-                                                <span key={lIdx} className="text-[8px] bg-indigo-50/50 border border-indigo-100 text-indigo-600 font-extrabold px-1.5 py-0.5 rounded uppercase font-sans">
-                                                  {loc}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                          <span className="font-black text-slate-600 font-mono text-xs">{formatWeight(cMat.prevTotal)}</span>
-                                          {allUniqueLocs.length > 0 && (
-                                            <div className="text-[9px] text-slate-400 space-y-0.5 mt-1 font-sans">
-                                              {allUniqueLocs.map((loc, lIdx) => (
-                                                <div key={lIdx}>
-                                                  <span className="capitalize">{loc}:</span> <span className="font-mono font-bold text-slate-500">{formatWeight(cMat.prevLocs[loc] || 0)}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                          <span className="font-black text-amber-600 font-mono text-xs">{formatWeight(cMat.consumption)}</span>
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                          <span className="font-black text-slate-700 font-mono text-xs">{formatWeight(cMat.expectedStock)}</span>
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                          <span className="font-black text-slate-600 font-mono text-xs">{formatWeight(cMat.currentTotal)}</span>
-                                          {allUniqueLocs.length > 0 && (
-                                            <div className="text-[9px] text-slate-400 space-y-0.5 mt-1 font-sans">
-                                              {allUniqueLocs.map((loc, lIdx) => (
-                                                <div key={lIdx}>
-                                                  <span className="capitalize">{loc}:</span> <span className="font-mono font-bold text-slate-500">{formatWeight(cMat.currentLocs[loc] || 0)}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </td>
-                                        <td className={`px-5 py-4 text-right font-extrabold font-mono text-xs ${cMat.physicalDiff > 0 ? 'text-amber-600' : cMat.physicalDiff < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                          {cMat.physicalDiff > 0 ? formatWeight(cMat.physicalDiff) : cMat.physicalDiff < 0 ? formatWeight(cMat.physicalDiff) : '0 Kg'}
-                                        </td>
-                                        <td className={`px-5 py-4 text-right font-extrabold font-mono text-xs ${cMat.diffKgT > 0 ? 'text-emerald-600' : cMat.diffKgT < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                                          {cMat.diffKgT > 0 ? `+${formatWeight(cMat.diffKgT)}` : formatWeight(cMat.diffKgT)}
-                                        </td>
-                                        <td className={`px-5 py-4 text-right font-extrabold font-mono text-xs ${cMat.diffKgT > 0 ? 'text-emerald-600' : cMat.diffKgT < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                                          {(cMat.diffPercent > 0 ? '+' : '') + cMat.diffPercent.toFixed(2).replace('.', ',') + '%'}
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                          <span className="font-extrabold text-amber-600 font-mono text-xs">
-                                            {displayConsumptionPercent.toFixed(2).replace('.', ',') + '%'}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-
-                          {/* Power BI-Style Charts Dashboard Card */}
-                          <div className="bg-slate-50/50 border border-slate-100 rounded-3xl p-6 space-y-6">
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-indigo-100/50">
-                              <div>
-                                <h4 className="text-sm font-black uppercase text-indigo-950 flex items-center gap-2">
-                                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-indigo-500 animate-pulse"></span>
-                                  An√°lise BI - Balan√ßo e Consumo Din√¢mico
-                                </h4>
-                                <p className="text-[11px] text-slate-500 font-medium">Visualiza√ß√µes corporativas de perdas, ganhos e ader√™ncia √† receita</p>
-                              </div>
-                              
-                              <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
-                                {/* Bot√£o Dia Anterior */}
-                                <button
-                                  type="button"
-                                  disabled={selectedIdx <= 0}
-                                  onClick={() => {
-                                    if (selectedIdx > 0) {
-                                      setSelectedStockDate(sortedEntries[selectedIdx - 1].date);
-                                    }
-                                  }}
-                                  className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all font-bold disabled:opacity-40 disabled:hover:text-slate-600 disabled:hover:border-slate-205"
-                                  title="Dia Anterior"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                                  </svg>
-                                </button>
-
-                                {/* Select de Data do BI */}
-                                <div className="relative">
-                                  <select 
-                                    value={selectedStockDate}
-                                    onChange={(e) => setSelectedStockDate(e.target.value)}
-                                    className="appearance-none pl-3 pr-8 py-2 border border-indigo-100 rounded-xl text-xs font-extrabold text-indigo-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-sm cursor-pointer"
-                                  >
-                                    {sortedEntries.map(entry => (
-                                      <option key={entry.date} value={entry.date}>
-                                        üìÖ {entry.date.split('-').reverse().join('/')}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-indigo-400">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                  </div>
-                                </div>
-
-                                {/* Bot√£o Pr√≥ximo Dia */}
-                                <button
-                                  type="button"
-                                  disabled={selectedIdx >= sortedEntries.length - 1}
-                                  onClick={() => {
-                                    if (selectedIdx < sortedEntries.length - 1) {
-                                      setSelectedStockDate(sortedEntries[selectedIdx + 1].date);
-                                    }
-                                  }}
-                                  className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all font-bold disabled:opacity-40 disabled:hover:text-slate-600 disabled:hover:border-slate-205"
-                                  title="Pr√≥ximo Dia"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-indigo-50/40 rounded-2xl px-4 py-2.5 border border-indigo-100/30 text-xs font-extrabold text-indigo-950">
-                              <span>Per√≠odo Ativo de An√°lise:</span>
-                              <div className="flex items-center gap-2 font-mono text-indigo-600">
-                                <span>{previousEntry.date.split('-').reverse().join('/')} (Base)</span>
-                                <span>‚ûî</span>
-                                <span>{currentEntry.date.split('-').reverse().join('/')} (Atual)</span>
-                              </div>
-                            </div>
-
-                            {/* Comparativo de Produ√ß√£o vs Consumo de Mat√©ria-Prima */}
-                            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-4">
-                              <div className="flex items-center gap-2 pb-2 border-b border-slate-200/50">
-                                <Scale size={16} className="text-indigo-600" />
-                                <h4 className="text-xs font-black uppercase text-indigo-950 tracking-wider">
-                                  Balan√ßo de Rendimento: Produ√ß√£o vs Consumo de Mat√©ria-Prima
-                                </h4>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Bloco Esquerdo: Produ√ß√£o Relacionada */}
-                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                                  <div className="flex items-center justify-between">
-                                    <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider">
-                                      Produ√ß√£o Realizada do Per√≠odo
-                                    </h5>
-                                    <span className="text-[10px] text-slate-400 font-bold font-mono">
-                                      Ref: {previousEntry.date.split('-').reverse().join('/')} a {currentEntry.date.split('-').reverse().join('/')}
-                                    </span>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-3 gap-3">
-                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100/50">
-                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">L√≠quido</p>
-                                      <p className="text-xs font-black text-slate-800 mt-1 font-mono">{formatWeight(prevProdNet)}</p>
-                                    </div>
-                                    <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/30">
-                                      <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Eco A</p>
-                                      <p className="text-xs font-black text-emerald-800 mt-1 font-mono">{formatWeight(prevProdEcoA)}</p>
-                                    </div>
-                                    <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100/30">
-                                      <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Eco B</p>
-                                      <p className="text-xs font-black text-amber-800 mt-1 font-mono">{formatWeight(prevProdEcoB)}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="pt-2 flex justify-between items-center border-t border-slate-100">
-                                    <span className="text-[10px] font-black uppercase text-slate-500">Total Produzido no Per√≠odo</span>
-                                    <span className="text-xs font-black text-slate-900 font-mono bg-slate-100 px-2 py-1 rounded-lg">
-                                      {formatWeight(prevTotalProduced)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Bloco Direito: Consumo Real vs Te√≥rico de Mat√©ria-Prima */}
-                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                                  <div className="flex items-center justify-between">
-                                    <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider">
-                                      Mat√©ria-Prima Consumida
-                                    </h5>
-                                    <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
-                                      F√≠sico Real
-                                    </span>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-100/30">
-                                      <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Consumo Real (F√≠sico)</p>
-                                      <p className="text-xs font-black text-amber-950 mt-1 font-mono">
-                                        {formatWeight(totalPhysicalDiffSum)}
-                                        <span className="text-[10px] font-bold text-amber-700 ml-1">
-                                          ({totalTheoreticalConsumptionSum > 0 ? ((totalPhysicalDiffSum / totalTheoreticalConsumptionSum) * 100).toFixed(1).replace('.', ',') : '0'}%)
-                                        </span>
-                                      </p>
-                                    </div>
-                                    <div className="bg-indigo-50/40 p-3 rounded-xl border border-indigo-100/30">
-                                      <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Consumo Te√≥rico (Receita)</p>
-                                      <p className="text-xs font-black text-indigo-950 mt-1 font-mono">{formatWeight(totalTheoreticalConsumptionSum)}</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="pt-2 flex justify-between items-center border-t border-slate-100 font-mono">
-                                    <span className="text-[10px] font-black uppercase text-slate-500 font-sans">Aproveitamento Real</span>
-                                    <div className="flex items-center gap-1.5">
-                                      {(() => {
-                                        const yieldPercent = totalPhysicalDiffSum > 0 ? (prevTotalProduced / totalPhysicalDiffSum) * 100 : 0;
-                                        const isGood = yieldPercent >= 90 && yieldPercent <= 105;
-                                        return (
-                                          <>
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${isGood ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                              {isGood ? 'Excelente Rendimento' : 'Analisar Desvio'}
-                                            </span>
-                                            <span className="text-xs font-black text-slate-900">
-                                              {yieldPercent.toFixed(1).replace('.', ',')}%
-                                            </span>
-                                          </>
-                                        );
-                                      })()}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-
-                            </div>
-
-                            {/* Cards de M√©tricas Estilo Power BI */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Consumo F√≠sico Total</span>
-                                <div className="mt-2 flex items-baseline justify-between">
-                                  <span className="text-lg font-black text-slate-800 font-mono">{formatWeight(totalPhysicalDiffSum)}</span>
-                                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Consumo Real</span>
-                                </div>
-                              </div>
-
-                              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Consumo de Receita Teorico</span>
-                                <div className="mt-2 flex items-baseline justify-between">
-                                  <span className="text-lg font-black text-slate-700 font-mono">{formatWeight(totalTheoreticalConsumptionSum)}</span>
-                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Te√≥rico</span>
-                                </div>
-                              </div>
-
-                              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Desvio L√≠quido de Invent√°rio</span>
-                                <div className="mt-2 flex items-baseline justify-between">
-                                  <span className={`text-lg font-black font-mono ${totalDeviationSum > 0 ? 'text-emerald-700' : totalDeviationSum < 0 ? 'text-rose-700' : 'text-slate-600'}`}>
-                                    {totalDeviationSum > 0 ? `+${formatWeight(totalDeviationSum)}` : formatWeight(totalDeviationSum)}
-                                  </span>
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${totalDeviationSum > 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                                    {totalDeviationSum > 0 ? 'Sobra de Estoque' : 'Perda de Estoque'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rela√ß√£o Buteno : Metaloceno</span>
-                                <div className="mt-2 flex flex-col gap-0.5">
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="font-extrabold text-indigo-600">Buteno: {pieData[0].percent.toFixed(1).replace('.', ',')}%</span>
-                                    <span className="font-extrabold text-amber-600">Met: {pieData[1].percent.toFixed(1).replace('.', ',')}%</span>
-                                  </div>
-                                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-1 flex">
-                                    <div className="bg-indigo-500 h-full" style={{ width: `${pieData[0].percent}%` }}></div>
-                                    <div className="bg-amber-500 h-full" style={{ width: `${pieData[1].percent}%` }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Grid do Gr√°ficos do Power BI */}
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                              {/* 1. Comparativo de Consumo Real vs Te√≥rico */}
-                              <div className="lg:col-span-8 bg-white border border-slate-100 shadow-sm rounded-2xl p-4 flex flex-col">
-                                <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider mb-4">
-                                  Consumo F√≠sico Real vs Receitado (Te√≥rico) por Insumo
-                                </h5>
-                                <div className="h-[250px] w-full">
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={biChartsData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
-                                      <YAxis 
-                                        stroke="#94a3b8" 
-                                        fontSize={9} 
-                                        fontWeight="bold" 
-                                        tickLine={false}
-                                        tickFormatter={(v) => formatWeight(v)}
-                                      />
-                                      <RechartsTooltip 
-                                        formatter={(v: any) => [formatWeight(Number(v)), '']}
-                                        labelStyle={{ fontWeight: 'bold', color: '#1e293b', fontSize: '11px' }}
-                                        contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px' }}
-                                      />
-                                      <Legend iconSize={8} wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                      <Bar name="Consumo F√≠sico Real" dataKey="consumptionReal" fill="#0284c7" radius={[4, 4, 0, 0]} maxBarSize={45}>
-                                        {biChartsData.map((entry, index) => (
-                                          <Cell key={`cell-cr-${index}`} fill={entry.consumptionReal < 0 ? '#10b981' : '#0284c7'} />
-                                        ))}
-                                      </Bar>
-                                      <Bar name="Consumo Te√≥rico (Receita)" dataKey="consumptionTeorico" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={45} />
-                                    </BarChart>
-                                  </ResponsiveContainer>
-                                </div>
-                              </div>
-
-                              {/* 2. Propor√ß√£o Buteno vs Metaloceno do Per√≠odo */}
-                              <div className="lg:col-span-4 bg-white border border-slate-100 shadow-sm rounded-2xl p-4 flex flex-col">
-                                <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider mb-4">
-                                  Divis√£o de Consumo Buteno + Metaloceno
-                                </h5>
-                                <div className="h-[200px] w-full relative flex items-center justify-center">
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                      <Pie
-                                        data={pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={45}
-                                        outerRadius={70}
-                                        paddingAngle={4}
-                                        dataKey="value"
-                                      >
-                                        <Cell fill="#6366f1" />
-                                        <Cell fill="#f59e0b" />
-                                      </Pie>
-                                      <RechartsTooltip 
-                                        formatter={(v: any) => [formatWeight(Number(v)), '']}
-                                        contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px' }}
-                                      />
-                                    </PieChart>
-                                  </ResponsiveContainer>
-                                  
-                                  {/* Center Stat indicator */}
-                                  <div className="absolute flex flex-col items-center justify-center text-center">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Soma Consumo</span>
-                                    <span className="text-xs font-black text-slate-800 font-mono">
-                                      {formatWeight(sumButenoMetaloceno)}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mt-auto space-y-2">
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                                      <span className="w-2.5 h-2.5 rounded-full bg-[#6366f1]"></span>
-                                      BUTENO
-                                    </div>
-                                    <span className="font-mono font-black text-slate-800">{pieData[0].percent.toFixed(2).replace('.', ',')}%</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                                      <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
-                                      METALOCENO
-                                    </div>
-                                    <span className="font-mono font-black text-slate-800">{pieData[1].percent.toFixed(2).replace('.', ',')}%</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 3. Desvios (Varia√ß√µes) de Invent√°rio Real x Te√≥rico */}
-                            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-4 flex flex-col">
-                              <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider mb-2">
-                                Desvio de Invent√°rio por Insumo (Diferen√ßa F√≠sica Real vs Esperada)
-                              </h5>
-                              <p className="text-[10px] text-slate-400 font-medium mb-4">
-                                Valores acima de zero indicam sobra de estoque real em rela√ß√£o √† receita. Valores abaixo representam consumo excedente ou perdas.
-                              </p>
-                              <div className="h-[220px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <BarChart data={biChartsData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontWeight="bold" tickLine={false} />
-                                    <YAxis 
-                                      stroke="#94a3b8" 
-                                      fontSize={9} 
-                                      fontWeight="bold" 
-                                      tickLine={false}
-                                      tickFormatter={(v) => formatWeight(v)}
-                                    />
-                                    <RechartsTooltip 
-                                      formatter={(v: any) => [formatWeight(Number(v)), 'Desvio']}
-                                      labelStyle={{ fontWeight: 'bold', color: '#1e293b', fontSize: '11px' }}
-                                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px' }}
-                                    />
-                                    <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1.5} />
-                                    <Bar name="Desvio (Kg / T)" dataKey="deviation" radius={[4, 4, 0, 0]} maxBarSize={45}>
-                                      {biChartsData.map((entry, index) => {
-                                        // Verde para sobras, Vermelho para perdas
-                                        const fillHex = entry.deviation > 0 ? '#10b981' : entry.deviation < 0 ? '#f43f5e' : '#94a3b8';
-                                        return <Cell key={`cell-dev-${index}`} fill={fillHex} />;
-                                      })}
-                                    </Bar>
-                                  </BarChart>
-                                </ResponsiveContainer>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()
-            )}
-          </div>
-        )}
-
-        {activeTab === 'ribbon' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Header com Descri√ß√£o */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                  <Layers className="w-6 h-6 text-blue-600 animate-pulse" />
-                  Controle do Setor de Corte de Fita
-                </h2>
-                <p className="text-sm text-slate-500 font-medium">Lan√ßamento, monitoramento de rendimento, consumo de jumbos e perda de processo</p>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                {canEditProduction && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editingRibbonId) {
-                        setEditingRibbonId(null);
-                        setRibbonOperator('');
-                        setRibbonShift('');
-                        setRibbonProducedM2('');
-                        setRibbonRejectedM2('');
-                        setRibbonWasteWeight('');
-                        setRibbonJumboM2('');
-                        setRibbonJumboType('');
-                      }
-                      setShowRibbonForm(!showRibbonForm);
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase rounded-xl shadow-md transition-all active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {showRibbonForm ? 'Ocultar Formul√°rio' : 'Novo Lan√ßamento'}
-                  </button>
-                )}
-
-                {canEditProduction && (
-                  <button
-                    type="button"
-                    disabled={isGeneratingMock}
-                    onClick={handleGenerateMockRibbonEntries}
-                    className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-black text-xs uppercase rounded-xl shadow-md transition-all active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {isGeneratingMock ? 'Gerando...' : 'Gerar 20 Lan√ßamentos Teste'}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={exportRibbonToExcel}
-                  className="flex items-center gap-1.5 px-4 py-2.5 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black text-xs uppercase rounded-xl shadow-sm transition-all"
-                >
-                  <Download className="w-4 h-4" />
-                  Exportar Excel
-                </button>
-              </div>
-            </div>
-
-            {/* Painel de Cadastro (Modal Overlay) */}
-            <AnimatePresence>
-              {showRibbonForm && canEditProduction && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                  {/* Backdrop */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => {
-                      setEditingRibbonId(null);
-                      setRibbonOperator('');
-                      setRibbonShift('');
-                      setRibbonProducedM2('');
-                      setRibbonRejectedM2('');
-                      setRibbonWasteWeight('');
-                      setRibbonJumboM2('');
-                      setRibbonJumboType('');
-                      setShowRibbonForm(false);
-                    }}
-                    className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs cursor-pointer"
-                  />
-
-                  {/* Modal Container */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                    transition={{ duration: 0.2 }}
-                    className="relative bg-white border border-slate-200 shadow-2xl rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto z-10 flex flex-col"
-                  >
-                    <form onSubmit={handleSaveRibbonEntry} className="p-6 md:p-8 space-y-6">
-                      <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-                        <h4 className="text-sm font-black uppercase text-indigo-950 flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
-                          {editingRibbonId ? '‚úèÔ∏è Editar Lan√ßamento (Corte de Fita)' : 'üìù Novo Registro Di√°rio (Corte de Fita)'}
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingRibbonId(null);
-                            setRibbonOperator('');
-                            setRibbonShift('');
-                            setRibbonProducedM2('');
-                            setRibbonRejectedM2('');
-                            setRibbonWasteWeight('');
-                            setRibbonJumboM2('');
-                            setRibbonJumboType('');
-                            setShowRibbonForm(false);
-                          }}
-                          className="rounded-lg p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all font-black text-sm"
-                          title="Voltar / Fechar"
-                        >
-                          ‚úï
-                        </button>
-                      </div>
-
-                    <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-200/50 space-y-4">
-                      <h5 className="text-xs font-black uppercase text-slate-700">1. Informa√ß√µes Gerais</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* Data */}
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-black uppercase text-slate-500 block">Data do Lan√ßamento</label>
-                          <input
-                            type="date"
-                            value={ribbonDate}
-                            onChange={(e) => setRibbonDate(e.target.value)}
-                            required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-
-                        {/* Operador */}
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-black uppercase text-slate-500 block">Operador</label>
-                          <select
-                            value={ribbonOperator}
-                            onChange={(e) => setRibbonOperator(e.target.value)}
-                            required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="">Selecione...</option>
-                            {operators.map(op => (
-                              <option key={op} value={op}>{op}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Turno */}
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-black uppercase text-slate-500 block">Turno</label>
-                          <select
-                            value={ribbonShift}
-                            onChange={(e) => setRibbonShift(e.target.value)}
-                            required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="">Selecione...</option>
-                            {availableShifts.length > 0 ? (
-                              availableShifts.map(s => (
-                                <option key={s.id} value={s.name}>{s.name}</option>
-                              ))
-                            ) : (
-                              ['A', 'B', 'C', 'D'].map(sh => (
-                                <option key={sh} value={sh}>{sh}</option>
-                              ))
-                            )}
-                          </select>
-                        </div>
-
-                        {/* M√°quina */}
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-black uppercase text-slate-500 block">M√°quina</label>
-                          <select
-                            value={ribbonMachine}
-                            onChange={(e) => setRibbonMachine(e.target.value)}
-                            required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="">Selecione a M√°quina...</option>
-                            <option value="Ghezze">Ghezze</option>
-                            <option value="Lintech">Lintech</option>
-                            <option value="Wutec">Wutec</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-200/50 space-y-4">
-                      <h5 className="text-xs font-black uppercase text-slate-700">2. Jumbos Processados nesta Ficha</h5>
-                      <p className="text-[10px] text-slate-500 block">
-                        Se houve consumo de mais de um jumbo ou jumbos diferentes no mesmo dia e m√°quina, utilize o bot√£o abaixo para adicion√°-los. Os totais ser√£o calculados e resumidos automaticamente.
-                      </p>
-                      
-                      {/* Sub-form item */}
-                      <div className="bg-white p-5 border border-indigo-100/70 rounded-2xl space-y-4 shadow-xs">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                          {/* Tipo do Jumbo */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-indigo-950 block">Tipo do Jumbo</label>
-                            <select
-                              value={tempJumboType}
-                              onChange={(e) => setTempJumboType(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-white"
-                            >
-                              <option value="">Selecione...</option>
-                              <option value="AR9">AR9 (45 micras)</option>
-                              <option value="AA 38">AA 38 (38 micras)</option>
-                              <option value="AS 50">AS 50 (50 micras)</option>
-                              <option value="HOTMAILT">HOTMAILT (38 micras)</option>
-                            </select>
-                          </div>
-
-                          {/* N√∫mero do Pedido (OP) */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-slate-500 block">N√∫mero do Pedido (OP)</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: 10452"
-                              value={tempOrderNumber}
-                              onChange={(e) => setTempOrderNumber(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                            />
-                          </div>
-
-                          {/* Utilizado (m¬≤) */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-indigo-700 block">Utilizado m¬≤ (Auto)</label>
-                            <input
-                              type="text"
-                              placeholder="C√°lculo Autom√°tico"
-                              value={tempJumboM2 ? `${Number(tempJumboM2).toLocaleString('pt-BR')} m¬≤` : 'Calculando...'}
-                              readOnly
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-black text-indigo-900 bg-indigo-50/50 cursor-not-allowed"
-                            />
-                          </div>
-
-                          {/* Lixo Peso (Kg) */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-slate-400 block">Lixo Peso (Kg)</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              placeholder="Ex: 15"
-                              value={tempWasteWeight}
-                              onChange={(e) => setTempWasteWeight(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Configura√ß√£o de Rolos e Dimens√µes por Jumbo */}
-                        <div className="border-t border-slate-100 pt-3">
-                          <span className="text-[10px] font-black uppercase text-indigo-900 block mb-2">Especifica√ß√£o de Rolos do Jumbo</span>
-                          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-slate-500 block">Largura (mm)</label>
-                              <input
-                                type="number"
-                                placeholder="45"
-                                value={tempRollWidth}
-                                onChange={(e) => setTempRollWidth(e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-slate-500 block">Metragem Rolo (m)</label>
-                              <input
-                                type="number"
-                                placeholder="100"
-                                value={tempRollLength}
-                                onChange={(e) => setTempRollLength(e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-slate-500 block">Rolos Produzidos</label>
-                              <input
-                                type="number"
-                                placeholder="Ex: 500"
-                                value={tempRollsCount}
-                                onChange={(e) => setTempRollsCount(e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-amber-600 block">√ë. Conf. Tipo 1 (Rolos)</label>
-                              <input
-                                type="number"
-                                placeholder="Ex: 5"
-                                value={tempRollsTipo1}
-                                onChange={(e) => setTempRollsTipo1(e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-orange-600 block">√ë. Conf. Tipo 2 (Rolos)</label>
-                              <input
-                                type="number"
-                                placeholder="Ex: 8"
-                                value={tempRollsTipo2}
-                                onChange={(e) => setTempRollsTipo2(e.target.value)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Visualiza√ß√£o m2 calculados */}
-                        <div className="bg-slate-50 rounded-xl p-3 grid grid-cols-1 md:grid-cols-4 gap-2 text-[10px] font-semibold text-slate-500">
-                          <div>
-                            M¬≤ Produzido Auto: <strong className="text-slate-850">{tempProducedM2 ? `${tempProducedM2} m¬≤` : '-'}</strong>
-                          </div>
-                          <div>
-                            M¬≤ Tipo 1 Auto: <strong className="text-amber-700">{tempM2Tipo1 ? `${tempM2Tipo1} m¬≤` : '-'}</strong>
-                          </div>
-                          <div>
-                            M¬≤ Tipo 2 Auto: <strong className="text-orange-700">{tempM2Tipo2 ? `${tempM2Tipo2} m¬≤` : '-'}</strong>
-                          </div>
-                          <div className="text-right">
-                            Total Rejeitado: <strong className="text-red-650">{tempRejectedM2 ? `${tempRejectedM2} m¬≤` : '0 m¬≤'}</strong>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end pt-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!tempJumboType || !tempJumboM2) {
-                                alert("Por favor, selecione o tipo de jumbo e a metragem utilizada em m¬≤!");
-                                return;
-                              }
-                              const m2Val = parseFloat(tempJumboM2) || 0;
-                              const prodVal = parseFloat(tempProducedM2) || 0;
-                              const rejVal = parseFloat(tempRejectedM2) || 0;
-                              const wasteVal = parseFloat(tempWasteWeight) || 0;
-                              
-                              const newItem = {
-                                id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-                                jumboType: tempJumboType,
-                                jumboM2: m2Val,
-                                producedM2: prodVal,
-                                rejectedM2: rejVal,
-                                wasteWeight: wasteVal,
-                                orderNumber: tempOrderNumber || undefined,
-                                rollsCount: tempRollsCount ? parseInt(tempRollsCount) || 0 : undefined,
-                                rollWidth: tempRollWidth ? parseFloat(tempRollWidth) || 0 : undefined,
-                                rollLength: tempRollLength ? parseFloat(tempRollLength) || 0 : undefined,
-                                rollsTipo1: tempRollsTipo1 ? parseInt(tempRollsTipo1) || 0 : undefined,
-                                rollsTipo2: tempRollsTipo2 ? parseInt(tempRollsTipo2) || 0 : undefined,
-                                m2Tipo1: tempM2Tipo1 ? parseFloat(tempM2Tipo1) || 0 : undefined,
-                                m2Tipo2: tempM2Tipo2 ? parseFloat(tempM2Tipo2) || 0 : undefined
-                              };
-                              setRibbonJumboItems([...ribbonJumboItems, newItem]);
-                              setTempJumboType('');
-                              setTempJumboM2('');
-                              setTempProducedM2('');
-                              setTempRejectedM2('');
-                              setTempWasteWeight('');
-                              setTempOrderNumber('');
-                              setTempRollsCount('');
-                              setTempRollWidth('');
-                              setTempRollLength('');
-                              setTempRollsTipo1('');
-                              setTempRollsTipo2('');
-                              setTempM2Tipo1('');
-                              setTempM2Tipo2('');
-                            }}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
-                          >
-                            + Incluir Jumbo na Ficha
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Lista do Detalhamento das Execu√ß√µes */}
-                      {ribbonJumboItems.length > 0 ? (
-                        <div className="bg-indigo-50/40 rounded-xl p-3 border border-indigo-100">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-[10px]">
-                              <thead>
-                                <tr className="border-b border-indigo-100 text-slate-500 uppercase font-black tracking-wider">
-                                  <th className="py-2 px-1">OP / Tipo Jumbo</th>
-                                  <th className="py-2 px-1 text-right">Utilizado (m¬≤)</th>
-                                  <th className="py-3 px-1 text-center">Rolos Prod. (m¬≤)</th>
-                                  <th className="py-3 px-1 text-center text-amber-700">Tipo 1 (m¬≤)</th>
-                                  <th className="py-3 px-1 text-center text-orange-700">Tipo 2 (m¬≤)</th>
-                                  <th className="py-2 px-1 text-right">Lixo Peso</th>
-                                  <th className="py-2 px-1 text-right">Lixo Perdido (m¬≤)</th>
-                                  <th className="py-2 px-1 text-center">Remover</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {ribbonJumboItems.map((item) => (
-                                  <tr key={item.id} className="border-b border-indigo-50/50 font-bold text-slate-700">
-                                    <td className="py-2 px-1 text-indigo-700 uppercase">
-                                      <div className="font-black text-indigo-900">#{item.orderNumber || '-'}</div>
-                                      <div className="text-[9px] text-slate-400">{item.jumboType}</div>
-                                    </td>
-                                    <td className="py-2 px-1 text-right">{item.jumboM2.toLocaleString('pt-BR')} m¬≤</td>
-                                    <td className="py-2 px-1 text-center text-slate-800">
-                                      <div>{item.rollsCount ? `${item.rollsCount.toLocaleString('pt-BR')} un` : '-'}</div>
-                                      <div className="text-[8px] text-slate-400">{(item.producedM2 || 0).toLocaleString('pt-BR')} m¬≤</div>
-                                    </td>
-                                    <td className="py-2 px-1 text-center text-amber-900">
-                                      {item.rollsTipo1 ? (
-                                        <div>
-                                          <div>{item.rollsTipo1} un</div>
-                                          <div className="text-[8px] text-amber-500">{(item.m2Tipo1 || 0).toLocaleString('pt-BR')} m¬≤</div>
-                                        </div>
-                                      ) : <span className="text-slate-400">-</span>}
-                                    </td>
-                                    <td className="py-2 px-1 text-center text-orange-900">
-                                      {item.rollsTipo2 ? (
-                                        <div>
-                                          <div>{item.rollsTipo2} un</div>
-                                          <div className="text-[8px] text-orange-500">{(item.m2Tipo2 || 0).toLocaleString('pt-BR')} m¬≤</div>
-                                        </div>
-                                      ) : <span className="text-slate-400">-</span>}
-                                    </td>
-                                    <td className="py-2 px-1 text-right text-slate-600">{formatWeight(item.wasteWeight)}</td>
-                                    <td className="py-2 px-1 text-right text-red-650">
-                                      {item.wasteWeight > 0 ? `${calculateLostM2(item.wasteWeight, item.jumboType).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤` : '-'}
-                                    </td>
-                                    <td className="py-2 px-1 text-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const filtered = ribbonJumboItems.filter(x => x.id !== item.id);
-                                          setRibbonJumboItems(filtered);
-                                          if (filtered.length === 0) {
-                                            setRibbonJumboM2('');
-                                            setRibbonProducedM2('');
-                                            setRibbonRejectedM2('');
-                                            setRibbonWasteWeight('');
-                                            setRibbonJumboType('');
-                                          }
-                                        }}
-                                        className="text-red-500 hover:text-red-700 uppercase font-black text-[9px]"
-                                      >
-                                        Remover
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-amber-700 font-bold bg-amber-50 rounded-xl px-4 py-2.5 border border-amber-100">
-                          Nenhum jumbo adicionado √† lista. Voc√™ pode usar os campos acima para preenchimento manual simples de apenas 1 jumbo, ou adicionar jumbos m√∫ltiplos ao apontamento clicando em "+ Incluir Jumbo na Ficha" acima.
-                        </div>
-                      )}
-
-                      {/* Totais do Form */}
-                      <div className="border-t border-slate-100 pt-4">
-                        <span className="text-[10px] font-black uppercase text-slate-400 block mb-3">Resumo dos Totais (Calculado Autom√°tico caso haja itens adicionados)</span>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-black uppercase text-slate-500 block">Total Jumbos (m¬≤)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={ribbonJumboM2}
-                              onChange={(e) => setRibbonJumboM2(e.target.value)}
-                              required
-                              disabled={ribbonJumboItems.length > 0}
-                              className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 ${
-                                ribbonJumboItems.length > 0 ? 'bg-indigo-50 border-indigo-100/70 text-indigo-700 font-extrabold cursor-not-allowed' : 'bg-white border-slate-200 text-slate-800'
-                              }`}
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-black uppercase text-slate-500 block">Tipo Jumbo Base</label>
-                            <select
-                              value={ribbonJumboType}
-                              onChange={(e) => setRibbonJumboType(e.target.value)}
-                              required
-                              disabled={ribbonJumboItems.length > 0}
-                              className={`w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 ${
-                                ribbonJumboItems.length > 0 ? 'bg-indigo-50 border-indigo-100/70 text-indigo-700 font-extrabold cursor-not-allowed' : 'bg-white border-slate-200 text-slate-800'
-                              }`}
-                            >
-                              <option value="">Selecione...</option>
-                              <option value="AR9">AR9 (45 micras)</option>
-                              <option value="AA 38">AA 38 (38 micras)</option>
-                              <option value="AS 50">AS 50 (50 micras)</option>
-                              <option value="HOTMAILT">HOTMAILT (38 micras)</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-black uppercase text-slate-500 block">Total M¬≤ Produzido</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={ribbonProducedM2}
-                              onChange={(e) => setRibbonProducedM2(e.target.value)}
-                              required
-                              disabled={ribbonJumboItems.length > 0}
-                              className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 ${
-                                ribbonJumboItems.length > 0 ? 'bg-indigo-50 border-indigo-100/70 text-indigo-700 font-extrabold cursor-not-allowed' : 'bg-white border-slate-200 text-slate-800'
-                              }`}
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-black uppercase text-slate-500 block">Total M¬≤ √ë Conf.</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={ribbonRejectedM2}
-                              onChange={(e) => setRibbonRejectedM2(e.target.value)}
-                              disabled={ribbonJumboItems.length > 0}
-                              className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 ${
-                                ribbonJumboItems.length > 0 ? 'bg-indigo-50 border-indigo-100/70 text-indigo-700 font-extrabold cursor-not-allowed' : 'bg-white border-slate-200 text-slate-800'
-                              }`}
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-black uppercase text-slate-500 block">Total Lixo Peso (Kg)</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={ribbonWasteWeight}
-                              onChange={(e) => setRibbonWasteWeight(e.target.value)}
-                              disabled={ribbonJumboItems.length > 0}
-                              className={`w-full px-3 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500 ${
-                                ribbonJumboItems.length > 0 ? 'bg-indigo-50 border-indigo-100/70 text-indigo-700 font-extrabold cursor-not-allowed' : 'bg-white border-slate-200 text-slate-800'
-                              }`}
-                            />
-                            {ribbonWasteWeight && ribbonJumboType && (
-                              <span className="text-[9px] text-red-500 font-bold block mt-1">
-                                Perda total aproximada: {calculateLostM2(parseFloat(ribbonWasteWeight), ribbonJumboType).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 3. Paradas de M√°quina (Opcional) */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4 space-y-4 shadow-inner">
-                      <div className="flex items-center gap-2 text-slate-700 font-black text-[10px] uppercase tracking-widest border-b border-slate-200 pb-2">
-                        <Clock size={14} /> 3. Paradas de M√°quina (Opcional)
-                      </div>
-                      <div className="space-y-4">
-                        
-                        {/* Se√ß√£o Manuten√ß√£o */}
-                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 text-orange-600 font-black text-[10px] uppercase tracking-widest">
-                              <Wrench size={13} /> Manuten√ß√£o
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddRibbonStop('manutencao')}
-                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                            >
-                              <Plus size={10} /> Add Hor√°rio
-                            </button>
-                          </div>
-                          
-                          {ribbonManutencaoStops.length === 0 ? (
-                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de manuten√ß√£o registrada</p>
-                          ) : (
-                            <div className="space-y-3">
-                              {ribbonManutencaoStops.map((stop) => {
-                                const min = getDiffMinutes(stop.de, stop.ate);
-                                return (
-                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-1.5 flex-1">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase">Hor√°rio:</span>
-                                        <input
-                                          type="time"
-                                          value={stop.de}
-                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'de', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                        <span className="text-[10px] font-black text-slate-400">√†s</span>
-                                        <input
-                                          type="time"
-                                          value={stop.ate}
-                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'ate', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                          {min > 0 ? `${min} min` : '0 min'}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveRibbonStop('manutencao', stop.id)}
-                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                          title="Remover parada"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                      <div>
-                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                        <select
-                                          value={stop.motivo}
-                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'motivo', e.target.value)}
-                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                        >
-                                          <option value="">üìã Selecionar motivo padronizado...</option>
-                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                            <optgroup key={gIdx} label={group.groupName}>
-                                              {group.reasons.map((mReason, idx) => (
-                                                <option key={idx} value={mReason}>{mReason}</option>
-                                              ))}
-                                            </optgroup>
-                                          ))}
-                                        </select>
-                                      </div>
-
-                                      <div>
-                                        <input
-                                          type="text"
-                                          value={stop.explicacao || ''}
-                                          onChange={(e) => handleUpdateRibbonStop('manutencao', stop.id, 'explicacao', e.target.value)}
-                                          placeholder="Explica√ß√£o / Detalhamento do problema (opcional)..."
-                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                            <span>Subtotal Manuten√ß√£o</span>
-                            <span className="text-slate-700 font-bold">{calcTotalMinutes(ribbonManutencaoStops)} min</span>
-                          </div>
-                        </div>
-
-                        {/* Se√ß√£o Processo */}
-                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 text-blue-600 font-black text-[10px] uppercase tracking-widest">
-                              <Layers size={13} /> Processo
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddRibbonStop('processo')}
-                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                            >
-                              <Plus size={10} /> Add Hor√°rio
-                            </button>
-                          </div>
-                          
-                          {ribbonProcessoStops.length === 0 ? (
-                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma parada de processo registrada</p>
-                          ) : (
-                            <div className="space-y-3">
-                              {ribbonProcessoStops.map((stop) => {
-                                const min = getDiffMinutes(stop.de, stop.ate);
-                                return (
-                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-1.5 flex-1">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase">Hor√°rio:</span>
-                                        <input
-                                          type="time"
-                                          value={stop.de}
-                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'de', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                        <span className="text-[10px] font-black text-slate-400">√†s</span>
-                                        <input
-                                          type="time"
-                                          value={stop.ate}
-                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'ate', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                          {min > 0 ? `${min} min` : '0 min'}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveRibbonStop('processo', stop.id)}
-                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                          title="Remover parada"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                      <div>
-                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                        <select
-                                          value={stop.motivo}
-                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'motivo', e.target.value)}
-                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                        >
-                                          <option value="">üìã Selecionar motivo padronizado...</option>
-                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                            <optgroup key={gIdx} label={group.groupName}>
-                                              {group.reasons.map((mReason, idx) => (
-                                                <option key={idx} value={mReason}>{mReason}</option>
-                                              ))}
-                                            </optgroup>
-                                          ))}
-                                        </select>
-                                      </div>
-
-                                      <div>
-                                        <input
-                                          type="text"
-                                          value={stop.explicacao || ''}
-                                          onChange={(e) => handleUpdateRibbonStop('processo', stop.id, 'explicacao', e.target.value)}
-                                          placeholder="Explica√ß√£o / Detalhamento do problema (opcional)..."
-                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                            <span>Subtotal Processo</span>
-                            <span className="text-slate-700 font-bold">{calcTotalMinutes(ribbonProcessoStops)} min</span>
-                          </div>
-                        </div>
-
-                        {/* Se√ß√£o Outros */}
-                        <div className="p-3 bg-white border border-slate-100 rounded-2xl space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-1.5 text-slate-600 font-black text-[10px] uppercase tracking-widest">
-                              <Package size={13} /> Outros
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleAddRibbonStop('outros')}
-                              className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-700 uppercase bg-blue-50 px-2.5 py-1 rounded-lg transition-all"
-                            >
-                              <Plus size={10} /> Add Hor√°rio
-                            </button>
-                          </div>
-                          
-                          {ribbonOutrosStops.length === 0 ? (
-                            <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Nenhuma outra parada registrada</p>
-                          ) : (
-                            <div className="space-y-3">
-                              {ribbonOutrosStops.map((stop) => {
-                                const min = getDiffMinutes(stop.de, stop.ate);
-                                return (
-                                  <div key={stop.id} className="p-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 shadow-2xs">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-1.5 flex-1">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase">Hor√°rio:</span>
-                                        <input
-                                          type="time"
-                                          value={stop.de}
-                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'de', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                        <span className="text-[10px] font-black text-slate-400">√†s</span>
-                                        <input
-                                          type="time"
-                                          value={stop.ate}
-                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'ate', e.target.value)}
-                                          className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                                          {min > 0 ? `${min} min` : '0 min'}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveRibbonStop('outros', stop.id)}
-                                          className="p-1 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                          title="Remover parada"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                      <div>
-                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Motivo Padronizado:</label>
-                                        <select
-                                          value={stop.motivo}
-                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'motivo', e.target.value)}
-                                          className="w-full bg-white text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                                        >
-                                          <option value="">üìã Selecionar motivo padronizado...</option>
-                                          {downtimeSuggestions.allGroups.map((group, gIdx) => (
-                                            <optgroup key={gIdx} label={group.groupName}>
-                                              {group.reasons.map((mReason, idx) => (
-                                                <option key={idx} value={mReason}>{mReason}</option>
-                                              ))}
-                                            </optgroup>
-                                          ))}
-                                        </select>
-                                      </div>
-
-                                      <div>
-                                        <input
-                                          type="text"
-                                          value={stop.explicacao || ''}
-                                          onChange={(e) => handleUpdateRibbonStop('outros', stop.id, 'explicacao', e.target.value)}
-                                          placeholder="Explica√ß√£o / Detalhamento do problema (opcional)..."
-                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 px-1 text-[9px] font-black text-slate-400 uppercase">
-                            <span>Subtotal Outros</span>
-                            <span className="text-slate-700 font-bold">{calcTotalMinutes(ribbonOutrosStops)} min</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-200 flex justify-between items-center px-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Parado Geral</span>
-                          <span className="text-sm font-black text-slate-800 font-mono">
-                            {calcTotalMinutes(ribbonManutencaoStops) + calcTotalMinutes(ribbonProcessoStops) + calcTotalMinutes(ribbonOutrosStops)} min
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 border-t border-slate-50 pt-5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingRibbonId(null);
-                          setRibbonOperator('');
-                          setRibbonShift('');
-                          setRibbonProducedM2('');
-                          setRibbonRejectedM2('');
-                          setRibbonWasteWeight('');
-                          setRibbonJumboM2('');
-                          setRibbonJumboType('');
-                          setRibbonMachine('');
-                          setRibbonRollsCount('');
-                          setRibbonRollWidth('');
-                          setRibbonRollLength('');
-                          setRibbonOrderNumber('');
-                          setRibbonRollsTipo1('');
-                          setRibbonRollsTipo2('');
-                          setRibbonM2Tipo1('');
-                          setRibbonM2Tipo2('');
-                          setRibbonStoppedMinutes('');
-                          setRibbonStoppedReason('');
-                          setRibbonManutencaoStops([]);
-                          setRibbonProcessoStops([]);
-                          setRibbonOutrosStops([]);
-                          setRibbonJumboItems([]);
-                          setShowRibbonForm(false);
-                        }}
-                        className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-bold uppercase rounded-xl transition-all"
-                      >
-                        Limpar / Fechar
-                      </button>
-
-                      <button
-                        type="submit"
-                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        {editingRibbonId ? 'Salvar Edi√ß√£o' : 'Salvar Registro'}
-                      </button>
-                    </div>
-                  </form>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-            {/* Conditional Subtab Layout */}
-            {ribbonSubTab === 'dashboard' ? (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                
-                {ribbonDashboardSubTab === 'summary' && (
-                  /* Se√ß√£o 1: Vis√£o Geral e Metas de Convers√£o */
-                  <div className="space-y-6 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Efic√°cia e Metas de Convers√£o</h3>
-                    </div>
-
-                    {/* Blue Metric card */}
-                    <div className="bg-[#1e3a8a] text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden flex flex-col">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest flex items-center gap-1">
-                            EFIC√ÅCIA DE CONVERS√ÉO
-                            <span className="group relative inline-block cursor-help align-middle">
-                              <span className="w-3.5 h-3.5 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white"><Info size={9} /></span>
-                              <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-48 bg-slate-900 border border-slate-700 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                Mede o percentual de atingimento da meta f√≠sica de metros quadrados produtos de fita.
-                              </span>
-                            </span>
-                          </p>
-                          <h2 className="text-2xl font-black uppercase tracking-tight">META MENSAL ‚Ä¢ CORTE DE FITA</h2>
-                        </div>
-                        <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/20"><Activity size={24} /></div>
-                      </div>
-                      
-                      <div className="flex items-baseline gap-2 mb-1">
-                        <span className="text-4xl md:text-5xl font-black">{formatM2(ribbonDashboardStats.month)}</span>
-                        <span className="text-lg font-bold opacity-80">/ {((ribbonDashboardStats.month / Math.max(1, ribbonDashboardStats.goal)) * 100).toFixed(1)}%</span>
-                      </div>
-
-                      <div className="space-y-4 mb-4 mt-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] font-black uppercase tracking-widest opacity-60">
-                            <span>M√™s Atual ‚Äî {formatM2(ribbonDashboardStats.month)}</span>
-                            <span>Meta: {formatM2(ribbonDashboardStats.goal)}</span>
-                          </div>
-                          <div className="w-full bg-white/20 h-2.5 rounded-full overflow-hidden">
-                            <div className="bg-white h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(255,255,255,0.5)]" style={{ width: `${Math.min((ribbonDashboardStats.month / Math.max(1, ribbonDashboardStats.goal)) * 100, 100)}%` }}></div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] font-black uppercase tracking-widest opacity-60">
-                            <span>M√™s Anterior ‚Äî {formatM2(ribbonDashboardStats.prevMonthTotal)}</span>
-                            <span>{((ribbonDashboardStats.prevMonthTotal / Math.max(1, ribbonDashboardStats.prevMonthGoal)) * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-400/60 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min((ribbonDashboardStats.prevMonthTotal / Math.max(1, ribbonDashboardStats.prevMonthGoal)) * 100, 100)}%` }}></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">OBJETIVO</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.goal)}</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">FALTA</p><p className="text-base font-bold">{formatM2(Math.max(0, ribbonDashboardStats.goal - ribbonDashboardStats.month))}</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">M√âDIA NEC.</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.avgReq)}/dia</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">PROJE√á√ÉO</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.projection)}</p></div>
-                      </div>
-                    </div>
-
-                    {/* Yesterday Production & Raw Material proportional consumption */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Column 1: Ontem & Outlook Sharing */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 flex flex-col justify-between">
-                        <div className="space-y-2">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Produ√ß√£o de Ontem</span>
-                          <h3 className="text-2xl font-black text-slate-800">{formatM2(ribbonDashboardStats.yesterday)}</h3>
-                          <p className="text-xs text-slate-500 font-medium">Metros quadrados convertidos no dia de ontem.</p>
-                        </div>
-
-                        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <span className="text-xs font-black uppercase text-indigo-950">Relat√≥rio Di√°rio (Outlook)</span>
-                            <div className="flex items-center gap-1 border border-slate-200 bg-white rounded-lg px-2 py-0.5">
-                              <input 
-                                type="date"
-                                value={ribbonShareDate}
-                                onChange={(e) => setRibbonShareDate(e.target.value)}
-                                className="bg-transparent border-none text-slate-700 text-xs font-bold outline-none cursor-pointer p-0 w-[105px]"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 text-xs text-slate-600">
-                            <div className="flex justify-between">
-                              <span>Produzido:</span>
-                              <span className="font-extrabold text-slate-900">{formatM2(ribbonDailyShareMetrics.totProd)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Aproveitamento:</span>
-                              <span className="font-extrabold text-emerald-600">{ribbonDailyShareMetrics.yieldPercent.toFixed(2).replace('.', ',')}%</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Tempo Parado:</span>
-                              <span className="font-extrabold text-amber-600">{formatMinutes(ribbonDailyShareMetrics.totStops)}</span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={copyRibbonOutlookToClipboard}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] uppercase py-2.5 rounded-xl transition-all shadow-sm block text-center"
-                          >
-                            Copiar para √Årea de Transfer√™ncia (Outlook) ‚úâÔ∏è
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Column 2: Consumo Proporcional de Mat√©ria-Prima (Jumbos) */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div>
-                          <h3 className="text-sm font-black uppercase text-indigo-950">Consumo Proporcional de Mat√©ria-Prima</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Distribui√ß√£o do M√™s Selecionado ({dashboardMonth.split('-').reverse().join('/')})</p>
-                        </div>
-
-                        <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-                          {Object.entries(ribbonDashboardStats.jumboBreakdown).map(([type, stats]) => {
-                            const percentageOfTotal = ribbonDashboardStats.totJumbo > 0 ? (((stats as any).used || 0) / ribbonDashboardStats.totJumbo) * 100 : 0;
-                            return (
-                              <div key={type} className="space-y-1.5">
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-                                  <span>Jumbo {type}</span>
-                                  <span className="font-mono text-[11px] text-slate-500">
-                                    {formatM2((stats as any).used || 0)} ({percentageOfTotal.toFixed(1)}%)
-                                  </span>
-                                </div>
-                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                  <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${percentageOfTotal}%` }}></div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {Object.keys(ribbonDashboardStats.jumboBreakdown).length === 0 && (
-                            <div className="text-slate-400 font-semibold text-xs text-center py-6">Sem consumo de jumbos registrado no m√™s de refer√™ncia.</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {ribbonDashboardSubTab === 'charts' && (
-                  /* Se√ß√£o 2: Evolu√ß√£o de Produ√ß√£o e Perdas */
-                  <div className="space-y-6 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Evolu√ß√£o de Produ√ß√£o e Perdas</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Chart 3: Composed Loss vs Net Production */}
-                      <div id="ribbon-chart-composed" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 col-span-1 lg:col-span-2 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
-                          <div>
-                            <h3 className="text-sm font-black uppercase text-indigo-950">Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Barras (N√£o conforme [Tipo 1 & Tipo 2] & Lixo) vs Linha de Produ√ß√£o (Eixo Secund√°rio - m¬≤)</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button 
-                              onClick={() => downloadChartAsPNG('ribbon-chart-composed', 'Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida')}
-                              className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                              title="Baixar Imagem"
-                            >
-                              <Download size={15} />
-                            </button>
-                            <button 
-                              onClick={() => setFullscreenChart('ribbon-chart-composed')}
-                              className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
-                              title="Visualizar em Tela Cheia"
-                            >
-                              <Maximize2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="h-72">
-                          {ribbonDailyTrendData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                              <ComposedChart data={ribbonDailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-                                <YAxis stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
-                                <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" m¬≤" />
-                                <RechartsTooltip formatter={(value: any, name: any, props: any) => {
-                                  if (name === "Lixo") {
-                                    const kgVal = props?.payload?.residuoWeight ?? 0;
-                                    return [`${formatWeight(kgVal)} (${Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤)`, name];
-                                  }
-                                  return [Number(value).toLocaleString('pt-BR') + ' m¬≤', name];
-                                }} />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 10 }} />
-                                <Bar dataKey="tipo1" name="N√£o conforme Tipo 1 (m¬≤)" stackId="losses" fill="#ef4444" barSize={20} />
-                                <Bar dataKey="tipo2" name="N√£o conforme Tipo 2 (m¬≤)" stackId="losses" fill="#f43f5e" barSize={20} />
-                                <Bar dataKey="residuoM2" name="Lixo" stackId="losses" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={20} />
-                                <Line yAxisId="right" type="monotone" dataKey="prod" name="Produ√ß√£o L√≠quida" stroke="#10b981" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                              </ComposedChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para o per√≠odo</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Chart 1: Daily Production in M¬≤ */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div>
-                          <h3 className="text-sm font-black uppercase text-indigo-950">Produ√ß√£o F√≠sica Di√°ria</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Metros Quadrados Produzidos por Dia</p>
-                        </div>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={[...filteredRibbonEntries].reverse()}>
-                              <defs>
-                                <linearGradient id="prodColor" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="date" tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} tick={{ fontSize: 9 }} />
-                              <YAxis tickFormatter={(v) => formatM2(v)} tick={{ fontSize: 9 }} />
-                              <RechartsTooltip formatter={(v: any) => [formatM2(Number(v)), 'Produzido']} />
-                              <Area type="monotone" dataKey="producedM2" stroke="#3b82f6" fillOpacity={1} fill="url(#prodColor)" strokeWidth={2} />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      {/* Chart 2: Daily Waste weight (Kg) accumulators */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div>
-                          <h3 className="text-sm font-black uppercase text-indigo-950">Indicador de Lixo Acumulado</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Mapeamento de Descarte Di√°rio em Peso</p>
-                        </div>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={[...filteredRibbonEntries].reverse()}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="date" tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                              <YAxis tickFormatter={(v) => formatWeight(v)} tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                              <RechartsTooltip 
-                                formatter={(v: any, name: any, props: any) => {
-                                  const entry = props?.payload;
-                                  const wt = Number(v);
-                                  const m2 = entry && entry.jumboType ? calculateLostM2(wt, entry.jumboType) : 0;
-                                  const m2Str = m2 > 0 ? ` (${m2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤)` : '';
-                                  return [`${formatWeight(wt)}${m2Str}`, 'Lixo total'];
-                                }}
-                                labelFormatter={(l: any) => l.split('-').reverse().join('/')}
-                              />
-                              <Bar dataKey="wasteWeight" name="Lixo Coletado" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={25} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      {/* Chart 4: Scatter Plot operator performance */}
-                      <div id="ribbon-chart-scatter" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
-                          <div>
-                            <h3 className="text-sm font-black uppercase text-indigo-950">Dispers√£o: Produ√ß√£o vs Lixo Operador</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">X = Produ√ß√£o L√≠quida (m¬≤) | Y = Lixo (Kg/T) | Tamanho = Paradas de Processo (min)</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button 
-                              onClick={() => downloadChartAsPNG('ribbon-chart-scatter', 'Dispers√£o Performance Operador Fita')}
-                              className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                              title="Baixar Imagem"
-                            >
-                              <Download size={15} />
-                            </button>
-                            <button 
-                              onClick={() => setFullscreenChart('ribbon-chart-scatter')}
-                              className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
-                              title="Visualizar em Tela Cheia"
-                            >
-                              <Maximize2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="h-72">
-                          {ribbonScatterData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                              <ScatterChart margin={{ top: 15, right: 15, bottom: 10, left: -25 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis type="number" dataKey="prod" name="Produ√ß√£o L√≠quida" unit=" m¬≤" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-                                <YAxis type="number" dataKey="wastes" name="Lixo" unit=" kg" stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} tickFormatter={(val) => formatWeight(val)} />
-                                <ZAxis type="number" dataKey="stopsProcess" range={[50, 450]} name="Ajustes de Paradas" unit=" min" />
-                                <RechartsTooltip 
-                                  cursor={{ strokeDasharray: '3 3' }}
-                                  content={({ active, payload }: any) => {
-                                    if (active && payload && payload.length) {
-                                      const item = payload[0].payload;
-                                      return (
-                                        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-xl border border-slate-700 text-[10px] space-y-1 font-semibold">
-                                          <p className="font-extrabold uppercase tracking-wider text-emerald-400 border-b border-slate-800 pb-1.5 mb-1.5">{item.name}</p>
-                                          <p>üèÜ Produ√ß√£o L√≠quida: <span className="font-black text-slate-100">{item.prod.toLocaleString('pt-BR')} m¬≤</span></p>
-                                          <p>üóëÔ∏è Lixo: <span className="font-black text-slate-100">{formatWeight(item.wastes)}</span></p>
-                                          <p>‚è±Ô∏è Tempo de Paradas: <span className="font-black text-slate-100">{item.stopsProcess} min</span></p>
-                                        </div>
-                                      );
-                                    }
-                                    return null;
-                                  }}
-                                />
-                                <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 10 }} />
-                                {ribbonScatterData.map((entry, index) => (
-                                  <Scatter 
-                                    key={index} 
-                                    name={entry.name} 
-                                    data={[entry]} 
-                                    fill={entry.color} 
-                                    className="cursor-zoom-in"
-                                  />
-                                ))}
-                              </ScatterChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para an√°lise</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Chart 5: 100% proportional stops breakdown */}
-                      <div id="ribbon-chart-stacked" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
-                          <div>
-                            <h3 className="text-sm font-black uppercase text-indigo-950">Breakdown Proporcional de Paradas (100%)</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Exibe a distribui√ß√£o interna de motivos de inatividade</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                              <button 
-                                type="button"
-                                onClick={() => setRibbonStopsGroupBy('machine')}
-                                className={`px-2.5 py-1 rounded-md text-[8px] font-black uppercase tracking-wider transition-all ${ribbonStopsGroupBy === 'machine' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                              >
-                                M√°quinas
-                              </button>
-                              <button 
-                                type="button"
-                                onClick={() => setRibbonStopsGroupBy('operator')}
-                                className={`px-2.5 py-1 rounded-md text-[8px] font-black uppercase tracking-wider transition-all ${ribbonStopsGroupBy === 'operator' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                              >
-                                Operador
-                              </button>
-                            </div>
-                            <div className="flex gap-1">
-                              <button 
-                                onClick={() => downloadChartAsPNG('ribbon-chart-stacked', 'Distribui√ß√£o Proporcional de Paradas Fita')}
-                                className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                                title="Baixar Imagem"
-                              >
-                                <Download size={15} />
-                              </button>
-                              <button 
-                                onClick={() => setFullscreenChart('ribbon-chart-stacked')}
-                                className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
-                                title="Visualizar em Tela Cheia"
-                              >
-                                <Maximize2 size={15} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="h-72">
-                          {ribbonProportionalStopsData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={ribbonProportionalStopsData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-                                <YAxis tickFormatter={(tick) => `${tick}%`} stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
-                                <RechartsTooltip formatter={(val) => `${val}%`} />
-                                <Legend iconType="rect" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 10 }} />
-                                <Bar dataKey="manutPct" name="Parada Manuten√ß√£o" stackId="stops-pct" fill="#ef4444" unit="%" />
-                                <Bar dataKey="procPct" name="Parada Processo" stackId="stops-pct" fill="#f59e0b" unit="%" />
-                                <Bar dataKey="outrosPct" name="Outras Paradas" stackId="stops-pct" fill="#64748b" unit="%" />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem inatividades registradas</div>
-                          )}
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                )}
-
-                {ribbonDashboardSubTab === 'comparison' && (
-                  /* Se√ß√£o 3: Comparativos BI e Performance */
-                  <div className="space-y-6 text-slate-800 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Comparativos e Performance BI</h3>
-                    </div>
-
-                    <RibbonBiAnalyticsView
-                      ribbonEntries={ribbonEntries}
-                      ribbonGoals={ribbonGoals}
-                      employees={employees}
-                    />
-                  </div>
-                )}
-
-              </div>
-            ) : (
-              <>
-                {/*KPI Cards Grid */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Card M¬≤ Produzidos */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px] font-black uppercase tracking-wider">M¬≤ Produzidos</span>
-                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-                    <Activity className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <h4 className="text-xl font-black text-slate-800 tracking-tight">
-                  {ribbonStats.totProd.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤
-                </h4>
-                <p className="text-[9px] text-slate-400 font-medium">Metros finais entregues</p>
-              </div>
-
-              {/* Card N√£o Conformidades */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px] font-black uppercase tracking-wider">N√£o Conforme</span>
-                  <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <h4 className="text-xl font-black text-slate-800 tracking-tight">
-                  {ribbonStats.totRej.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤
-                </h4>
-                <p className="text-[9px] text-red-500 font-black">
-                  Perda: {ribbonStats.lossPercent.toFixed(2)}%
-                </p>
-              </div>
-
-              {/* Card Aproveitamento */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px] font-black uppercase tracking-wider">Aproveitamento</span>
-                  <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <h4 className="text-xl font-black text-emerald-700 tracking-tight">
-                  {ribbonStats.yieldPercent.toFixed(2)}%
-                </h4>
-                <p className="text-[9px] text-slate-400 font-medium">Efici√™ncia de corte final</p>
-              </div>
-
-              {/* Card Jumbos Convertidos */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2 col-span-1">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px] font-black uppercase tracking-wider">Jumbos Convertidos</span>
-                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                    <Layers className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <h4 className="text-xl font-black text-slate-800 tracking-tight">
-                  {ribbonStats.jumboCount.toFixed(2)} jumbos
-                </h4>
-                <p className="text-[9px] text-slate-400 font-medium truncate">
-                  Total jumbo: {ribbonStats.totJumbo.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m¬≤
-                </p>
-              </div>
-
-              {/* Card Res√≠duo Lixo */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-2 col-span-2 lg:col-span-1 border-l-4 border-l-amber-500">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px] font-black uppercase tracking-wider">Lixo Coletado</span>
-                  <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
-                    <Scale className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <h4 className="text-xl font-black text-slate-800 tracking-tight">
-                  {formatWeight(ribbonStats.totWaste)}
-                </h4>
-                <p className="text-[11px] text-slate-500 font-bold">
-                  Equivalente a <span className="text-red-550 font-black">{ribbonStats.totWasteM2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Painel de Filtros e Tabela */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6 select-none cursor-default">
-              {/* Filtros e Controles */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-50 pb-4">
-                <div>
-                  <h4 className="text-sm font-black uppercase text-indigo-950">Relat√≥rio de Lan√ßamentos de Corte de Fita</h4>
-                  <p className="text-[11px] text-slate-400 font-medium">Hist√≥rico do setor e par√¢metros de processo</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                  {selectedRibbonIds.length > 0 && canEditProduction && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteSelectedRibbon}
-                      className="px-4 py-2 bg-red-650 hover:bg-red-700 text-white rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-1.5 shadow-md shadow-red-200 transition-all active:scale-95 animate-in zoom-in duration-200"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Excluir Selecionados ({selectedRibbonIds.length})
-                    </button>
-                  )}
-                  {/* Filtro Operador */}
-                  <div className="min-w-[120px]">
-                    <select
-                      value={ribbonFilterOperator}
-                      onChange={(e) => setRibbonFilterOperator(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-black text-slate-700 bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                    >
-                      <option value="all">Todos Operadores</option>
-                      {operators.map(op => (
-                        <option key={op} value={op}>{op}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Filtro Turno */}
-                  <div className="min-w-[120px]">
-                    <select
-                      value={ribbonFilterShift}
-                      onChange={(e) => setRibbonFilterShift(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-black text-slate-700 bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                    >
-                      <option value="all">Todos Turnos</option>
-                      {availableShifts.length > 0 ? (
-                        availableShifts.map(s => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))
-                      ) : (
-                        ['A', 'B', 'C', 'D'].map(sh => (
-                          <option key={sh} value={sh}>{sh}</option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-
-                  {(ribbonFilterOperator !== 'all' || ribbonFilterShift !== 'all') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRibbonFilterOperator('all');
-                        setRibbonFilterShift('all');
-                      }}
-                      className="text-[11px] font-black uppercase text-red-500 hover:underline px-2"
-                    >
-                      Limpar Filtros
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Tabela Responsiva */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px] select-none cursor-default">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                      {canEditProduction && (
-                        <th className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              checked={filteredRibbonEntries.length > 0 && selectedRibbonIds.length === filteredRibbonEntries.length}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedRibbonIds(filteredRibbonEntries.map(e => e.id));
-                                } else {
-                                  setSelectedRibbonIds([]);
-                                }
-                              }}
-                              className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
-                              title="Selecionar Todos"
-                            />
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Editar</span>
-                          </div>
-                        </th>
-                      )}
-                      <th className="py-3 px-4">Data</th>
-                      <th className="py-3 px-4">Operador</th>
-                      <th className="py-3 px-4 text-center">Turno</th>
-                      <th className="py-3 px-4 text-center">M√°quina</th>
-                      <th className="py-3 px-4 text-center">Pedido</th>
-                      <th className="py-3 px-4 text-center">Tipo de Jumbo</th>
-                      <th className="py-3 px-4 text-right">Jumbo Utilizado (m¬≤)</th>
-                      <th className="py-3 px-4 text-right">Jumbos Eq.</th>
-                      <th className="py-3 px-4 text-right">Rolos Prod.</th>
-                      <th className="py-3 px-4 text-right">M¬≤ Produzido</th>
-                      <th className="py-3 px-4 text-right">Fita N√£o Conforme</th>
-                      <th className="py-3 px-4 text-right">Aproveitamento %</th>
-                      <th className="py-3 px-4 text-right">Lixo Peso (Kg)</th>
-                      <th className="py-3 px-4 text-right">Lixo Perdido (m¬≤)</th>
-                      {canEditProduction && <th className="py-3 px-4 text-center">A√ß√µes</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-600">
-                    {filteredRibbonEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={canEditProduction ? 16 : 14} className="py-8 text-center text-slate-400 font-medium">
-                          Nenhum lan√ßamento encontrado para os filtros selecionados.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredRibbonEntries.map(entry => {
-                        const lossRate = entry.producedM2 > 0 ? (entry.rejectedM2 / entry.producedM2) * 100 : 0;
-                        const rendRate = entry.producedM2 > 0 ? ((entry.producedM2 - entry.rejectedM2) / entry.producedM2) * 100 : 0;
-                        const jumbosEquivalent = entry.jumboM2 / 8200;
-
-                        return (
-                          <tr key={entry.id} className={`hover:bg-slate-50/50 transition-all font-mono ${selectedRibbonIds.includes(entry.id) ? 'bg-blue-50/30' : ''}`}>
-                            {canEditProduction && (
-                              <td className="py-3.5 px-4 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRibbonIds.includes(entry.id)}
-                                    onChange={() => {
-                                      if (selectedRibbonIds.includes(entry.id)) {
-                                        setSelectedRibbonIds(selectedRibbonIds.filter(id => id !== entry.id));
-                                      } else {
-                                        setSelectedRibbonIds([...selectedRibbonIds, entry.id]);
-                                      }
-                                    }}
-                                    className="rounded text-blue-600 border-slate-350 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer font-sans shrink-0"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditRibbonEntry(entry)}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
-                                    title="Editar Lan√ßamento"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                    <span>Editar</span>
-                                  </button>
-                                </div>
-                              </td>
-                            )}
-                            <td className="py-3.5 px-4 font-sans font-bold text-slate-800">
-                              {entry.date.split('-').reverse().join('/')}
-                            </td>
-                            <td className="py-3.5 px-4 font-sans font-medium text-slate-700">
-                              {entry.operator}
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-sans col-span-1">
-                              <span className="px-2 py-0.5 bg-slate-100 border border-slate-200/50 text-slate-600 rounded-md font-black text-[10px]">
-                                {entry.shift}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-sans font-bold text-slate-700">
-                              {entry.machine ? (
-                                <span className="px-2 py-0.5 bg-orange-50 border border-orange-100 text-orange-800 rounded-md text-[10px] uppercase font-black">
-                                  {entry.machine}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">-</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-sans font-bold text-slate-800">
-                              {entry.orderNumber ? (
-                                <span className="px-1.5 py-0.5 bg-sky-50 border border-sky-150 text-sky-800 font-extrabold rounded text-[10px]">
-                                  #{entry.orderNumber}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">-</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-sans">
-                              {entry.jumboType ? (
-                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 text-indigo-700 rounded-lg font-extrabold text-[10px] uppercase">
-                                  {entry.jumboType}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">-</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-right text-indigo-700 font-bold">
-                              <div>{entry.jumboM2.toLocaleString('pt-BR')} m¬≤</div>
-                              {entry.jumboType && (
-                                <div className="text-[9px] text-slate-400 font-black uppercase">
-                                  {getJumboMicras(entry.jumboType) 
-                                    ? `(${getJumboMicras(entry.jumboType)} micras)` 
-                                    : ''}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-sans font-extrabold text-indigo-600">
-                              {jumbosEquivalent.toFixed(2)} Qtd
-                            </td>
-                            <td className="py-3.5 px-4 text-right text-slate-700">
-                              {entry.rollsCount ? (
-                                <div>
-                                  <div className="font-extrabold text-slate-800">{entry.rollsCount.toLocaleString('pt-BR')} un</div>
-                                  <div className="text-[9px] text-slate-400 font-medium font-sans">
-                                    {entry.rollWidth && `${entry.rollWidth}mm`}
-                                    {entry.rollWidth && entry.rollLength && ' x '}
-                                    {entry.rollLength && `${entry.rollLength}m`}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">-</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-extrabold text-slate-800">
-                              {entry.producedM2.toLocaleString('pt-BR')} m¬≤
-                            </td>
-                            <td className="py-3.5 px-4 text-right text-red-500 font-medium">
-                              {entry.rejectedM2 ? `${entry.rejectedM2.toLocaleString('pt-BR')} m¬≤` : '0 m¬≤'}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-sans font-black text-emerald-600">
-                              {rendRate.toFixed(2)}%
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-sans font-bold text-slate-700">
-                              {formatWeight(entry.wasteWeight)}
-                            </td>
-                            <td className="py-3.5 px-4 text-right font-sans font-bold text-red-600">
-                              {entry.wasteWeight > 0 && entry.jumboType && getJumboMicras(entry.jumboType) ? (
-                                <span>
-                                  {calculateLostM2(entry.wasteWeight, entry.jumboType).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">-</span>
-                              )}
-                            </td>
-                            {canEditProduction && (
-                              <td className="py-3.5 px-4 text-center">
-                                <div className="flex items-center justify-center gap-1.5 no-print">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditRibbonEntry(entry)}
-                                    className="p-1.5 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-all"
-                                    title="Editar"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteRibbonEntry(entry.id)}
-                                    className="p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-all"
-                                    title="Excluir"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Gr√°ficos de Produ√ß√£o e Lixo */}
-            {filteredRibbonEntries.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
-                {/* Gr√°fico 1: Rendimento e Perda no Tempo */}
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
-                  <div>
-                    <h4 className="text-sm font-black uppercase text-indigo-950">Hist√≥rico de Produ√ß√£o de Fita</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">M¬≤ Produzido vs Metros N√£o Conformes</p>
-                  </div>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={[...filteredRibbonEntries].reverse()}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} 
-                          tick={{ fontSize: 10, fontWeight: 'bold' }} 
-                        />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <RechartsTooltip 
-                          formatter={(v: any) => [v.toLocaleString('pt-BR') + ' m¬≤', '']}
-                          labelFormatter={(l: any) => l.split('-').reverse().join('/')}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                        <Area type="monotone" dataKey="producedM2" name="Metros Produzidos (m¬≤)" fill="#e0e7ff" stroke="#4f46e5" strokeWidth={2} />
-                        <Bar dataKey="rejectedM2" name="N√£o Conforme (m¬≤)" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={25} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Gr√°fico 2: Descarte de Res√≠duo Lixo */}
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
-                  <div>
-                    <h4 className="text-sm font-black uppercase text-indigo-950">Descarte de Res√≠duos do Setor (Lixo)</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Peso total de descarte ao longo do tempo (visualizado em Kg/T)</p>
-                  </div>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[...filteredRibbonEntries].reverse()}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} 
-                          tick={{ fontSize: 10, fontWeight: 'bold' }} 
-                        />
-                        <YAxis tickFormatter={(v) => formatWeight(v)} tick={{ fontSize: 9 }} />
-                        <RechartsTooltip 
-                          formatter={(v: any, name: any, props: any) => {
-                            const entry = props?.payload;
-                            const wt = Number(v);
-                            const m2 = entry && entry.jumboType ? calculateLostM2(wt, entry.jumboType) : 0;
-                            const m2Str = m2 > 0 ? ` (${m2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m¬≤)` : '';
-                            return [`${formatWeight(wt)}${m2Str}`, 'Lixo total'];
-                          }}
-                          labelFormatter={(l: any) => l.split('-').reverse().join('/')}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                        <Bar dataKey="wasteWeight" name="Lixo Coletado" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={30} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-          </div>
-        )}
-
-        {activeTab === 'personnel' && (
-          personnelSubView === 'vacations' ? (
-            <VacationPlanning
-              employees={employees}
-              vacations={vacations}
-              onSaveVacation={handleSaveVacation}
-              onDeleteVacation={handleDeleteVacation}
-              onGeneratePlan={handleGenerateVacationPlan}
-              onUpdateEmployee={async (employeeId: string, updates: any) => {
-                try {
-                  await setDoc(doc(db, 'employees', employeeId), updates, { merge: true });
-                } catch (err) {
-                  console.error('Erro ao atualizar colaborador:', err);
-                }
-              }}
-              onClose={() => setPersonnelSubView('board')}
-              canManage={canManagePersonnel}
-            />
-          ) : personnelSubView === 'training' ? (
-            <OperationalTraining
-              employees={employees}
-              sheets={operatorTrainingSheets}
-              onSaveSheet={handleSaveOperatorTrainingSheet}
-              onDeleteSheet={handleDeleteOperatorTrainingSheet}
-              onClose={() => setPersonnelSubView('board')}
-              canManage={canManagePersonnel}
-            />
-          ) : personnelSubView === 'lunch' ? (
-            <LunchSchedule
-              employees={employees}
-              onClose={() => setPersonnelSubView('board')}
-              canManage={canManagePersonnel}
-            />
-          ) : (
-            <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-center no-print">
-              <div className="relative">
-                <button 
-                  onClick={() => setIsExtraMenuOpen(!isExtraMenuOpen)}
-                  className="p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-slate-600 flex items-center gap-2"
-                >
-                  <Menu size={22} />
-                  <span className="text-[10px] font-black uppercase tracking-widest px-1">Menu Extra</span>
-                </button>
-                
-                {isExtraMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsExtraMenuOpen(false)}></div>
-                    <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top">
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setIsCollaboratorModalOpen(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-b border-slate-50"
-                      >
-                        <UserPlus size={18} className="text-blue-600" />
-                        Cadastrar Colaborador
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); exportPersonnelToPDF(); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors"
-                      >
-                        <FileText size={18} className="text-emerald-500" />
-                        Baixar PDF Pessoal
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setIsHistoryModalOpen(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors"
-                      >
-                        <History size={18} className="text-blue-500" />
-                        Hist√≥rico de Pessoal
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setIsDatabaseModalOpen(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors"
-                      >
-                        <Database size={18} className="text-emerald-500" />
-                        Banco de Dados
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setPersonnelSubView('vacations'); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-t border-slate-50"
-                      >
-                        <Calendar size={18} className="text-violet-600" />
-                        Planejamento de F√©rias
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setPersonnelSubView('training'); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-t border-slate-50"
-                      >
-                        <Award size={18} className="text-violet-500" />
-                        Treinamento Operacional
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setPersonnelSubView('lunch'); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-t border-slate-50"
-                      >
-                        <Utensils size={18} className="text-amber-500" />
-                        Escala de Almo√ßo
-                      </button>
-                      <button 
-                        onClick={() => { setIsExtraMenuOpen(false); setIsTrainingModalOpen(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 text-[11px] font-black uppercase transition-colors border-t border-slate-50"
-                      >
-                        <FileText size={18} className="text-blue-600" />
-                        Di√°rio de Produ√ß√£o (DDP)
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div ref={personnelRef} data-ref-personnel-root className="space-y-8 p-1">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                {renderPersonnelStat('Colaboradores', totalAtivos, 'Ativos', <Users size={20} className="sm:w-6 sm:h-6"/>, 'text-blue-400')}
-                {renderPersonnelStat('Operadores', totalOperadoresAtivos, 'Ativos', <HardHat size={20} className="sm:w-6 sm:h-6"/>, 'text-emerald-400')}
-                {renderPersonnelStat('Auxiliares', totalAuxiliaresAtivos, 'Ativos', <Briefcase size={20} className="sm:w-6 sm:h-6"/>, 'text-orange-400')}
-                {renderPersonnelStat('Vagas', totalVacancies, 'Aberto', <UserPlus size={20} className="sm:w-6 sm:h-6"/>, 'text-red-400')}
-              </div>
-
-            <div className="bg-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-700">
-                <div className="px-8 py-6 flex items-center justify-between bg-slate-900/80">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 border border-blue-500/30"><ShieldCheck size={24}/></div>
-                      <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Lideran√ßa</h2>
-                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">Ger√™ncia / Supervis√£o / L√≠der</p>
-                      </div>
-                    </div>
-                    {canManagePersonnel && (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => { 
-                            setQuickAllocSector('Lideran√ßa'); 
-                            setIsQuickAllocModalOpen(true); 
-                          }} 
-                          className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center"
-                          title="Aloca√ß√£o R√°pida"
-                        >
-                          <Plus size={20} />
-                        </button>
-                        <button onClick={() => { setSelectedSlot({ sector: 'Lideran√ßa', machine: 'Geral', shift: 'Integral', role: 'Gerente' }); setIsEmployeeModalOpen(true); }} className="bg-blue-500 text-white p-2.5 rounded-xl hover:bg-blue-600 transition-all shadow-lg shadow-blue-900/20">
-                          <Plus size={20} />
-                        </button>
-                      </div>
-                    )}
-                </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 bg-slate-800/50">
-                    {employees.filter(e => normalize(e.sector) === 'lideranca' && isEmployed(e.status) && e.status !== 'F√©rias').sort((a, b) => {
-                        const roles = ['Gerente', 'Supervisor de Produ√ß√£o', 'L√≠der'];
-                        return roles.indexOf(a.role) - roles.indexOf(b.role);
-                    }).map(emp => (
-                        <div key={emp.id} className="bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-700/50 shadow-sm animate-in zoom-in-95 duration-200">
-                             <div className="flex justify-between items-center mb-4 px-1">
-                                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{emp.role}</h3>
-                                <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">{emp.shift}</p>
-                             </div>
-                             {renderSlot('Lideran√ßa', 'Geral', emp.shift, emp.role, emp.role.substring(0,3).toUpperCase(), emp)}
-                        </div>
-                    ))}
-                    {employees.filter(e => normalize(e.sector) === 'lideranca' && isEmployed(e.status) && e.status !== 'F√©rias').length === 0 && (
-                        <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-500/50 border-2 border-dashed border-slate-700/50 rounded-[2.5rem]">
-                            <Users size={32} className="mb-2 opacity-20" />
-                            <p className="text-[10px] font-bold uppercase tracking-widest">Nenhuma lideran√ßa cadastrada</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="bg-[#242d3c] rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-700">
-                <div className="px-8 py-6 flex items-center justify-between bg-[#1e293b]">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 border border-blue-500/30"><Factory size={24}/></div>
-                      <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Setor: Extrus√£o</h2>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Escala de Turnos</p>
-                      </div>
-                    </div>
-                    {canManagePersonnel && (
-                      <button 
-                        onClick={() => { 
-                          setQuickAllocSector('Extrus√£o'); 
-                          setIsQuickAllocModalOpen(true); 
-                        }} 
-                        className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center"
-                        title="Aloca√ß√£o R√°pida"
-                      >
-                        <Plus size={20} />
-                      </button>
-                    )}
-                </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-100/10">
-                    {['Diurno 1', 'Noturno 1', 'Diurno 2', 'Noturno 2'].map(sh => (
-                        <div key={sh} className={`p-6 rounded-[2rem] border shadow-sm ${sh.includes('Noturno') ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200'}`}>
-                            <div className="flex items-center gap-3 mb-6">
-                              <Clock size={16} className={sh.includes('Noturno') ? 'text-indigo-400' : 'text-blue-400'}/>
-                              <h3 className={`text-[12px] font-black uppercase tracking-widest ${sh.includes('Noturno') ? 'text-slate-300' : 'text-slate-500'}`}>{sh}</h3>
-                            </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {['Cast 1', 'Cast 2'].map(ma => (
-                                    <div key={ma} className="space-y-3">
-                                        <div className="flex justify-between items-center px-1 mb-2">
-                                          <p className={`text-[10px] font-black uppercase tracking-widest ${sh.includes('Noturno') ? 'text-slate-400' : 'text-slate-300'}`}>{ma}</p>
-                                          {canManagePersonnel && (
-                                            <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Extrus√£o', machine: ma, shift: sh, role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={14}/></button>
-                                          )}
-                                        </div>
-                                        {renderMachineGroup('Extrus√£o', ma, sh, 3)}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="bg-[#064e3b] rounded-[2.5rem] overflow-hidden shadow-2xl border border-emerald-900">
-                <div className="px-8 py-6 flex items-center justify-between bg-emerald-900/80">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-emerald-400 border border-emerald-500/30"><RotateCcw size={24}/></div>
-                      <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Setor: Reciclagem</h2>
-                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-[0.2em]">Erema</p>
-                      </div>
-                    </div>
-                    {canManagePersonnel && (
-                      <button 
-                        onClick={() => { 
-                          setQuickAllocSector('Reciclagem'); 
-                          setIsQuickAllocModalOpen(true); 
-                        }} 
-                        className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center"
-                        title="Aloca√ß√£o R√°pida"
-                      >
-                        <Plus size={20} />
-                      </button>
-                    )}
-                </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-emerald-50/30">
-                    {['Diurno 1', 'Diurno 2'].map(sh => (
-                        <div key={sh} className="bg-white p-6 rounded-[2rem] border border-emerald-100 shadow-sm">
-                            <p className="text-[11px] font-black text-emerald-800 uppercase text-center mb-4 tracking-widest">{sh}</p>
-                            {renderMachineGroup('Reciclagem', 'Erema 1', sh, 1)}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="bg-[#78350f] rounded-[2.5rem] overflow-hidden shadow-2xl border border-orange-900">
-                <div className="px-8 py-6 flex items-center justify-between bg-orange-950/80">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-orange-500/20 rounded-2xl flex items-center justify-center text-orange-400 border border-orange-500/30"><Briefcase size={24}/></div>
-                      <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Setor: Fita Adesiva</h2>
-                        <p className="text-[10px] text-orange-400 font-bold uppercase tracking-[0.2em]">Ghezzi / Lintech / Wutec</p>
-                      </div>
-                    </div>
-                    {canManagePersonnel && (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => { 
-                            setQuickAllocSector('Fita'); 
-                            setIsQuickAllocModalOpen(true); 
-                          }} 
-                          className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center"
-                          title="Aloca√ß√£o R√°pida"
-                        >
-                          <Plus size={20} />
-                        </button>
-                        <button onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Ghezzi', shift: 'Diurno 1', role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }} className="bg-orange-500 text-white p-2.5 rounded-xl hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
-                          <Plus size={20} />
-                        </button>
-                      </div>
-                    )}
-                </div>
-                <div className="p-6 space-y-6 bg-orange-50/30">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white p-6 rounded-[2rem] border border-orange-100 shadow-sm">
-                            <div className="flex items-center justify-between mb-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-orange-500"/>
-                                <h3 className="text-[12px] font-black uppercase text-orange-900 tracking-widest">Ghezzi</h3>
-                              </div>
-                              {canManagePersonnel && (
-                                <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Ghezzi', shift: 'Diurno 1', role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={14}/></button>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {['Diurno 1', 'Diurno 2'].map(sh => (
-                                    <div key={sh} className="space-y-3">
-                                        <div className="flex justify-between items-center mb-1">
-                                          <p className="text-[10px] font-bold text-slate-400 uppercase">{sh}</p>
-                                          {canManagePersonnel && (
-                                            <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Ghezzi', shift: sh, role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={12}/></button>
-                                          )}
-                                        </div>
-                                        {renderMachineGroup('Fita', 'Ghezzi', sh, 2)}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="bg-white p-6 rounded-[2rem] border border-orange-100 shadow-sm">
-                            <div className="flex items-center justify-between mb-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-orange-500"/>
-                                <h3 className="text-[12px] font-black uppercase text-orange-900 tracking-widest">Lintech</h3>
-                              </div>
-                              {canManagePersonnel && (
-                                <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Lintech', shift: 'Comercial', role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={14}/></button>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                {['Comercial'].map(sh => (
-                                    <div key={sh} className="space-y-3">
-                                        <div className="flex justify-between items-center mb-1">
-                                          <p className="text-[10px] font-bold text-slate-400 uppercase">{sh}</p>
-                                          {canManagePersonnel && (
-                                            <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Lintech', shift: sh, role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={12}/></button>
-                                          )}
-                                        </div>
-                                        {renderMachineGroup('Fita', 'Lintech', sh, 2)}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-[2rem] border border-orange-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-orange-500"/>
-                            <h3 className="text-[12px] font-black uppercase text-orange-900 tracking-widest">Wutec</h3>
-                          </div>
-                          {canManagePersonnel && (
-                            <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Wutec', shift: 'Diurno 1', role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={14}/></button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            {['Diurno 1', 'Diurno 2'].map(sh => (
-                                <div key={sh} className="space-y-3">
-                                    <div className="flex justify-between items-center mb-1">
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase">{sh}</p>
-                                      {canManagePersonnel && (
-                                        <button className="text-blue-400 hover:bg-blue-500/10 p-1 rounded-md transition-colors" onClick={() => { setSelectedSlot({ sector: 'Fita', machine: 'Wutec', shift: sh, role: 'Novo Slot' }); setIsEmployeeModalOpen(true); }}><Plus size={12}/></button>
-                                      )}
-                                    </div>
-                                    {renderMachineGroup('Fita', 'Wutec', sh, 2)}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      )}
-
-        {activeTab === 'evaluations' && (
-          <EvaluationsTab
-            dashboardMonth={dashboardMonth}
-            collaborators={collaborators}
-            evalSelectedOperator={evalSelectedOperator}
-            setEvalSelectedOperator={setEvalSelectedOperator}
-            promotionTimeframe={promotionTimeframe}
-            setPromotionTimeframe={setPromotionTimeframe}
-            exportPromotionEvaluationPDF={exportPromotionEvaluationPDF}
-            isCreatingOpSheet={isCreatingOpSheet}
-            setIsCreatingOpSheet={setIsCreatingOpSheet}
-            newSheetEmployeeId={newSheetEmployeeId}
-            setNewSheetEmployeeId={setNewSheetEmployeeId}
-            newSheetInstructor={newSheetInstructor}
-            setNewSheetInstructor={setNewSheetInstructor}
-            newSheetStartDate={newSheetStartDate}
-            setNewSheetStartDate={setNewSheetStartDate}
-            operatorTrainingSheets={operatorTrainingSheets}
-            activeOpSheet={activeOpSheet}
-            setActiveOpSheet={setActiveOpSheet}
-            handleSaveOperatorTrainingSheet={handleSaveOperatorTrainingSheet}
-            confirmDeleteOperatorTrainingSheet={confirmDeleteOperatorTrainingSheet}
-            TRAINING_MODULES={TRAINING_MODULES}
-          />
-        )}
-
-        {activeTab === 'maintenance' && (
-          <MaintenanceTab setPdfModal={setPdfModal} loggedUser={loggedUser} employees={employees} />
-        )}
-
-        {activeTab === 'projection' && (
-          <ProjectionDashboard
-            productionData={productionData}
-            ribbonEntries={ribbonEntries}
-            goals={goals}
-            dashboardMonth={dashboardMonth}
-            collaborators={collaborators}
-            systemName={systemName}
-            systemLogo={systemLogo || undefined}
-            onClose={() => setActiveTab('home')}
-            operatorPenalties={operatorPenalties}
-            onAddPenalty={handleAddPenalty}
-            onDeletePenalty={handleDeletePenalty}
-            employees={employees}
-            companyNotices={companyNotices}
-            onSaveNotice={handleSaveNotice}
-            onDeleteNotice={handleDeleteNotice}
-          />
-        )}
-
-
-      </main>
-
-      {/* Rodap√© de Cr√©ditos e Informa√ß√µes Gerais */}
-      <footer className="max-w-7xl mx-auto px-6 pb-12 mt-8 text-center no-print">
-        <div className="border-t border-slate-200/60 pt-8 flex flex-col md:flex-row items-center justify-between gap-6 text-slate-500 text-xs font-bold uppercase tracking-wide">
-          <div className="text-left space-y-2 max-w-lg md:max-w-2xl">
-            <h4 className="text-slate-800 font-black text-sm tracking-tight">{systemName}</h4>
-            <p className="text-[10px] text-slate-400 normal-case font-medium leading-relaxed">
-              Sistema integrado para controle de produ√ß√£o industrial de extrus√£o, acompanhamento de metas operacionais, an√°lise de indicadores de desempenho di√°rio e mensal, monitoramento de paradas e gest√£o de equipes em escala cont√≠nua.
-            </p>
-          </div>
-          <div className="text-center md:text-right flex flex-col items-center md:items-end gap-1">
-            <p className="text-[9px] text-slate-400 tracking-widest">Desenvolvedor</p>
-            <p className="text-blue-600 font-black text-sm tracking-wider uppercase">
-              Adaias Melo
-            </p>
-            <p className="text-[8px] text-slate-300 font-mono">¬© 2026 ‚Ä¢ Vers√£o Produ√ß√£o</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Modal de Detalhes do Colaborador (Popup Informativo) */}
-      {isDetailModalOpen && employeeDetailData && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setIsDetailModalOpen(false)}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-blue-600 p-8 text-white">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-                  <Users size={32} />
-                </div>
-                <button onClick={() => setIsDetailModalOpen(false)} className="text-white/60 hover:text-white transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
-              <h3 className="text-2xl font-black uppercase tracking-tight flex items-center gap-2 flex-wrap">
-                {employeeDetailData.name}
-                {(() => {
-                  const isBrig = collaborators.find(c => 
-                    (employeeDetailData.collaboratorId && c.id === employeeDetailData.collaboratorId) || 
-                    (employeeDetailData.registration && c.registration === employeeDetailData.registration)
-                  )?.isBrigadista;
-                  return isBrig ? (
-                    <span className="px-2.5 py-1 bg-red-700/60 text-white text-[9px] font-black uppercase tracking-widest rounded-full border border-red-500/40 shrink-0">
-                      üî• Brigada
-                    </span>
-                  ) : null;
-                })()}
-              </h3>
-              <p className="text-xs font-bold text-white/70 uppercase tracking-widest mt-1">{employeeDetailData.role} ‚Ä¢ {employeeDetailData.sector}</p>
-            </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Turno</p>
-                  <p className="text-sm font-bold text-slate-800 uppercase">{employeeDetailData.shift}</p>
-                </div>
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">M√°quina</p>
-                  <p className="text-sm font-bold text-slate-800 uppercase">{employeeDetailData.machine}</p>
-                </div>
-              </div>
-
-              {canManagePersonnel && (
-                <button 
-                  onClick={() => {
-                    setIsDetailModalOpen(false);
-                    setSelectedEmployee(employeeDetailData);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  className="w-full py-4 bg-slate-100 text-slate-800 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                >
-                  Editar Colaborador
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEremaChart && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowEremaChart(false)}>
-          <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowEremaChart(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 transition-colors"><X size={28} /></button>
-            <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100"><RotateCcw size={24}/></div>
-              <div>
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Produ√ß√£o Erema por Operador</h3>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Refer√™ncia: {filterDay || dashboardMonth}</p>
-              </div>
-            </div>
-            <div className="h-[400px]">
-              {eremaOperatorStats.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={eremaOperatorStats} cx="50%" cy="32%" innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value" label={renderCustomizedLabel}>
-                      {eremaOperatorStats.map((_, idx: number) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}
-                    </Pie>
-                    <RechartsTooltip formatter={(v: any) => formatWeight(Number(v))} />
-                    <Legend verticalAlign="bottom" content={(props) => renderTwoColumnLegend(props)} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
-                  <Activity size={48} className="opacity-20" />
-                  <p className="font-bold uppercase text-[11px] tracking-widest">Nenhum dado para este filtro</p>
-                </div>
-              )}
-            </div>
-            <button onClick={() => setShowEremaChart(false)} className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Fechar An√°lise</button>
-          </div>
-        </div>
-      )}
-
-      <SettingsModal 
-        isOpen={isSettingsModalOpen} 
-        onClose={() => setIsSettingsModalOpen(false)}
-        onSave={handleSaveSettings}
-        activeTab={activeSettingsTab}
-        setActiveTab={setActiveSettingsTab}
-        filterOperator={filterOperator}
-        setFilterOperator={setFilterOperator}
-        filterDay={filterDay}
-        setFilterDay={setFilterDay}
-        filterStartDate={filterStartDate}
-        setFilterStartDate={setFilterStartDate}
-        filterEndDate={filterEndDate}
-        setFilterEndDate={setFilterEndDate}
-        dashboardMonth={dashboardMonth}
-        setDashboardMonth={setDashboardMonth}
-        operators={operators}
-        goals={goals}
-        setGoals={setGoals}
-        ribbonGoals={ribbonGoals}
-        setRibbonGoals={setRibbonGoals}
-        setIsUserManagementOpen={setIsUserManagementOpen}
-        setIsDowntimeReasonsModalOpen={setIsDowntimeReasonsModalOpen}
-        setIsDowntimeAnalyticsModalOpen={setIsDowntimeAnalyticsModalOpen}
-        setIsOperatorModalOpen={setIsOperatorModalOpen}
-        setIsRoleModalOpen={setIsRoleModalOpen}
-        setIsShiftModalOpen={setIsShiftModalOpen}
-        setIsPermissionModalOpen={setIsPermissionModalOpen}
-        downloadBackup={downloadBackup}
-        handleRestoreData={handleRestoreData}
-        handleSyncLocalToCloud={handleSyncLocalToCloud}
-        openConfirm={openConfirm}
-        isInitializing={isInitializing}
-        fileInputRef={fileInputRef}
-        systemName={systemName}
-        setSystemName={setSystemName}
-        loginSystemName={loginSystemName}
-        setLoginSystemName={setLoginSystemName}
-        loginSystemSubtitle={loginSystemSubtitle}
-        setLoginSystemSubtitle={setLoginSystemSubtitle}
-        systemLogo={systemLogo}
-        setSystemLogo={setSystemLogo}
-        systemCoverImage={systemCoverImage}
-        setSystemCoverImage={setSystemCoverImage}
-        isAdminUser={loggedUser.registration === '1010' || loggedUser.role === 'Administrador'}
-        isInstallable={isInstallable}
-        isStandalone={isStandalone}
-        isIOS={isIOS}
-        handleInstallClick={handleInstallClick}
-        setShowInstallExperience={setShowInstallExperience}
-        onTriggerUpdateNotification={handleTriggerUpdateNotification}
-      />
-
-      <PermissionOverlay 
-        isOpen={isPermissionModalOpen}
-        onClose={() => setIsPermissionModalOpen(false)}
-      />
-
-      <input type="file" ref={fileInputRef} onChange={(e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = async (ev) => {
-                try {
-                    const data = JSON.parse(ev.target?.result as string);
-                    
-                    if (data.operators) setOperators(data.operators);
-                    if (data.availableRoles) setAvailableRoles(data.availableRoles);
-                    if (data.goals) setGoals(data.goals);
-                    if (data.dashboardMonth) setDashboardMonth(data.dashboardMonth);
-
-                    // Restore to LocalStorage
-                    if (data.productionData) setProductionData(data.productionData.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift, e.machine || e.sector) })));
-                    if (data.employees) setEmployees(data.employees.map((e: any) => ({ ...e, shift: sanitizeShift(e.shift, e.sector || e.machine) })));
-                    if (data.availableShifts) setAvailableShifts(data.availableShifts);
-                    if (data.personnelLogs) setPersonnelLogs(data.personnelLogs);
-
-                    alert('Backup restaurado com sucesso!');
-                } catch (err) {
-                    alert('Erro ao processar arquivo de backup.');
-                }
-            };
-            reader.readAsText(file);
-        }
-      }} accept=".json" className="hidden" />
-
-      <LaunchModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (e) => {
-        try {
-          const isNew = !editingEntry;
-          const id = editingEntry ? editingEntry.id : Math.random().toString(36).substr(2, 9);
-          const entry = { ...e, id, userId: currentUser.uid, updatedAt: new Date().toISOString() };
-          await setDoc(doc(db, 'productionEntries', id), entry);
-          
-          if (isNew) {
-            addNotification(`Novo lan√ßamento realizado por ${entry.operator} na ${entry.machine}`);
-            // Trigger push notifications
-            try {
-              const tokensSnap = await getDocs(collection(db, 'fcm_tokens'));
-              const tokens = tokensSnap.docs.map(d => d.data().token);
-              
-              const title = `Novo Lan√ßamento: ${entry.machine}`;
-              const body = `${entry.operator} lan√ßou produ√ß√£o para ${entry.product}.`;
-
-              for (const token of tokens) {
-                fetch('/api/send-notification', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token, title, body })
-                }).catch(e => console.error('Push failed for token', token, e));
-              }
-            } catch (err) {
-              console.error("Error triggering push notifications:", err);
-            }
-          }
-        } catch (error) {
-          console.error("Erro ao salvar:", error);
-          alert("Ocorreu um erro ao salvar o lan√ßamento.");
-        }
-        setEditingEntry(null);
-      }} collaborators={collaborators} employees={employees} activeMachines={activeMachines} availableShifts={availableShifts} initialData={editingEntry} dashboardMonth={dashboardMonth} productionEntries={productionData} ribbonEntries={ribbonEntries} />
-      
-      <EmployeeModal isOpen={isEmployeeModalOpen} onClose={() => { setIsEmployeeModalOpen(false); setSelectedEmployee(null); setSelectedSlot(null); }} onSave={async (data, action, details) => {
-          try {
-            const now = new Date().toISOString();
-            const empId = data.id || Math.random().toString(36).substr(2, 9);
-            
-            if (action === 'Contrata√ß√£o') {
-              // Quando salva um colaborador, garante que ele existe na base central se for adicionado por nome manualmente (embora agora use sele√ß√£o)
-              // Mas aqui o EmployeeModal j√° retorna o collaboratorId se selecionado.
-              await setDoc(doc(db, 'employees', empId), { ...data, id: empId, updatedAt: now, userId: currentUser.uid });
-            } else if (action === 'Exclus√£o') {
-              await deleteDoc(doc(db, 'employees', empId));
-            } else if (action === 'Desligamento') {
-              await setDoc(doc(db, 'employees', empId), { 
-                ...data, 
-                status: 'Em Contrata√ß√£o', 
-                name: 'Em Contrata√ß√£o',
-                updatedAt: now, 
-                userId: currentUser.uid 
-              }, { merge: true });
-            } else {
-              await setDoc(doc(db, 'employees', empId), { ...data, updatedAt: now, userId: currentUser.uid }, { merge: true });
-            }
-            
-            const logId = Math.random().toString(36).substr(2, 9);
-            await setDoc(doc(db, 'personnelLogs', logId), {
-              id: logId,
-              date: now,
-              employeeName: data.name || 'Vaga',
-              action: action as any,
-              details: details || '',
-              user: currentUser.displayName || currentUser.email || 'Admin',
-              userId: currentUser.uid
-            });
-
-            // Local simulate lists for the operators sync function
-            const updatedEmployeesList = [...employees];
-            const empIdx = updatedEmployeesList.findIndex(e => e.id === empId);
-            const employeeMerged = { ...data, id: empId, updatedAt: now } as Employee;
-            if (action === 'Exclus√£o') {
-              if (empIdx >= 0) updatedEmployeesList.splice(empIdx, 1);
-            } else if (action === 'Desligamento') {
-              const terminatedEmp = { ...employeeMerged, status: 'Em Contrata√ß√£o', name: 'Em Contrata√ß√£o' } as Employee;
-              if (empIdx >= 0) updatedEmployeesList[empIdx] = terminatedEmp;
-              else updatedEmployeesList.push(terminatedEmp);
-            } else {
-              if (empIdx >= 0) updatedEmployeesList[empIdx] = { ...updatedEmployeesList[empIdx], ...data };
-              else updatedEmployeesList.push(employeeMerged);
-            }
-
-            const updatedCollaboratorsList = [...collaborators];
-            if (data.collaboratorId && data.role) {
-              await setDoc(doc(db, 'collaborators', data.collaboratorId), {
-                role: data.role,
-                updatedAt: now
-              }, { merge: true });
-
-              const colIdx = updatedCollaboratorsList.findIndex(c => c.id === data.collaboratorId);
-              if (colIdx >= 0) {
-                updatedCollaboratorsList[colIdx] = { ...updatedCollaboratorsList[colIdx], role: data.role };
-              }
-            }
-
-            await syncOperatorsSetting(updatedEmployeesList, updatedCollaboratorsList);
-          } catch(error) {
-            console.error(error);
-          }
-      }} availableShifts={availableShifts} availableMachines={activeMachines} availableRoles={availableRoles} collaborators={collaborators} initialData={selectedEmployee} slotInfo={selectedSlot} />
-      
-      <ShiftModal isOpen={isShiftModalOpen} onClose={() => setIsShiftModalOpen(false)} onSave={async (s) => {
-        try {
-          const shiftId = Math.random().toString(36).substr(2, 9);
-          await setDoc(doc(db, 'shifts', shiftId), { ...s, id: shiftId, userId: currentUser.uid });
-        } catch (error) {
-          console.error(error);
-        }
-      }} />
-      
-      <UpdateModal 
-        isOpen={isUpdateAvailable} 
-        updateNotes={updateNotes}
-        onClose={() => {
-          setIsUpdateAvailable(false);
-          setUpdateDismissed(true);
-        }} 
-        onUpdate={() => {
-          if (sessionLoadedBuildTimeRef.current) {
-            sessionLoadedBuildTimeRef.current = new Date().toISOString();
-          }
-          if ((window as any).refreshAppVersion) {
-            (window as any).refreshAppVersion();
-          } else {
-            window.location.reload();
-          }
-        }} 
-      />
-      <HistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} logs={personnelLogs} />
-      <TrainingModal 
-        isOpen={isTrainingModalOpen} 
-        onClose={() => setIsTrainingModalOpen(false)} 
-        collaborators={collaborators} 
-        employees={employees} 
-        records={trainingRecords}
-        onSave={handleSaveTraining} 
-        onDelete={(id) => {
-          openConfirm(
-            'Excluir Ficha',
-            'Tem certeza que deseja excluir esta ficha de treinamento permanentemente?',
-            () => handleDeleteTraining(id)
-          );
-        }}
-        onEditTemplate={() => setIsTemplateModalOpen(true)}
-      />
-      
-      <TrainingTemplateModal
-        isOpen={isTemplateModalOpen}
-        onClose={() => setIsTemplateModalOpen(false)}
-        template={trainingTemplate}
-        onSave={handleSaveTrainingTemplate}
-      />
-      
-      <UserManagementModal 
-        isOpen={isUserManagementOpen} 
-        onClose={() => setIsUserManagementOpen(false)} 
-        users={systemUsers} 
-        onUpdateUsers={setSystemUsers}
-        availableRoles={availableRoles} 
-        collaborators={collaborators}
-      />
-      
-      <ActiveUsersModal
-        isOpen={isActiveUsersModalOpen}
-        onClose={() => setIsActiveUsersModalOpen(false)}
-        activeSessions={activeSessions}
-        accessLogs={accessLogs}
-        onDisconnectUser={handleDisconnectUser}
-        onClearHistory={isAdmin ? handleClearAccessLogs : undefined}
-        currentUserId={loggedUser?.id || loggedUser?.registration}
-      />
-      <QuickAllocationModal
-        isOpen={isQuickAllocModalOpen}
-        onClose={() => setIsQuickAllocModalOpen(false)}
-        defaultSector={quickAllocSector}
-        collaborators={collaborators}
-        availableRoles={availableRoles}
-        availableShifts={availableShifts.map(s => s.name)}
-        machines={activeMachines}
-        onAdd={async (newEmp) => {
-          try {
-            const id = Math.random().toString(36).substring(2, 15);
-            const now = new Date().toISOString();
-            const empData = {
-              ...newEmp,
-              id,
-              userId: currentUser.uid,
-              updatedAt: now
-            };
-            await setDoc(doc(db, 'employees', id), empData);
-            
-            const logId = Math.random().toString(36).substring(2, 15);
-            await setDoc(doc(db, 'personnelLogs', logId), {
-              id: logId,
-              userId: currentUser.uid,
-              date: now,
-              employeeName: newEmp.name,
-              action: 'Contrata√ß√£o' as any,
-              details: `Inclus√£o r√°pida via Quadro de Pessoal (${newEmp.sector} - ${newEmp.machine})`,
-              user: loggedUser?.name || 'Sistema'
-            });
-            
-            const simulatedEmps = [...employees, empData as Employee];
-            await syncOperatorsSetting(simulatedEmps);
-          } catch (err) {
-            console.error(err);
-          }
-        }}
-      />
-      {isDatabaseModalOpen && (
-        <DatabaseModal 
-          isOpen={isDatabaseModalOpen}
-          onClose={() => setIsDatabaseModalOpen(false)}
-          employees={employees}
-          collaborators={collaborators}
-          onEditCollaborator={(col) => {
-            console.log('Editing collaborator:', col);
-            setSelectedCollaborator(col);
-            setIsCollaboratorModalOpen(true);
-          }}
-          availableRoles={availableRoles}
-          availableShifts={availableShifts.map(s => s.name)}
-          machines={activeMachines}
-           onAdd={async (newEmp) => {
-            try {
-              const id = Math.random().toString(36).substring(2, 15);
-              const now = new Date().toISOString();
-              const empData = {
-                ...newEmp,
-                id,
-                userId: currentUser.uid,
-                updatedAt: now
-              };
-              await setDoc(doc(db, 'employees', id), empData);
-              
-              const logId = Math.random().toString(36).substring(2, 15);
-              await setDoc(doc(db, 'personnelLogs', logId), {
-                id: logId,
-                userId: currentUser.uid,
-                date: now,
-                employeeName: newEmp.name,
-                action: 'Contrata√ß√£o' as any,
-                details: `Inclus√£o direta via Banco de Dados (${newEmp.sector} - ${newEmp.machine})`,
-                user: loggedUser?.name || 'Sistema'
-              });
-              
-              const simulatedEmps = [...employees, empData as Employee];
-              await syncOperatorsSetting(simulatedEmps);
-            } catch (err) {
-              console.error(err);
-            }
-          }}
-          onDelete={(id, name) => {
-            openConfirm(
-              'Excluir Slot',
-              `Tem certeza que deseja EXCLUIR o slot de ${name}? Isso remover√° o registro e o slot do quadro caso seja um extra.`,
-              async () => {
-                try {
-                  await deleteDoc(doc(db, 'employees', id));
-                  
-                  const now = new Date().toISOString();
-                  const logId = Math.random().toString(36).substring(2, 15);
-                  await setDoc(doc(db, 'personnelLogs', logId), {
-                    id: logId,
-                    userId: currentUser.uid,
-                    date: now,
-                    employeeName: name,
-                    action: 'Exclus√£o' as any,
-                    details: `Exclus√£o permanente via Banco de Dados`,
-                    user: loggedUser?.name || 'Sistema'
-                  });
-                  
-                  const simulatedEmps = employees.filter(e => e.id !== id);
-                  await syncOperatorsSetting(simulatedEmps);
-                } catch (err) {
-                  console.error(err);
-                }
-              }
-            );
-          }}
-          onTerminate={(id, name) => {
-            openConfirm(
-              'Confirmar Desligamento',
-              `Deseja DESLIGAR ${name}? Isso abrir√° uma vaga dispon√≠vel no quadro.`,
-              async () => {
-                try {
-                  const now = new Date().toISOString();
-                  await setDoc(doc(db, 'employees', id), { 
-                    status: 'Em Contrata√ß√£o', 
-                    name: 'Em Contrata√ß√£o',
-                    updatedAt: now, 
-                    userId: currentUser.uid 
-                  }, { merge: true });
-                  
-                  const logId = Math.random().toString(36).substring(2, 15);
-                  await setDoc(doc(db, 'personnelLogs', logId), {
-                    id: logId,
-                    userId: currentUser.uid,
-                    date: now,
-                    employeeName: name,
-                    action: 'Desligamento' as any,
-                    details: `Desligamento via Banco de Dados (vaga aberta)`,
-                    user: loggedUser?.name || 'Sistema'
-                  });
-                  
-                  const simulatedEmps = employees.map(e => e.id === id ? { ...e, name: 'Em Contrata√ß√£o', status: 'Em Contrata√ß√£o' as any } : e);
-                  await syncOperatorsSetting(simulatedEmps);
-                } catch (err) {
-                  console.error(err);
-                }
-              },
-              'warning'
-            );
-          }}
-        />
-      )}
-      <WeeklyProductionSummaryModal
-        isOpen={isWeeklySummaryOpen}
-        onClose={() => setIsWeeklySummaryOpen(false)}
-        productionData={productionData}
-        ribbonData={ribbonEntries}
-        employees={employees}
-      />
-      <DowntimeReasonsModal
-        isOpen={isDowntimeReasonsModalOpen}
-        onClose={() => setIsDowntimeReasonsModalOpen(false)}
-      />
-      <DowntimeAnalyticsModal
-        isOpen={isDowntimeAnalyticsModalOpen}
-        onClose={() => setIsDowntimeAnalyticsModalOpen(false)}
-        productionData={productionData}
-        ribbonEntries={ribbonEntries}
-      />
-      {isCollaboratorModalOpen && (
-        <div className="fixed inset-0 z-[300]">
-          <CollaboratorModal
-            isOpen={isCollaboratorModalOpen}
-            onClose={() => { setIsCollaboratorModalOpen(false); setSelectedCollaborator(null); }}
-            onSave={handleSaveCollaborator}
-            initialData={selectedCollaborator}
-            availableRoles={availableRoles}
-          />
-        </div>
-      )}
-
-      {/* Real-time Notifications Portal */}
-      <div className="fixed top-6 right-6 z-[250] flex flex-col gap-3 pointer-events-none w-full max-w-sm">
-        <AnimatePresence>
-          {notifications.map((n) => (
-            <motion.div
-              key={n.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              className="pointer-events-auto bg-white/95 backdrop-blur-xl border border-blue-100 p-5 rounded-[2rem] shadow-2xl shadow-blue-900/10 flex items-start gap-4 relative overflow-hidden group"
-            >
-              <div className="absolute top-0 left-0 w-1 h-full bg-blue-600"></div>
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
-                <Bell size={24} className="animate-bounce" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <Activity size={12} /> Novo Lan√ßamento
-                  </p>
-                  <button 
-                    onClick={() => setNotifications(prev => prev.filter(notif => notif.id !== n.id))}
-                    className="text-slate-300 hover:text-slate-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-                <p className="text-xs font-black text-slate-800 leading-tight uppercase tracking-tight">
-                  {n.message}
-                </p>
-                <div className="flex items-center gap-2 pt-1">
-                  <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center">
-                    <Users size={8} className="text-slate-400" />
-                  </div>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                    Resp: {n.operator}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="absolute bottom-0 left-0 h-1 bg-blue-600/10 w-full">
-                <motion.div 
-                  initial={{ width: "100%" }}
-                  animate={{ width: "0%" }}
-                  transition={{ duration: 5, ease: "linear" }}
-                  className="h-full bg-blue-600"
-                />
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
-        title={confirmDialog.title}
-        message={confirmDialog.message}
-        onConfirm={confirmDialog.onConfirm}
-        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
-        type={confirmDialog.type}
-      />
-
-      <PdfChoiceModal
-        isOpen={pdfModal.isOpen}
-        title={pdfModal.title}
-        onClose={() => setPdfModal(prev => ({ ...prev, isOpen: false }))}
-        onDownload={() => {
-          if (pdfModal.doc) {
-            pdfModal.doc.save(pdfModal.filename);
-          }
-        }}
-        onView={() => {
-          if (pdfModal.doc) {
-            const blob = pdfModal.doc.output('blob');
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-          }
-        }}
-      />
-
-      <RoleModal
-        isOpen={isRoleModalOpen}
-        onClose={() => setIsRoleModalOpen(false)}
-        roles={availableRoles}
-        onUpdate={async (newRoles) => {
-          setAvailableRoles(newRoles);
-          try {
-            await setDoc(doc(db, 'settings', 'global'), {
-              availableRoles: newRoles
-            }, { merge: true });
-          } catch (err) {
-            console.error("Erro ao salvar fun√ß√µes:", err);
-          }
-        }}
-      />
-
-      <StockConciliationPreviewModal
-        isOpen={isPreviewConciliationOpen}
-        onClose={() => setIsPreviewConciliationOpen(false)}
-        stockDate={selectedStockDate}
-        stockEntries={stockEntries}
-        productionData={productionData}
-        formatWeight={formatWeight}
-        onExportPDF={exportStockAndConciliationPDF}
-        systemLogo={systemLogo}
-      />
-
-      <AnimatePresence>
-        {fullscreenChart && ['stops-motifs-card', 'ribbon-chart-composed', 'ribbon-chart-scatter', 'ribbon-chart-stacked'].includes(fullscreenChart) && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-white rounded-[2rem] shadow-2xl border border-slate-200 w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden text-left"
-            >
-              {/* Header */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div>
-                  <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">
-                    {fullscreenChart === 'stops-motifs-card' && 'Rela√ß√£o de Paradas e Motivos'}
-                    {fullscreenChart === 'ribbon-chart-composed' && 'Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida (Corte de Fita)'}
-                    {fullscreenChart === 'ribbon-chart-scatter' && 'Dispers√£o Performance Operador (Corte de Fita)'}
-                    {fullscreenChart === 'ribbon-chart-stacked' && 'Distribui√ß√£o Proporcional de Paradas (Corte de Fita)'}
-                  </h3>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                    {fullscreenChart === 'stops-motifs-card' && 'Detalhamento completo das paradas ocorridas por m√°quina'}
-                    {fullscreenChart === 'ribbon-chart-composed' && 'Barras (N√£o conforme [Tipo 1 & Tipo 2] & Lixo) vs Linha de Produ√ß√£o (Eixo Secund√°rio - m¬≤)'}
-                    {fullscreenChart === 'ribbon-chart-scatter' && 'X = Produ√ß√£o L√≠quida (m¬≤) | Y = Lixo (Kg/T) | Tamanho = Paradas de Processo (min)'}
-                    {fullscreenChart === 'ribbon-chart-stacked' && 'Exibe a distribui√ß√£o interna de motivos de inatividade'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => downloadChartAsPNG(fullscreenChart, 'Gr√°fico Ampliado')}
-                    className="p-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-xl transition-all cursor-pointer border border-slate-200"
-                    title="Baixar Imagem"
-                  >
-                    <Download size={18} />
-                  </button>
-                  <button
-                    onClick={() => setFullscreenChart(null)}
-                    className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-all cursor-pointer border border-rose-100"
-                    title="Fechar"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Content body */}
-              <div className="flex-1 p-8 overflow-y-auto">
-                <div className="w-full h-full min-h-[450px]">
-                  {fullscreenChart === 'stops-motifs-card' && (
-                    <div className="space-y-4">
-                      {/* Search bar inside Fullscreen Modal */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                        <div className="relative flex-1">
-                          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                          <input
-                            type="text"
-                            placeholder="Pesquisar motivo de parada... (ex: eixo, motor, troca, faca, vazamento)"
-                            value={stopsSearchTerm}
-                            onChange={(e) => setStopsSearchTerm(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-xs"
-                          />
-                          {stopsSearchTerm && (
-                            <button
-                              onClick={() => setStopsSearchTerm('')}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
-                              title="Limpar pesquisa"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
-                        </div>
-
-                        {stopsSearchTerm && (
-                          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl shrink-0">
-                            <Filter size={14} className="text-blue-600" />
-                            <span className="text-[11px] font-black text-blue-700">
-                              {filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.motifs.length, 0)} parada(s) ({formatMinutes(filteredMachineStopsDetails.reduce((sum, [_, d]) => sum + d.total, 0))})
-                            </span>
-                            <button
-                              onClick={() => setStopsSearchTerm('')}
-                              className="text-[10px] font-black uppercase text-blue-600 hover:underline ml-1"
-                            >
-                              Limpar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {filteredMachineStopsDetails.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[500px] overflow-y-auto pr-2">
-                          {filteredMachineStopsDetails.map(([machine, data]) => (
-                            <div key={machine} className="bg-slate-50 rounded-[2rem] p-6 border border-slate-200 text-left hover:border-blue-300 transition-all">
-                              <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
-                                <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{machine}</span>
-                                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-                                  <Clock size={12} className="text-blue-500"/>
-                                  <span className="text-[11px] font-black text-blue-600">{formatMinutes(data.total)}</span>
-                                </div>
-                              </div>
-                              <div className="space-y-2.5 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                                {data.motifs.map((m, idx) => (
-                                  <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-                                    <div className="flex justify-between items-center">
-                                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
-                                        m.type === 'Manuten√ß√£o' ? 'bg-orange-100 text-orange-600' :
-                                        m.type === 'Processo' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'
-                                      }`}>
-                                        {m.type}
-                                      </span>
-                                      <span className="text-[10px] font-black text-slate-700">{m.min} min</span>
-                                    </div>
-                                    <p className="text-[11px] font-bold text-slate-600 leading-tight">"{m.reason}"</p>
-                                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-50">
-                                      <span className="text-[8px] font-bold text-slate-400 uppercase">{m.operator}</span>
-                                      <span className="text-[8px] font-bold text-slate-300">{m.date.split('-').reverse().join('/')}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="py-20 flex flex-col items-center justify-center text-slate-300 gap-3">
-                          <Activity size={56} className="opacity-20 text-slate-400" />
-                          <p className="font-black uppercase text-xs tracking-wider text-slate-500">
-                            {stopsSearchTerm 
-                              ? `Nenhuma parada encontrada para "${stopsSearchTerm}"` 
-                              : 'Sem registros de parada no per√≠odo'}
-                          </p>
-                          {stopsSearchTerm && (
-                            <button
-                              onClick={() => setStopsSearchTerm('')}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-500 transition-all shadow-sm"
-                            >
-                              Limpar Pesquisa
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {fullscreenChart === 'ribbon-chart-composed' && (
-                    ribbonDailyTrendData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={ribbonDailyTrendData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <YAxis stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" m¬≤" />
-                          <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" m¬≤" />
-                          <RechartsTooltip formatter={(value: any) => formatM2(Number(value))} />
-                          <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Bar dataKey="ncT1" name="N√£o Conforme T1" stackId="loss" fill="#ec4899" />
-                          <Bar dataKey="ncT2" name="N√£o Conforme T2" stackId="loss" fill="#f43f5e" />
-                          <Bar dataKey="trash" name="Lixo" stackId="loss" fill="#94a3b8" />
-                          <Line yAxisId="right" type="monotone" dataKey="prod" name="Produ√ß√£o L√≠quida" stroke="#10b981" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 8 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o per√≠odo</div>
-                    )
-                  )}
-
-                  {fullscreenChart === 'ribbon-chart-scatter' && (
-                    ribbonScatterData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: -10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                          <XAxis type="number" dataKey="prod" name="Produ√ß√£o L√≠quida" unit=" m¬≤" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <YAxis type="number" dataKey="trash" name="Lixo Extrus√£o" unit=" kg" stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <ZAxis type="number" dataKey="stopsProcess" range={[100, 1000]} name="Ajuste Processo" unit=" min" />
-                          <RechartsTooltip 
-                            cursor={{ strokeDasharray: '3 3' }}
-                            formatter={(value: any, name: any) => [name === 'Ajuste Processo' ? `${value} min` : name === 'Lixo Extrus√£o' ? formatWeight(Number(value)) : formatM2(Number(value)), name]}
-                          />
-                          <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Scatter name="Operadores Corte e Rebobinamento" data={ribbonScatterData} fill="#6366f1">
-                            {ribbonScatterData.map((_entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Scatter>
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o per√≠odo</div>
-                    )
-                  )}
-
-                  {fullscreenChart === 'ribbon-chart-stacked' && (
-                    ribbonProportionalStopsData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={ribbonProportionalStopsData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <YAxis tickFormatter={(tick) => `${tick}%`} stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <RechartsTooltip formatter={(val: any) => `${Number(val).toFixed(1)}%`} />
-                          <Legend wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Bar dataKey="Ajuste Processo" stackId="a" fill="#3b82f6" />
-                          <Bar dataKey="Troca de Bobina" stackId="a" fill="#10b981" />
-                          <Bar dataKey="Limpeza" stackId="a" fill="#f59e0b" />
-                          <Bar dataKey="Manuten√ß√£o El√©trica" stackId="a" fill="#ef4444" />
-                          <Bar dataKey="Manuten√ß√£o Mec√¢nica" stackId="a" fill="#8b5cf6" />
-                          <Bar dataKey="Falta de Mat√©ria-Prima" stackId="a" fill="#ec4899" />
-                          <Bar dataKey="Troca de Facas" stackId="a" fill="#14b8a6" />
-                          <Bar dataKey="Outros" stackId="a" fill="#64748b" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados de paradas registrados</div>
-                    )
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Elemento oculto para exporta√ß√£o de gr√°ficos do BI no relat√≥rio em PDF */}
-      <div id="pdf-hidden-charts-container" style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '800px', opacity: 0, pointerEvents: 'none', zIndex: -9999 }}>
-        {/* Gr√°fico 1: Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida */}
-        <div id="pdf-chart-composed" className="bg-white p-8 rounded-3xl" style={{ width: '800px', height: '420px' }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#1e293b', fontFamily: 'sans-serif' }}>Evolu√ß√£o de Perdas vs Produ√ß√£o L√≠quida</h4>
-          <p style={{ fontSize: '10px', color: '#94a3b8', margin: '0 0 16px 0', fontFamily: 'sans-serif' }}>Barras (Eco B P+M + Borra) vs Linha de Produ√ß√£o (Eixo Secund√°rio)</p>
-          <div style={{ width: '740px', height: '320px' }}>
-            <ComposedChart width={740} height={320} data={pdfDailyTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-              <YAxis stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
-              <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 9, fontWeight: 'bold' }} unit=" kg" />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold' }} />
-              <Bar dataKey="ecoBP" name="Eco B Produ√ß√£o" stackId="loss" fill="#3b82f6" isAnimationActive={false} />
-              <Bar dataKey="ecoBM" name="Eco B Manuten√ß√£o" stackId="loss" fill="#8b5cf6" isAnimationActive={false} />
-              <Bar dataKey="borra" name="Res√≠duo Borra" stackId="loss" fill="#f43f5e" isAnimationActive={false} />
-              <Line yAxisId="right" type="monotone" dataKey="prod" name="Produ√ß√£o L√≠quida" stroke="#10b981" strokeWidth={3} dot={{ r: 3 }} isAnimationActive={false} />
-            </ComposedChart>
-          </div>
-        </div>
-
-        {/* Gr√°fico 2: Dispers√£o: Produ√ß√£o vs Res√≠duos Operador */}
-        <div id="pdf-chart-scatter" className="bg-white p-8 rounded-3xl mt-8" style={{ width: '800px', height: '420px' }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#1e293b', fontFamily: 'sans-serif' }}>Dispers√£o: Produ√ß√£o vs Res√≠duos Operador</h4>
-          <p style={{ fontSize: '10px', color: '#94a3b8', margin: '0 0 16px 0', fontFamily: 'sans-serif' }}>X = Produ√ß√£o (kg) | Y = Res√≠duos (kg) | Tamanho = Paradas de Processo (min)</p>
-          <div style={{ width: '740px', height: '320px' }}>
-            <ScatterChart width={740} height={320} margin={{ top: 20, right: 20, bottom: 10, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis type="number" dataKey="prod" name="Produ√ß√£o" unit=" kg" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-              <YAxis type="number" dataKey="wastes" name="Res√≠duos" unit=" kg" stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
-              <ZAxis type="number" dataKey="stopsProcess" range={[80, 500]} name="Ajuste Processo" unit=" min" />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold' }} />
-              {pdfScatterData.map((op, index) => (
-                <Scatter key={op.name} name={op.name} data={[op]} fill={COLORS[index % COLORS.length]} isAnimationActive={false} />
-              ))}
-            </ScatterChart>
-          </div>
-        </div>
-
-        {/* Gr√°fico 3: Breakdown Proporcional de Paradas (100%) */}
-        <div id="pdf-chart-stacked" className="bg-white p-8 rounded-3xl mt-8" style={{ width: '800px', height: '420px' }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#1e293b', fontFamily: 'sans-serif' }}>Breakdown Proporcional de Paradas (100%)</h4>
-          <p style={{ fontSize: '10px', color: '#94a3b8', margin: '0 0 16px 0', fontFamily: 'sans-serif' }}>Exibe a distribui√ß√£o interna de motivos de inatividade por M√°quina</p>
-          <div style={{ width: '740px', height: '320px' }}>
-            <BarChart width={740} height={320} data={pdfProportionalStopsData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
-              <YAxis tickFormatter={(tick) => `${tick}%`} stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
-              <Legend iconType="rect" wrapperStyle={{ fontSize: 9, fontWeight: 'bold' }} />
-              <Bar dataKey="manutPct" name="Parada Manuten√ß√£o" stackId="stops-pct" fill="#ef4444" unit="%" isAnimationActive={false} />
-              <Bar dataKey="procPct" name="Parada Processo" stackId="stops-pct" fill="#f59e0b" unit="%" isAnimationActive={false} />
-              <Bar dataKey="outrosPct" name="Outras Paradas" stackId="stops-pct" fill="#64748b" unit="%" isAnimationActive={false} />
-            </BarChart>
-          </div>
-        </div>
-
-        {/* Gr√°fico 4: Balan√ßo de Massa: Res√≠duo vs Reciclado */}
-        <div id="pdf-chart-donut" className="bg-white p-8 rounded-3xl mt-8" style={{ width: '800px', height: '420px' }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#1e293b', fontFamily: 'sans-serif' }}>Balan√ßo de Massa: Res√≠duo vs Reciclado</h4>
-          <p style={{ fontSize: '10px', color: '#94a3b8', margin: '0 0 16px 0', fontFamily: 'sans-serif' }}>Rela√ß√£o direta de mat√©ria coletada na extrusora vs reprocessada no Erema</p>
-          <div style={{ width: '740px', height: '320px' }}>
-            <PieChart width={740} height={320}>
-              <Pie 
-                data={pdfMassBalanceData} 
-                cx="50%" 
-                cy="50%" 
-                innerRadius={65} 
-                outerRadius={90} 
-                dataKey="value"
-                nameKey="name"
-                label={(props) => `${props.name}: ${formatWeight(props.value)}`}
-                paddingAngle={3}
-                isAnimationActive={false}
-              >
-                <Cell fill="#f59e0b" stroke="none" />
-                <Cell fill="#10b981" stroke="none" />
-              </Pie>
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold' }} />
-            </PieChart>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface StockConciliationPreviewModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  stockDate: string;
-  stockEntries: StockEntry[];
-  productionData: ProductionEntry[];
-  formatWeight: (val: number) => string;
-  onExportPDF: (stockDate: string) => void;
-  systemLogo: string | null;
-}
-
-const StockConciliationPreviewModal: React.FC<StockConciliationPreviewModalProps> = ({
-  isOpen,
-  onClose,
-  stockDate,
-  stockEntries,
-  productionData,
-  formatWeight,
-  onExportPDF,
-  systemLogo,
-}) => {
-  if (!isOpen) return null;
-
-  const entry = stockEntries.find((e) => e.date === stockDate);
-  if (!entry) {
-    return (
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
-        <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl text-center space-y-4">
-          <p className="text-sm font-black text-slate-800">Nenhum registro de estoque f√≠sico localizado para a data selecionada.</p>
-          <button onClick={onClose} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
-            Fechar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Identificar dia anterior corrrelacionado
-  const sortedEntries = [...stockEntries].sort((a, b) => a.date.localeCompare(b.date));
-  const selectedIdx = sortedEntries.findIndex((e) => e.date === stockDate);
-  const previousEntry = selectedIdx > 0 ? sortedEntries[selectedIdx - 1] : null;
-
-  let prevProdDate = '';
-  if (stockDate) {
-    const sDate = new Date(stockDate + 'T12:00:00');
-    sDate.setDate(sDate.getDate() - 1);
-    prevProdDate = sDate.toISOString().split('T')[0];
-  }
-
-  const prevDayProdEntries = (previousEntry && stockDate)
-    ? productionData.filter((e) => e.date >= previousEntry.date && e.date < stockDate && !e.machine.toLowerCase().includes('erema'))
-    : (prevProdDate ? productionData.filter((e) => e.date === prevProdDate && !e.machine.toLowerCase().includes('erema')) : []);
-
-  let totalWeightLC3 = 0;
-  let totalWeightATX = 0;
-  let totalWeightLC2 = 0;
-  let totalWeightATXPlus = 0;
-  let totalWeightOther = 0;
-
-  prevDayProdEntries.forEach((e) => {
-    const weight = (e.netWeight || 0) + (e.ecoA || 0) + (e.ecoBP || 0) + (e.ecoBM || 0);
-    const mType = (e.materialType || 'LC3').trim().toUpperCase();
-    if (mType === 'LC3') {
-      totalWeightLC3 += weight;
-    } else if (mType === 'ATX') {
-      totalWeightATX += weight;
-    } else if (mType === 'LC2') {
-      totalWeightLC2 += weight;
-    } else if (mType === 'ATX PLUS' || mType === 'ATXPLUS') {
-      totalWeightATXPlus += weight;
-    } else {
-      totalWeightOther += weight;
-    }
-  });
-
-  // Consumo Te√≥rico Calculado
-  const consumedButeno = (totalWeightLC3 * 0.95) + (totalWeightATX * 0.05) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.05);
-  const consumedMetaloceno = (totalWeightLC3 * 0.05) + (totalWeightATX * 0.10) + (totalWeightLC2 * 0.05) + (totalWeightATXPlus * 0.10);
-  const consumedHexeno = (totalWeightATX * 0.85) + (totalWeightATXPlus * 0.85);
-  const consumedReciclado = (totalWeightLC2 * 0.90);
-  const consumedOther = totalWeightOther;
-
-  // Obter itens de estoque agregados
-  const groupedItems: { [key: string]: { code: string; name: string; fabrica: number; galpao: number; total: number; prevTotal: number } } = {};
-
-  entry.items.forEach((item) => {
-    const codeKey = (item.code || '').trim();
-    const nameKey = (item.name || '').trim().toUpperCase();
-    const key = codeKey ? codeKey : nameKey;
-
-    if (!groupedItems[key]) {
-      groupedItems[key] = {
-        code: item.code || '',
-        name: item.name || '',
-        fabrica: 0,
-        galpao: 0,
-        total: 0,
-        prevTotal: 0,
-      };
-    }
-
-    const locName = (item.location || 'F√°brica').trim().toUpperCase();
-    if (locName.includes('GALP')) {
-      groupedItems[key].galpao += item.quantity;
-    } else {
-      groupedItems[key].fabrica += item.quantity;
-    }
-    groupedItems[key].total += item.quantity;
-  });
-
-  // sortedEntries, selectedIdx and previousEntry are already declared above
-
-  if (previousEntry) {
-    previousEntry.items.forEach((item) => {
-      const codeKey = (item.code || '').trim();
-      const nameKey = (item.name || '').trim().toUpperCase();
-      const key = codeKey ? codeKey : nameKey;
-
-      if (!groupedItems[key]) {
-        groupedItems[key] = {
-          code: item.code || '',
-          name: item.name || '',
-          fabrica: 0,
-          galpao: 0,
-          total: 0,
-          prevTotal: 0,
-        };
-      }
-      groupedItems[key].prevTotal += item.quantity;
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[250] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-4xl shadow-2xl flex flex-col my-8 overflow-hidden max-h-[90vh]">
-        {/* Header */}
-        <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-              <Calculator size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Demonstrativo e Mem√≥ria de C√°lculo de Consumo</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Periodo de Concilia√ß√£o F√≠sica atualizado para auditoria pcp</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-8 overflow-y-auto space-y-8 flex-1">
-          {/* Information banner */}
-          <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-[2rem] flex gap-4 items-start">
-            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0">
-              <Sparkles size={16} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest">Justificativa Regulat√≥ria & Balan√ßo de Massas</h4>
-              <p className="text-[11px] leading-relaxed text-amber-900 font-medium">
-                Esta visualiza√ß√£o permite conferir a decomposi√ß√£o te√≥rica das receitas baseando-se no volume l√≠quido e de perdas operacionais declaradas nas Casts. Ao comparar o saldo do invent√°rio anterior com a contagem atual, auditamos desvios e fundamentamos as perdas f√≠sicas reais contra o rendimento estimado de extrus√£o.
-              </p>
-            </div>
-          </div>
-
-          {/* Bento Grid: Metodologia e Produ√ß√£o do Dia */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-slate-50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest flex items-center gap-2">
-                <Layers size={13} /> Regras de Mistura (Composi√ß√£o Industrial)
-              </h4>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                As fra√ß√µes estequiom√©tricas aplicadas pelo sistema para convers√£o de bobinas produzidas em insumos consumidos s√£o baseadas nas receitas vigentes:
-              </p>
-              <div className="space-y-2 pt-1 font-sans">
-                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-[11px]">
-                  <span className="font-bold text-slate-700">FILME LC3</span>
-                  <span className="font-mono font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">95% Buteno / 5% Metaloceno</span>
-                </div>
-                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-[11px]">
-                  <span className="font-bold text-slate-700">FILME ATX</span>
-                  <span className="font-mono font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">5% But. / 85% Hex. / 10% Met.</span>
-                </div>
-                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-[11px]">
-                  <span className="font-bold text-slate-700">FILME LC2</span>
-                  <span className="font-mono font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">90% Buteno / 10% Metaloceno</span>
-                </div>
-                <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-[11px]">
-                  <span className="font-bold text-slate-700">FILME ATX PLUS</span>
-                  <span className="font-mono font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded">5% But. / 80% Hex. / 15% Met.</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-emerald-600 tracking-widest flex items-center gap-2">
-                <TrendingUp size={13} /> Volumes de Extrus√£o do Per√≠odo ({prevProdDate ? prevProdDate.split('-').reverse().join('/') : '-'})
-              </h4>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Volume total gerado no dia de produ√ß√£o considerado para justificar o consumo f√≠sico atual de estoque:
-              </p>
-              <div className="space-y-2 pt-1 font-mono text-[11px]">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-600">FILME LC3 Produzido:</span>
-                  <span className="font-black text-slate-800">{formatWeight(totalWeightLC3)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-600">FILME ATX Produzido:</span>
-                  <span className="font-black text-slate-800">{formatWeight(totalWeightATX)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-600">FILME LC2 Produzido:</span>
-                  <span className="font-black text-slate-800">{formatWeight(totalWeightLC2)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-600">FILME ATX PLUS Produzido:</span>
-                  <span className="font-black text-slate-800">{formatWeight(totalWeightATXPlus)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-600">Outras Resinas / Apontamentos:</span>
-                  <span className="font-black text-slate-800">{formatWeight(totalWeightOther)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Se√ß√£o Balan√ßo Final Resumido de Insumos */}
-          <div className="space-y-3 font-sans">
-            <h4 className="text-xs font-black uppercase text-slate-800 tracking-widest">Resumo de Consumo e Balan√ßo Te√≥rico por Mat√©ria-Prima</h4>
-            <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
-              <table className="w-full border-collapse text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    <th className="px-5 py-3">Insumo Base / Componente</th>
-                    <th className="px-5 py-3 text-right">Estoque Inicial F√≠sico (Anterior)</th>
-                    <th className="px-5 py-3 text-right">Consumo Te√≥rico Projetado (Dia)</th>
-                    <th className="px-5 py-3 text-right">Estoque F√≠sico Estimado (Sobra)</th>
-                    <th className="px-5 py-3 text-right">Estoque F√≠sico Registrado Atual</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 font-medium text-slate-600">
-                  {Object.values(groupedItems).map((gItem) => {
-                    const normName = (gItem.name || '').trim().toUpperCase();
-                    const normCode = (gItem.code || '').trim().toUpperCase();
-                    let itemConsumo = 0;
-
-                    if (normName.includes('BUTENO') || normCode.includes('BUT')) {
-                      itemConsumo = consumedButeno;
-                    } else if (normName.includes('HEXENO') || normCode.includes('HEX')) {
-                      itemConsumo = consumedHexeno;
-                    } else if (normName.includes('METALOCENO') || normName.includes('METALOGENO') || normCode.includes('MET')) {
-                      itemConsumo = consumedMetaloceno;
-                    } else if (normName.includes('RECICLADO') || normName.includes('RECICLA') || normCode.includes('REC') || normName.includes('PELLETS') || normName.includes('EREMA')) {
-                      itemConsumo = consumedReciclado;
-                    } else if (normName.includes('OUTRO') || normName.includes('RESINA') || normCode.includes('OUTR')) {
-                      itemConsumo = consumedOther;
-                    }
-
-                    return (
-                      <tr key={gItem.code + gItem.name} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-5 py-3.5 font-bold text-slate-800 text-[11px] uppercase">{gItem.name}</td>
-                        <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-500">{formatWeight(gItem.prevTotal)}</td>
-                        <td className="px-5 py-3.5 text-right font-mono font-bold text-red-600 bg-red-50/20">-{formatWeight(itemConsumo)}</td>
-                        <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-500">{formatWeight(gItem.total - itemConsumo)}</td>
-                        <td className="px-5 py-3.5 text-right font-mono font-black text-indigo-600 bg-indigo-50/20">{formatWeight(gItem.total)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer actions */}
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="px-6 py-3 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            Fechar Conversa
-          </button>
-          <button
-            onClick={() => {
-              onExportPDF(stockDate);
-              onClose();
-            }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
-          >
-            <FileText size={14} /> Exportar Relat√≥rio Oficial (PDF)
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const UserManagementModal: React.FC<{ isOpen: boolean; onClose: () => void; users: SystemUser[]; onUpdateUsers: React.Dispatch<React.SetStateAction<SystemUser[]>>; availableRoles: string[]; collaborators: Collaborator[] }> = ({ isOpen, onClose, users, onUpdateUsers, availableRoles, collaborators }) => {
-  const [name, setName] = useState('');
-  const [registration, setRegistration] = useState('');
-  const [role, setRole] = useState(availableRoles[0] || '');
-  const [permissions, setPermissions] = useState<UserPermissions>({
-    canViewDashboard: true,
-    canViewReports: true,
-    canViewPersonnel: true,
-    canManageSettings: false,
-    canEditProduction: true,
-    canManagePersonnel: false,
-    isReadOnly: false
-  });
-  const [userToDelete, setUserToDelete] = useState<SystemUser | null>(null);
-
-  const handleCreate = async () => {
-    if (!name || !registration || !role) {
-      alert('Preencha todos os campos.');
-      return;
-    }
-    if (users.find(u => u.registration === registration)) {
-      alert('Esta matr√≠cula j√° est√° cadastrada.');
-      return;
-    }
-    const id = Math.random().toString(36).substr(2, 9);
-    const newUser: SystemUser = {
-      id,
-      name,
-      registration,
-      role,
-      isFirstAccess: true,
-      permissions
-    };
-    try {
-      await setDoc(doc(db, 'system_users', id), newUser);
-      setName('');
-      setRegistration('');
-      alert('Usu√°rio cadastrado com sucesso! A senha ser√° solicitada no primeiro acesso.');
-    } catch (err) {
-      alert('Erro ao cadastrar usu√°rio.');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!userToDelete) return;
-    const targetUserId = userToDelete.id;
-    try {
-      // Optimistically remove the user from local state immediately
-      onUpdateUsers(prev => prev.filter(u => u.id !== targetUserId));
-      setUserToDelete(null);
-      await deleteDoc(doc(db, 'system_users', targetUserId));
-    } catch (err) {
-      console.error("Erro ao excluir usu√°rio:", err);
-      alert('Erro ao excluir usu√°rio no banco de dados. Tentando reverter...');
-      // Re-fetch or fall back if it failed, but since onSnapshot is listening, it will automatically sync eventually.
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose}>
-      <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-         <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Cadastro de Usu√°rios</h3>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-800 transition-colors">
-              <div className="p-2 hover:bg-slate-100 rounded-xl"><X size={24}/></div>
-            </button>
-         </div>
-
-         {/* Confirma√ß√£o de Exclus√£o */}
-         {userToDelete && (
-           <div className="absolute inset-0 z-[120] bg-white/95 backdrop-blur-md flex items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-200">
-              <div className="max-w-xs">
-                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle size={32} />
-                </div>
-                <h4 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-2">Confirmar Exclus√£o</h4>
-                <p className="text-xs text-slate-500 font-bold mb-8 uppercase tracking-wide">
-                  Tem certeza que deseja excluir o usu√°rio <span className="text-red-600 underline">{userToDelete.name}</span>? Esta a√ß√£o n√£o pode ser desfeita.
-                </p>
-                <div className="flex gap-3">
-                  <button onClick={() => setUserToDelete(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-                  <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-100">Confirmar</button>
-                </div>
-              </div>
-           </div>
-         )}
-
-         <div className="space-y-4 mb-8 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">Nome Completo</label>
-                <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all" placeholder="Nome do usu√°rio" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">Matr√≠cula</label>
-                <div className="relative group">
-                  <input 
-                    value={registration} 
-                    onChange={e => {
-                      setRegistration(e.target.value);
-                      const col = (collaborators || []).find(c => c.registration === e.target.value);
-                      if (col) {
-                        setName(col.name);
-                        setRole(col.role || role);
-                      }
-                    }} 
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all font-mono" 
-                    placeholder="Ex: 0001" 
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Search size={16} className="text-slate-300" />
-                  </div>
-                </div>
-                <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 ml-1 tracking-tighter">Digite a matr√≠cula para buscar no banco central</p>
-              </div>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">Fun√ß√£o</label>
-              <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all">
-                <option value="" disabled>Selecione uma fun√ß√£o</option>
-                {availableRoles.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-
-            <div className="pt-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block ml-1">Permiss√µes de Acesso</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { key: 'canViewDashboard', label: 'Ver Dashboard' },
-                  { key: 'canViewReports', label: 'Ver Relat√≥rios' },
-                  { key: 'canViewPersonnel', label: 'Ver RH' },
-                  { key: 'canEditProduction', label: 'Lan√ßar Produ√ß√£o' },
-                  { key: 'canManageSettings', label: 'Configura√ß√µes' },
-                  { key: 'canManagePersonnel', label: 'Gerir RH' },
-                  { key: 'isReadOnly', label: 'Somente Leitura' }
-                ].map((perm) => (
-                  <button 
-                    key={perm.key}
-                    onClick={() => setPermissions(prev => ({ ...prev, [perm.key]: !prev[perm.key as keyof UserPermissions] }))}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${permissions[perm.key as keyof UserPermissions] ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-100 text-slate-400'}`}
-                  >
-                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${permissions[perm.key as keyof UserPermissions] ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
-                      {permissions[perm.key as keyof UserPermissions] && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-tight">{perm.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button onClick={handleCreate} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2 mt-2">
-              <Plus size={18}/> Cadastrar Novo Usu√°rio
-            </button>
-         </div>
-
-         <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Usu√°rios Registrados ({users.length})</p>
-            </div>
-            <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-1">
-              {users.length === 0 ? (
-                <div className="text-center py-10 text-slate-300">
-                  <Users size={32} className="mx-auto mb-2 opacity-20"/>
-                  <p className="text-[10px] font-black uppercase tracking-widest">Nenhum usu√°rio cadastrado</p>
-                </div>
-              ) : (
-                [...users].sort((a,b) => (a.registration || '').localeCompare(b.registration || '')).map(u => (
-                  <div key={u.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 group hover:border-blue-200 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 border border-slate-200 font-black text-[10px]">{u.registration}</div>
-                      <div>
-                        <p className="text-sm font-black text-slate-800 uppercase leading-none mb-1">{u.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em]">{u.role}</p>
-                      </div>
-                    </div>
-                    {u.registration !== '1010' && (
-                      <button 
-                        onClick={() => setUserToDelete(u)} 
-                        className="p-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 border border-red-100 rounded-xl transition-all shadow-sm active:scale-95"
-                        title="Excluir Usu√°rio"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-         </div>
-      </div>
-    </div>
-  )
-};
-
-const SettingsModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: () => Promise<void>;
-  activeTab: 'filters' | 'goals' | 'config' | 'system' | 'app';
-  setActiveTab: (tab: 'filters' | 'goals' | 'config' | 'system' | 'app') => void;
-  filterOperator: string;
-  setFilterOperator: (op: string) => void;
-  filterDay: string;
-  setFilterDay: (day: string) => void;
-  filterStartDate: string;
-  setFilterStartDate: (date: string) => void;
-  filterEndDate: string;
-  setFilterEndDate: (date: string) => void;
-  dashboardMonth: string;
-  setDashboardMonth: (month: string) => void;
-  operators: string[];
-  goals: Record<string, number>;
-  setGoals: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  ribbonGoals: Record<string, number>;
-  setRibbonGoals: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  setIsUserManagementOpen: (open: boolean) => void;
-  setIsDowntimeReasonsModalOpen?: (open: boolean) => void;
-  setIsDowntimeAnalyticsModalOpen?: (open: boolean) => void;
-  setIsOperatorModalOpen: (open: boolean) => void;
-  setIsRoleModalOpen: (open: boolean) => void;
-  setIsShiftModalOpen: (open: boolean) => void;
-  setIsPermissionModalOpen: (open: boolean) => void;
-  downloadBackup: () => void;
-  handleRestoreData: () => Promise<void>;
-  handleSyncLocalToCloud: () => Promise<void>;
-  openConfirm: (title: string, message: string, onConfirm: () => void, type?: 'danger' | 'warning' | 'info') => void;
-  isInitializing: boolean;
-  fileInputRef: React.RefObject<HTMLInputElement>;
-  systemName: string;
-  setSystemName: (name: string) => void;
-  loginSystemName: string;
-  setLoginSystemName: (name: string) => void;
-  loginSystemSubtitle: string;
-  setLoginSystemSubtitle: (text: string) => void;
-  systemLogo: string | null;
-  setSystemLogo: (logo: string | null) => void;
-  systemCoverImage: string | null;
-  setSystemCoverImage: (image: string | null) => void;
-  isAdminUser: boolean;
-  isInstallable: boolean;
-  isStandalone: boolean;
-  isIOS: boolean;
-  handleInstallClick: () => void;
-  setShowInstallExperience: (show: boolean) => void;
-  onTriggerUpdateNotification?: (notes?: string) => Promise<void>;
-}> = ({
-  isOpen, onClose, onSave, activeTab, setActiveTab,
-  filterOperator, setFilterOperator, filterDay, setFilterDay, filterStartDate, setFilterStartDate, filterEndDate, setFilterEndDate, dashboardMonth, setDashboardMonth,
-  operators, goals, setGoals, ribbonGoals, setRibbonGoals,
-  setIsUserManagementOpen, setIsDowntimeReasonsModalOpen, setIsDowntimeAnalyticsModalOpen, setIsOperatorModalOpen, setIsRoleModalOpen, setIsShiftModalOpen, setIsPermissionModalOpen,
-  downloadBackup, handleRestoreData, handleSyncLocalToCloud, openConfirm, isInitializing, fileInputRef,
-  systemName, setSystemName, loginSystemName, setLoginSystemName, loginSystemSubtitle, setLoginSystemSubtitle, systemLogo, setSystemLogo, systemCoverImage, setSystemCoverImage, 
-  isAdminUser, isInstallable, isStandalone, isIOS, handleInstallClick, setShowInstallExperience, onTriggerUpdateNotification
-}) => {
-  const [isSaving, setIsSaving] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    await onSave();
-    setIsSaving(false);
-  };
-
-  const tabs = [
-    { id: 'filters', label: 'Filtros', icon: Search },
-    { id: 'goals', label: 'Metas', icon: Target, hidden: !isAdminUser },
-    { id: 'config', label: 'Cadastro', icon: Settings, hidden: !isAdminUser },
-    { id: 'system', label: 'Sistema', icon: Cpu, hidden: !isAdminUser },
-    { id: 'app', label: 'App', icon: Smartphone },
-  ].filter(t => !t.hidden);
-
-  return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
-      <div className="bg-white rounded-[2rem] md:rounded-[3rem] w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]" onClick={e => e.stopPropagation()}>
-        <div className="px-6 md:px-8 pt-6 md:pt-8 pb-4 md:pb-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-          <div>
-            <h3 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tight">Configura√ß√µes</h3>
-            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-0.5">Gerencie as prefer√™ncias</p>
-          </div>
-          <button onClick={onClose} className="p-3 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-2xl transition-all active:scale-90">
-            <X size={24} className="md:w-7 md:h-7" />
-          </button>
-        </div>
-
-        <div className="flex bg-slate-50 border-b border-slate-100 p-2 overflow-x-auto no-scrollbar scroll-smooth shrink-0">
-          <div className="flex gap-1.5 md:gap-2 min-w-max md:min-w-0 md:flex-1 md:justify-center px-1">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center justify-center gap-2.5 px-4 md:px-6 py-3.5 rounded-2xl text-[10px] md:text-[11px] font-black uppercase transition-all whitespace-nowrap ${
-                  activeTab === tab.id ? 'bg-white text-blue-600 shadow-md ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <tab.icon size={16} className="md:w-[18px] md:h-[18px]" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-6 md:p-10 flex-1 overflow-y-auto custom-scrollbar">
-          {activeTab === 'app' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-               <div className={`${isStandalone ? 'bg-blue-50 border-blue-100' : 'bg-emerald-50 border-emerald-100'} p-6 md:p-8 rounded-[2rem] border`}>
-                  <div className="flex flex-col items-center text-center gap-4">
-                    <div className={`w-16 h-16 bg-white rounded-3xl shadow-lg flex items-center justify-center ${isStandalone ? 'text-blue-600' : 'text-emerald-600'}`}>
-                      <Smartphone size={32} />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-black text-slate-800 uppercase">
-                        {isStandalone ? 'Aplicativo Instalado' : 'Vers√£o para Celular'}
-                      </h4>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1">
-                        {isStandalone ? 'Voc√™ j√° est√° utilizando a vers√£o de aplicativo' : 'Transforme este site em um aplicativo completo'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 space-y-4">
-                    {isStandalone && (
-                      <div className="bg-white/80 backdrop-blur rounded-[1.5rem] p-6 border border-blue-100 text-center">
-                        <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                          <ShieldCheck size={24} />
-                        </div>
-                        <p className="text-[11px] font-black text-blue-800 uppercase mb-1">Status: Ativo & Instalado</p>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
-                          O sistema est√° rodando em modo nativo. Voc√™ pode acess√°-lo diretamente pela sua tela de in√≠cio.
-                        </p>
-                      </div>
-                    )}
-
-                    {!isStandalone && isInstallable && (
-                      <button 
-                        onClick={handleInstallClick}
-                        className="w-full py-5 bg-emerald-600 text-white rounded-[1.5rem] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl shadow-emerald-100 border-2 border-white/20"
-                      >
-                        <Download size={22} className="animate-bounce" />
-                        <div className="text-left font-sans text-white">
-                          <p className="text-[13px] font-black uppercase leading-none">Instalar Aplicativo</p>
-                          <p className="text-[9px] font-bold opacity-80 uppercase tracking-tighter">Download Direto PWA</p>
-                        </div>
-                      </button>
-                    )}
-
-                    {!isStandalone && isIOS && (
-                      <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100">
-                         <div className="flex gap-4 items-start text-left">
-                           <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
-                             <Share size={20} />
-                           </div>
-                           <div className="flex-1">
-                             <p className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1.5">Instru√ß√µes para iPhone</p>
-                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
-                               1. Toque no bot√£o <span className="text-blue-600 font-extrabold">"Compartilhar"</span> (√≠cone quadrado com seta).<br/>
-                               2. Selecione <span className="text-blue-600 font-extrabold">"Adicionar √† Tela de In√≠cio"</span>.
-                             </p>
-                           </div>
-                         </div>
-                      </div>
-                    )}
-
-                    {!isStandalone && !isInstallable && !isIOS && (
-                      <>
-                        <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100">
-                           <div className="flex gap-4 items-start text-left">
-                             <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
-                               <ExternalLink size={20} />
-                             </div>
-                             <div className="flex-1">
-                               <p className="text-[11px] font-black text-blue-800 uppercase leading-none mb-1.5">Dica de Instala√ß√£o</p>
-                               <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight leading-relaxed">
-                                 Acesse este link <b>DIRETAMENTE</b> pelo Chrome ou Samsung Internet. Se estiver vendo isso por dentro do Instagram, WhatsApp ou Facebook, a instala√ß√£o n√£o aparecer√°.
-                               </p>
-                             </div>
-                           </div>
-                        </div>
-
-                        <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100">
-                           <div className="flex gap-4 items-start text-left">
-                             <div className="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
-                               <Smartphone size={20} />
-                             </div>
-                             <div className="flex-1">
-                               <p className="text-[11px] font-black text-amber-800 uppercase leading-none mb-1.5">Instru√ß√µes para Android/PC</p>
-                               <p className="text-[10px] font-bold text-slate-600 uppercase tracking-tight leading-relaxed">
-                                 1. Abra o menu do navegador (geralmente <span className="text-amber-600 font-extrabold">3 pontos ou barras</span>).<br/>
-                                 2. Procure por <span className="text-amber-600 font-extrabold">"Instalar Aplicativo"</span> ou <span className="text-amber-600 font-extrabold">"Adicionar √† Tela Inicial"</span>.
-                               </p>
-                             </div>
-                           </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-               </div>
-
-               {isAdminUser && onTriggerUpdateNotification && (
-                 <div 
-                   className="bg-gradient-to-br from-blue-900 to-indigo-950 p-6 rounded-[1.8rem] border border-blue-500/30 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:border-blue-400 transition-all shadow-xl shadow-blue-900/20 mb-4 text-white" 
-                   onClick={() => {
-                     const notes = prompt('Digite as observa√ß√µes da atualiza√ß√£o para exibir nos dispositivos (opcional):', 'Nova atualiza√ß√£o do sistema dispon√≠vel. Clique para atualizar.');
-                     if (notes !== null) {
-                       onTriggerUpdateNotification(notes);
-                     }
-                   }}
-                 >
-                   <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center border border-blue-400/30 group-hover:scale-110 transition-transform">
-                     <Bell size={20} className="animate-bounce" />
-                   </div>
-                   <div>
-                     <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Notifica√ß√£o em Tempo Real</p>
-                     <p className="text-[12px] font-black uppercase leading-tight text-white">Disparar Notifica√ß√£o de Atualiza√ß√£o (PC & Celular)</p>
-                     <p className="text-[10px] text-slate-300 font-medium mt-1 leading-relaxed">
-                       Notifica instantaneamente todos os dispositivos com o aplicativo instalado para atualizar a vers√£o.
-                     </p>
-                   </div>
-                 </div>
-               )}
-
-               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all mb-4" onClick={() => {
-                  onClose();
-                  handleInstallClick();
-                }}>
-                  <Download size={16} className="text-slate-400 group-hover:text-blue-500 transition-all duration-500" />
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Sistema</p>
-                    <p className="text-[11px] font-black text-slate-700 uppercase leading-none">Instalar Aplicativo (PWA)</p>
-                  </div>
-               </div>
-
-               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all mb-4" onClick={() => setIsPermissionModalOpen(true)}>
-                  <ShieldCheck size={16} className="text-slate-400 group-hover:text-blue-500 transition-all duration-500" />
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Sistema</p>
-                    <p className="text-[11px] font-black text-slate-700 uppercase leading-none">Gerenciar Permiss√µes</p>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-all" onClick={() => {
-                    openConfirm(
-                      'Sincronizar Cloud', 
-                      'Deseja enviar seus dados locais atuais para o banco de dados na nuvem? Use isso se seus indicadores estiverem zerados na nuvem.',
-                      handleSyncLocalToCloud,
-                      'warning'
-                    );
-                  }}>
-                    <RotateCcw size={16} className={`text-slate-400 group-hover:text-emerald-500 transition-all duration-500 ${isInitializing ? 'animate-spin' : ''}`} />
-                    <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Nuvem</p>
-                      <p className="text-[11px] font-black text-slate-700 uppercase leading-none">Sincronizar Cloud</p>
-                    </div>
-                  </div>
-                  <div className="bg-red-50 p-5 rounded-2xl border border-red-100 flex flex-col items-center text-center justify-center gap-2 group cursor-pointer hover:bg-red-100 transition-all" onClick={async () => {
-                    if (confirm('Deseja limpar o cache e reiniciar o aplicativo? Isso pode resolver problemas de carregamento.')) {
-                      if ('serviceWorker' in navigator) {
-                        const regs = await navigator.serviceWorker.getRegistrations();
-                        for (let reg of regs) {
-                          await reg.unregister();
-                        }
-                      }
-                      window.location.reload();
-                    }
-                  }}>
-                    <Trash2 size={16} className="text-red-400" />
-                    <div>
-                      <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-0.5">Diagn√≥stico</p>
-                      <p className="text-[11px] font-black text-red-700 uppercase leading-none">Limpar Cache</p>
-                    </div>
-                  </div>
-               </div>
-
-               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Vers√£o</p>
-                  <p className="text-[11px] font-black text-slate-700 uppercase tracking-tighter text-blue-600 font-sans">v1.2.9 PROD</p>
-               </div>
-            </div>
-          )}
-
-          {activeTab === 'filters' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="bg-blue-50 p-8 rounded-[2rem] border border-blue-100">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-widest ml-1">Filtrar por Operador</label>
-                    <select 
-                      value={filterOperator} 
-                      onChange={e => setFilterOperator(e.target.value)} 
-                      className="w-full bg-white border border-blue-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all appearance-none"
-                    >
-                      <option value="Todos">Todos os Operadores</option>
-                      {operators.map(op => <option key={op} value={op}>{op}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-widest ml-1">Dia Espec√≠fico</label>
-                    <div className="relative">
-                      <input 
-                        type="date" 
-                        value={filterDay} 
-                        onChange={e => {
-                          setFilterDay(e.target.value);
-                          if (e.target.value) {
-                            setFilterStartDate('');
-                            setFilterEndDate('');
-                          }
-                        }} 
-                        className="w-full bg-white border border-blue-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all" 
-                      />
-                      {filterDay && (
-                        <button 
-                          onClick={() => setFilterDay('')} 
-                          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
-                          title="Limpar filtro"
-                        >
-                          <X size={14}/>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 pt-8 border-t border-blue-100/50">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-widest ml-1">In√≠cio do Per√≠odo</label>
-                    <div className="relative">
-                      <input 
-                        type="date" 
-                        value={filterStartDate} 
-                        onChange={e => {
-                          setFilterStartDate(e.target.value);
-                          if (e.target.value) {
-                            setFilterDay('');
-                          }
-                        }}
-                        className="w-full bg-white border border-blue-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all" 
-                      />
-                      {filterStartDate && (
-                        <button 
-                          onClick={() => setFilterStartDate('')} 
-                          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
-                          title="Limpar data inicial"
-                        >
-                          <X size={14}/>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-widest ml-1">Fim do Per√≠odo</label>
-                    <div className="relative">
-                      <input 
-                        type="date" 
-                        value={filterEndDate} 
-                        onChange={e => {
-                          setFilterEndDate(e.target.value);
-                          if (e.target.value) {
-                            setFilterDay('');
-                          }
-                        }}
-                        className="w-full bg-white border border-blue-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all" 
-                      />
-                      {filterEndDate && (
-                        <button 
-                          onClick={() => setFilterEndDate('')} 
-                          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
-                          title="Limpar data final"
-                        >
-                          <X size={14}/>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-blue-100/50 space-y-2">
-                  <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-widest ml-1">M√™s/Ano de Refer√™ncia</label>
-                  <input 
-                    type="month" 
-                    value={dashboardMonth} 
-                    onChange={e => setDashboardMonth(e.target.value)} 
-                    className="w-full bg-white border border-blue-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-4 focus:ring-blue-100 transition-all" 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'goals' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300 text-center py-4">
-              <div className="w-20 h-20 bg-orange-50 text-orange-500 rounded-[2rem] flex items-center justify-center border border-orange-100 mx-auto mb-2">
-                <Target size={40} />
-              </div>
-              <div>
-                <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">Metas de Produ√ß√£o</h4>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Defina objetivos mensais ({dashboardMonth.split('-').reverse().join('/')})</p>
-              </div>
-              <div className="max-w-md mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Extrus√£o */}
-                <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 text-center space-y-3">
-                  <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">Setor Extrus√£o</span>
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      value={goals[dashboardMonth] || GOAL_VALUE} 
-                      onChange={e => setGoals(prev => {
-                        const updated = {...prev, [dashboardMonth]: Number(e.target.value)};
-                        localStorage.setItem('manupackaging_goals', JSON.stringify(updated));
-                        setDoc(doc(db, 'settings', 'global'), { goals: updated }, { merge: true });
-                        return updated;
-                      })} 
-                      className="w-full bg-white border border-slate-200 rounded-[1.5rem] px-4 py-4 text-xl font-black text-center text-slate-800 outline-none focus:ring-4 focus:ring-orange-100 tracking-tighter"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-[10px]">KG</span>
-                  </div>
-                </div>
-
-                {/* Corte de Fita */}
-                <div className="bg-blue-50/20 p-6 rounded-3xl border border-blue-50/40 text-center space-y-3">
-                  <span className="text-[10px] font-black uppercase text-blue-400 block tracking-wider">Corte de Fita</span>
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      value={ribbonGoals[dashboardMonth] || 1000000} 
-                      onChange={e => setRibbonGoals(prev => {
-                        const updated = {...prev, [dashboardMonth]: Number(e.target.value)};
-                        localStorage.setItem('manupackaging_ribbon_goals', JSON.stringify(updated));
-                        setDoc(doc(db, 'settings', 'global'), { ribbonGoals: updated }, { merge: true });
-                        return updated;
-                      })} 
-                      className="w-full bg-white border border-slate-200 rounded-[1.5rem] px-4 py-4 text-xl font-black text-center text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 tracking-tighter"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-[10px]">M¬≤</span>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic leading-relaxed max-w-sm mx-auto">
-                Essas metas s√£o aplicadas ao per√≠odo selecionado para o c√°lculo dos indicadores.
-              </p>
-            </div>
-          )}
-
-          {activeTab === 'config' && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-               {isAdminUser && (
-                 <button onClick={() => { onClose(); setIsUserManagementOpen(true); }} className="w-full group px-8 py-6 bg-slate-50 text-slate-700 rounded-[2rem] font-black text-xs uppercase flex items-center justify-between border border-slate-200 hover:bg-blue-600 hover:text-white hover:border-blue-700 hover:shadow-xl hover:shadow-blue-200 transition-all">
-                    <div className="flex items-center gap-6">
-                      <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-white/20 group-hover:text-white transition-all"><UserPlus size={24}/></div>
-                      <div className="text-left">
-                        <p className="tracking-widest">Cadastro de Usu√°rios</p>
-                        <p className="text-[9px] font-bold opacity-60 tracking-normal mt-1">Gerencie quem pode acessar o sistema</p>
-                      </div>
-                    </div>
-                    <ChevronRight size={20} className="opacity-40 group-hover:opacity-100" />
-                 </button>
-               )}
-
-               <button onClick={() => { onClose(); setIsShiftModalOpen(true); }} className="w-full group px-8 py-6 bg-white border border-slate-200 rounded-[2rem] flex items-center justify-between hover:border-orange-400 hover:shadow-lg transition-all">
-                  <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center"><Clock size={24}/></div>
-                    <div className="text-left">
-                      <p className="text-xs font-black uppercase text-slate-800 tracking-widest">Gerenciar Turnos</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Hor√°rios e escalas de trabalho</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={20} className="text-slate-300" />
-               </button>
-
-               <button onClick={() => { onClose(); setIsRoleModalOpen(true); }} className="w-full group px-8 py-6 bg-white border border-slate-200 rounded-[2rem] flex items-center justify-between hover:border-indigo-400 hover:shadow-lg transition-all">
-                  <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center"><Briefcase size={24}/></div>
-                    <div className="text-left">
-                      <p className="text-xs font-black uppercase text-slate-800 tracking-widest">Gerenciar Fun√ß√µes</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e configure cargos/fun√ß√µes</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={20} className="text-slate-300" />
-               </button>
-
-               <button onClick={() => { onClose(); setIsDowntimeReasonsModalOpen?.(true); }} className="w-full group px-8 py-6 bg-white border border-slate-200 rounded-[2rem] flex items-center justify-between hover:border-blue-500 hover:shadow-lg transition-all">
-                  <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center"><Layers size={24}/></div>
-                    <div className="text-left">
-                      <p className="text-xs font-black uppercase text-slate-800 tracking-widest">Gerenciar Motivos de Parada</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Editar, adicionar e excluir motivos padronizados</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={20} className="text-slate-300" />
-               </button>
-
-               <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 text-center space-y-2">
-                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Gest√£o de Pessoal</p>
-                 <p className="text-xs font-bold text-slate-500">As configura√ß√µes de operadores e fun√ß√µes foram unificadas no <span className="text-blue-700">Cadastro de Colaboradores</span> dispon√≠vel no Menu Extra da tela de Pessoal.</p>
-               </div>
-            </div>
-          )}
-
-          {activeTab === 'system' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="space-y-6">
-                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-6">
-                  <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center border border-slate-200 overflow-hidden shadow-sm relative group">
-                    {systemLogo ? (
-                      <img src={systemLogo} alt="Logo Prev" className="w-full h-full object-cover" />
-                    ) : (
-                      <img src="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png" alt="Default Logo" className="w-8 h-8 opacity-40 object-contain" />
-                    )}
-                    <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest text-center px-2">Alterar Logo</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = async () => {
-                            const compressed = await compressImage(reader.result as string, 400, 400);
-                            setSystemLogo(compressed);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </label>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Logotipo do Sistema</p>
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed italic">Clique na imagem ao lado para carregar um novo arquivo do seu dispositivo.</p>
-                      <div className="flex gap-2">
-                         <button onClick={() => setSystemLogo(null)} className="px-4 py-2 bg-white border border-slate-200 text-[10px] font-black uppercase text-red-500 rounded-xl hover:bg-red-50 transition-all">Remover Logo</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-6">
-                  <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center border border-slate-200 overflow-hidden shadow-sm relative group">
-                    {systemCoverImage ? (
-                      <img src={systemCoverImage} alt="Capa Prev" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300">
-                        <ImageIcon size={32} />
-                      </div>
-                    )}
-                    <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest text-center px-2">Alterar Capa</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = async () => {
-                            const compressed = await compressImage(reader.result as string, 1200, 800);
-                            setSystemCoverImage(compressed);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </label>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Imagem de Capa (Home)</p>
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed italic">Esta imagem ser√° exibida na tela inicial do sistema em toda sua extens√£o.</p>
-                      <div className="flex gap-2">
-                         <button onClick={() => setSystemCoverImage(null)} className="px-4 py-2 bg-white border border-slate-200 text-[10px] font-black uppercase text-red-500 rounded-xl hover:bg-red-50 transition-all">Remover Capa</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Bell size={20} className="text-blue-600" />
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Notifica√ß√µes Push (PWA)</p>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-600 leading-relaxed">
-                    O sistema agora suporta notifica√ß√µes push mesmo com o aplicativo fechado. Para funcionar, √© necess√°rio configurar a <code className="bg-blue-100 px-1 rounded">FIREBASE_SERVICE_ACCOUNT</code> e <code className="bg-blue-100 px-1 rounded">VITE_FIREBASE_VAPID_KEY</code> nas configura√ß√µes.
-                  </p>
-                  <p className="text-[9px] font-medium text-slate-400 italic">
-                    Nota: O erro "[vite] fail to connect" no console √© normal. Certifique-se de permitir as notifica√ß√µes no seu navegador e "Instalar" o App como PWA.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center justify-between">
-                      Nome (Cabe√ßalho)
-                      {!isAdminUser && <span className="text-amber-500 flex items-center gap-1"><ShieldCheck size={10}/> ADM</span>}
-                    </label>
-                    <input 
-                      value={systemName} 
-                      onChange={e => setSystemName(e.target.value)} 
-                      disabled={!isAdminUser}
-                      className={`w-full border rounded-2xl px-6 py-4 font-black text-slate-800 outline-none transition-all ${isAdminUser ? 'bg-white border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-500' : 'bg-slate-50 border-slate-100 cursor-not-allowed opacity-60'}`}
-                      placeholder="Cabe√ßalho..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center justify-between">
-                      Nome (Login)
-                      {!isAdminUser && <span className="text-amber-500 flex items-center gap-1"><ShieldCheck size={10}/> ADM</span>}
-                    </label>
-                    <input 
-                      value={loginSystemName} 
-                      onChange={e => setLoginSystemName(e.target.value)} 
-                      disabled={!isAdminUser}
-                      className={`w-full border rounded-2xl px-6 py-4 font-black text-slate-800 outline-none transition-all ${isAdminUser ? 'bg-white border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-500' : 'bg-slate-50 border-slate-100 cursor-not-allowed opacity-60'}`}
-                      placeholder="Tela de Login..."
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center justify-between">
-                    Subt√≠tulo (Tela de Login)
-                    {!isAdminUser && <span className="text-amber-500 flex items-center gap-1"><ShieldCheck size={10}/> ADM</span>}
-                  </label>
-                  <input 
-                    value={loginSystemSubtitle} 
-                    onChange={e => setLoginSystemSubtitle(e.target.value)} 
-                    disabled={!isAdminUser}
-                    className={`w-full border rounded-2xl px-6 py-4 font-black text-slate-800 outline-none transition-all ${isAdminUser ? 'bg-white border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-500' : 'bg-slate-50 border-slate-100 cursor-not-allowed opacity-60'}`}
-                    placeholder="Texto abaixo do nome principal no login..."
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                <button onClick={downloadBackup} className="group p-6 bg-emerald-50 text-emerald-700 rounded-[2rem] border border-emerald-100 flex flex-col items-center text-center gap-3 hover:bg-emerald-600 hover:text-white hover:shadow-xl transition-all">
-                  <div className="w-14 h-14 bg-white text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm"><FileDown size={28}/></div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-black uppercase tracking-widest italic">Baixar Backup</p>
-                    <p className="text-[9px] font-bold opacity-70">Salvar dados em JSON</p>
-                  </div>
-                </button>
-                <button onClick={() => { onClose(); fileInputRef.current?.click(); }} className="group p-6 bg-blue-50 text-blue-700 rounded-[2rem] border border-blue-100 flex flex-col items-center text-center gap-3 hover:bg-blue-600 hover:text-white hover:shadow-xl transition-all">
-                  <div className="w-14 h-14 bg-white text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm"><Upload size={28}/></div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-black uppercase tracking-widest italic">Restaurar Backup</p>
-                    <p className="text-[9px] font-bold opacity-70">Carregar base salva</p>
-                  </div>
-                </button>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 space-y-4">
-                <button 
-                  onClick={handleRestoreData}
-                  disabled={isInitializing}
-                  className="w-full group p-6 bg-red-50 text-red-700 rounded-[2rem] border border-red-100 flex flex-col items-center text-center gap-3 hover:bg-red-600 hover:text-white hover:shadow-xl transition-all disabled:opacity-50 underline-none"
-                >
-                  <div className="w-14 h-14 bg-white text-red-600 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform shadow-sm"><RotateCcw size={28}/></div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-black uppercase tracking-widest italic">Restaurar Dados Iniciais</p>
-                    <p className="text-[9px] font-bold opacity-70">CUIDADO: Apaga tudo e volta ao padr√£o</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {activeTab !== 'filters' && isAdminUser && (
-          <div className="px-10 py-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-            <button 
-              onClick={handleSave} 
-              disabled={isSaving}
-              className={`px-10 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
-            >
-              {isSaving ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                'Salvar Altera√ß√µes'
-              )}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+                                  if (biDynamicGroup === 'operator' || biDynamicGroup === 'machine' || biDynamicGroup === 'shift') {xúÏ}€n‹Hñ‡˚|E¥¶jîÍR¶R7ó¨ñ\–ÕnO[e¡Ru˜¨aåôdH…6ìÃ"ô∂Tj≥ÿáÿÏˆmÅûÍ]†—‘”`Å¡ºÍOÊf>aœâ$#»`fJ∂´ú®í3yâÎ9'Œ˝¸±¯ù–ËÛ1c?ºË]ÿ¯áW°3Ú›'q4/œIù\†Kø¯ãÊoüπi~ƒú$˘∫‹]p'q≈›Ô¢h‘ı√ÖÜW56}ÌÒ…ù8=ƒ©çúqßÛ∑Àƒ_"ªèH«bé;4»zµ{ÌﬂêsX∏›ÎÉÁœûø8}Èìœ	ˇ⁄hxë_›êïÊQ--5- Œ æ◊7ƒaÛ™{ngÂM∆Qò¯oÈA¶é“öÜó»vÌöÏx˛[uøÜ›Û	,Œy@/âü“Q“uiò“ò¸ní§˛˘ï¸ô“À¥õNJªÎ˝>9áëtQ‡Ò/W˚„ÀWd2”ÿu∫ËÎ€ˇë·Ì˜$p¬€?AWa%ƒ£dGﬁ‰ˆOx€çFc'Ω˝·-ıìùXÕ¥LÎ-ﬁ3‹Ω^˘9y·Ño»©Ô—ÅìC
+$‰Á+∆K4∏”ﬁÏ@∞–£^wÌ2 „ÓD±k√ˇè≠‚Í‡j‚üÆŸJh˙é“p¡<Àrﬂ…ÿqi˜™ª^Ûº5‹T_R7ÑoS‡∏oÚΩQ∑ÚKl√m?ºËæÉ5ä=ª˝˛•l≥iBG@mÜ—Œ p≥vÜ°ØëësŸ¬Ä∂ÿà¢∑4>¢wpÀô§ÄCwµvvFÄ–
+T¿ª¥¢l|úxó7ÍHÕ†/6LÇ¯*é|’]Ìm -T˜N∑ÂÌnøan∫•´Ë¬√Bñp.€Aã.†ÿêPÈÂ˙ı; ‡!¸œg˜'«ææBﬂ*‰®o¶ü·⁄í››]“'_ëE¿g4ÄeÿÏ˜Å,…õ´‚&ü¿FÒÊZ·Õ/˘Õ¸ÈıÕ˛‚ÕÎõG¨ß/»ÍÕŒ
+NlöXH„IËB£Bﬂ!  Ñ.@€0GvÇ∂h˝∫x≥π,FÄrN≈ã‰Ø˛ Í§2 ÓˇjqÈGA#ﬁ(ç&iÖñOí^çëÚ±óöé¸ÖÅÔæŸΩÓ0å§ó„(NOÅ≤0éÖ-ƒ…·„N∂∫çgh˛)ì7?Ù¸ã®˚ màe[Ω∫≈âúò©ÖHÇ£8z›ºÏ…8ÚqÌÁñ˙iÄH≥Ô¯ópå¿<`~n0ÅS9BB˘ô4ØmÁeª}∞Åè˝Äû¡I‚„X]-ê0?Ä+X∞·\D{+|sÌûo8õÛè≈éZ∂UAVFè`bßL"ºNh@›îz«4ç}˜êû˜Œ£x‰§∞À‚ﬁ:¡@Œ£-FYœ64PœµT©¿8ÌÆÀ£&≠ú9ı‹¡∏ ‰ƒ>£¡ú‡è®ÁOF@i¿dP«C∆ ƒï,àI
+G1'KDhÁixÈ°vî2îLÜ±æÈˆâä√pd4Ç3Põo'î–˘v‚81'é‚E‰"æ˝˛‹w#‚∏˛»!—Ñ0ZÏE1π˝GB|⁄s»ÿÅ«c
+≥˝∞:"L™Í¢XÖHÌáNÍøı=«£IØv≥«ç[›˙¶Òñvê€M“hå3J@b …d4r‚+R#ÒÚ©Ü\\ OÔj`Ö5l0g∆›¸r-¶£WF68¬ÇøÎ&#PÄKIâd¿¶ô*3gzNòıÒ†ªaN;û´éÔ.∑¶¸¸Å•ä‡¯π`£`@ù˝ÃEàKô´∏Æ¢ëF|ﬂhú¯±{ÀÒn≠_+‘6—™R∏3\ØPòÀDe JÉg≥"âH—#ı/ÜÈ¬£ &\4|» û ÜzNB:'4æ˝!Ú¢%êD÷€<.È(;M4#Ba(I	–(†pøˆì	£|pë¿6PŸÍ&0ê~Ñ”X6¶~í≤ÔwI¨0(∏.ô¿eÑùk‡ã‡¸< ôxÔËH"t"‰cËÕÏß$l`j∂‚=O2î h`Ãgå Ç∫›Láp
+5ú1i\ UFŸL9˝Ù‡π°OçÏ6åµphÉÙ€€\xÑ"Î Ÿ$AàNáç<:˙v‚èπŒƒˆïÁ‚x≥}˛ÃGπl_9úƒl_8éÄÊ€>]A⁄ò”Ñ=À.·âZ}∂– I;È ÚÆ‘Åxx¸√yEƒóÏpQπ%~4J„Z4c˙<π[Ë3 ÊµÍ.)Z´ïMç8d£ñHΩ4ØÛi't‰óô≠6j‡÷aÆ=^Ï%„¿O;ã›≈•^La‰	Ì,ı~‚Ygqe—ñ]œZ.êÅ í»˝rÀé¸/àë%Cˇ<µÓ ´Å@iñ”¨Ã·C9Ód∫Î∆≈{RÂ–‚≈©¥G„ÀÓ*√êÉó<Mp°.∑V˜»%’.ﬂõœ¯êQ€¿ı%«N8Ii»0~Q(Ç‚(…)ˆ•˛"kƒ.Ør]Q©…ì8riídÕIçoèˇ™6»ØØñµOŸía;WFe}ﬁÃhe`Ü~◊\‚=ˆqì#˛c…
+Så3ó© Ñd®tÕ$5°·]"’ßrUƒØ©∫Wè Â:b•”()´tÜµEÅÉãÀDEIKµïJ:/ë`™„Fa˜¡DÄ˘ˇæYPvuUë' ˜rA:ßˆ»[~zEòÏ∆ÖØ0z;cíùYgä&ç=n£≥S ÂbµÕ6ZÎ¶lÄ™â-hV‰0¶†éágÃØÈÅz{\Eœs’›‚ †1ªI¢ï	W•≥Îîé§‰!LmB	#2“az2Ä‡k•√¢L©ïPÙ*«ëíÇZ‡ \˙¿˘ .  ∆ÿ§ëÿ} oÙ$-∫ÜG=ºƒ`÷UœO≠Î4eÄI=8™ö6}«¯Ω&Y}\£l‡kÄ≥Ù‚h\c{Ñ° Ωå¬é®*˝–€	vØØâ¿m—j-ı_Ω¬+´ıØ–K?m”Eâ¶¬ÚÌó6£3&è±∑◊§◊Î·/`yŸmìs' xSèè 69É$
+&x(âù ŒÈá¿ı>Ëg+é$ƒ¿ëô†≠‘ËbqÔFh]¿:ÿm¬§Ñ˘Ób‚:ÖÓ=‹\&∏3œ;+öYemÙó[ÔÙ,√»Ol	π°m≤êå·L∫X@Øx¬ãm≤∂â«©~[∂Mê™’6´lx¶EÃîëÚÙ[øàP9pûe„2êÜÁ≠Õ∑C≈Ó<Ù=»Å–M¢%ﬂ äoÜù6VqTûÊP*πIaqùR’Ÿ,z5iÿ3Î®ñQaWÈµs^Ω∂D±Ñ∞cå·Põv|˚Oﬁ$à»Súd»Ãg/8¥(◊xêŒ˛”%K3ÕpCßzLFúãIF´‰ÒP=3?LÎp£IÈ–∏¥ñ\È}–N¸Äëy2\(™Ÿíà¨pÑ9Z(lÖ—tÇ¡O„^˛VZâ∂]∞lXƒ&õ9ÀÓ)˝WÕÚìÒ:å’ÇËhñ@ÒÄr6ª	úJaHMLéyt±Ô¸É‘(¡1ç∂ÛüÎÃ^Q«ÇË[mÌ›¥iÂ—“ÇòX)^üªQﬂ˛ﬂ–ıÅù=ãR∆,%Ì™9 m/FÎ◊¯WIB¢(ƒo$k]´›˝€º5€"Ù+ç#ïsﬁ—Ì∂ú——8b˚ê{>
+Û‹ñLﬂ√w≈∆ß®1lcLΩâK;«uó—'$fD~ë/ÿO©7Y&˝fí⁄` ñèLR_’ôŒJ2Ñ›Ò$h∞Æàn[ÄEÆ1´Åã'±√ÕÊ‰¯ˆœûÔÃ(2◊∞PQãŒÃæe•»¯ä¡ÎÿIá=∂-ÛÄ4≤Bj«π¥d7 m≤k„áãpê˚~O‡€|‡ÚÛ—¶¿ÅH¢s>7Õ|Œ„hƒ$7z+nÚn Ò˜Í\vEˇS9œ≤7ÁÎ@ÀÄ√π†#‰lúIg%{ctﬁÊ~–MŒ¥∫ÈN„Q(9zÛí!≠mÍúr-P °Í∆˘«–Œæ ≤icc`íÄg_¢ﬂkŸH¶q,:q√õÏ{Ω√Ôµrs◊÷Z±y€ªj†∏èñdÀ6¨]ä[¥ÿ %èõ#ò€›|ç|¶±0{‘*◊±+)±_1Y∏m&8(Tì3ì≤Ìôı	0+≥˙‡è¬]π˙∑ÌLŸ´Ÿ±igPbÕ∑2(’ÏSÉœ_Yç‹k¬l†ñÇ∏“ª≠Ø®xºz‚gf%ùK‚8F!á’m¬öYò±©∆hÈ)ñ[_úI Ïó%QÕ∫úq•/»∂°•¸Ë ëB‚´b?fﬂzˇµTB'W(∂]Ω@C6fπ“ã'á‹‚Ÿf‰-`¬ﬁz©Ò°¶p≠¨œqYS1≠ïËkyÑétk‹'ÿxáŸä∏«M∆‘Ω˝·‹w+<≥è≥Â'h•·Ÿ Í°o®ñˆyÆ'*ê\B· 5ŒMZW;≈_!÷‚C‘^∞qW6çÆê´ÆKÏ‘√íñ∞ëü.0–s’*>¶Ó–âI—Ås^∫EÛÌ‹˛3ÖwßvwvV*ÊœÈm§h(I‹xUSá∂—óãøãkD4 ¡ﬁ‚2…/&.ã•(^KQL+>ÁE@~ãWxX‘‚´û∫¡ƒB]Íiz„¨
+s+[eìﬂ»õãıvFsﬁLvºô,x”ôÓº	p [Y≥6ŒUlr"8†¡–∂¥¢`π{ fVª¢Vo3Ô‚Èås®å¯%uºFeº÷ägt2∂∞„ú3Áaº”∏‡ê≤N„Ñﬂ,˚ó…™‰±zÒËmL§€<SãÒ6!'y¯≥€æù¯û≥ÿ¨hmËZ)÷Û°LKú@€jo–˜ö‹˛‡M¢ÑHNy]Z(ªNc0Òyó–˚8äô◊ç”0{ßúÿ≤.˜hœV˘ ƒ#9M>e◊Ò¢9t*Ë9ÎÉÎv”Ùb‰ÏÓ°ﬁ˛qÑ_;käÂ`œhî¬…Ù±ÛÔ}8KHÁ»ç»>9˘‚ò|Aˆ#∏∂Ñ´˛Ãá€Ò˛:G˛eDN©TÚˆ˚ÿèñÊ˜ø%ªÖ˛ﬁ\,ëﬂìøÅ´9‹ããgŒ»	áæ >VÊ1K: JÕcp*f]˙JÇ¯ ƒëkI#ÿM4$CÓ∏““áª0aR~4_ú…√ç<?¶)€)8Åoˇ˚àH\ÚÇ4tô∆ì$πË- JcæBÏfDé‡òõÌR—ÍıﬁE<;|Í€‰≥Ü‡ÚØ»‚øˇ·øˇüúöÅP©{C˙≥Ú˛€˛Ìüˇû(°&L5ıÔ¯üˇÉ∞`ï≈Äâ’8àjàm‡h–Ô‹(2⁄HÉs“hZ;	óD-∞Ç»Òÿ÷Ì%'_?)s±¿Û>ëQß{£q‡#µµ0ãÇîµöπ`¿%Èt≥Y–nΩ4‰CÍ¸4JA&∂¨Ÿ˝ó{}/àò¯ß#ƒÊŸ3˛Ïä•∂˜±wûv˚A⁄x\‹ÓNøß‹^©˜ 67SyUdSnaÊ`ªÉ\Jû√÷µ·±›≥9®Åê—?∞ı›‘ìöÓ*»à[-e’a&ÁàîKp∫¢	nc≥ocj√ï4+=«ÆŒbz,üNk´›é&'6+Ó. ‡}æ@Ü•	ÒÀRØz &¡'àyÃvØã#ΩÅÛ9æπái4ﬁ&k˝e¬"D¯W∑	¿˛2l4¿÷/Ék≠>Äûi‚;·t∑BO˙7Ù–X∫´›Öu≤æ ÆÓ.¸Â˘Í˘Ê˘√6i7~ªwÈ'lfø¢–;?ïn8ÎÉ-ºp0= ≤µßÄQ ˛Ø.≥_ø°|∂ã»Ï.¬‘ZÙ˛7¨˜¨∑ç/77<lŸ€$ÙaW…õã6”Ê_·ﬂßﬁÓÈ!QÏ#»‘ÚZ6∏’˛‡·÷Í}Ó#~irEAÍèQaSo˜ö)Ko§”˜ÓıŒæ/T> Õ|ª◊Í/‹ñA•≥¶Ï«Ùå^†“XâåÈá]œø@0t∏ºSÕ™¨ÈVeô ân∏gà-´õÌ §õX©Ìü,êêë2!Ôdbn∞˘∏ªAî$<Àﬁ¬_8Øù?h≥ï>èã}™1Ç¶^∑õÓΩPÄìΩfRÙ>ø™ÔÒ|c˝|≥Uêi%∏1`Öúã–\6$Ãö'G§Qùh/¸Ü—‰Îç``Ü&	P≈}ˇ0JÑ:.OÒ^; ›Y)Pk´¯ºvôÂ«⁄Dv'ôìQ9ƒ
+d”HX…Ú∏*Kõ`ìA¯…Ÿ¯ U–ºh‚Èâ8ÂC‚s´?ÏÛ^9¯?∏√û£t8Aê6≠úe˜À¸ŒI`±‰ê—"{∑?∏æp ÷èx*√~ƒˇ°nƒÃìLh≥Àû≥{çY˛ñ	¸Èø∫sŸCÇêÎΩ≤â É>aÌ2!πÑÎ2¬ö .⁄d‡ïü,ÈÆ,„Ÿ6q¬´e6SˆïI≥/Ò'ß•…£nËıg◊Ï’\Å◊@}U∆¶Û5[fﬁ¯“o˘ïÌ ?:Hê#)R¡Üx¿≈ÖÇﬁH^`„|„m„≠ß∂"“√—√∂˘ ˛∑Ò~£ŒÛøv·k˜≥k÷–ÕÎrˆcº:]d˘±qè£ZãiÀ`®G¡'˛‚·/e~Û¢çô·+eÜ/ñÈÊC‚4dÚmÅ…⁄±˛»ÙH≈Óùù›7èïS	3ä«~ø˘®“}ÒÂ3∫t\Ê'$.?ËñziÙ›N:´Kl∏≠è±˜(∂W∏õLÄuÊ%•üA€Ãx∂¸–—v!≈“)ªxÊè∆Ù;}”Áõi0u”™BÅ¬‡•Ìâûo¿g>=S˜ˆè°©ß5èùÄõ3èÖ9≥{˚#√§‹ç≠á≠®ä~Û;pÜÈ˜~c∞ÂL?ôÁLh¢m˘¡∆ó[ˆ[oWq!˙GƒO(È`2gﬂ®©ÍB6•ªf+r£|Û ç`≈ò∑ãKßd't¶‰Ã…l‰ÂÅ>⁄mpx¶±]huﬁ≤e9Ùˆ ËÒ]wue›ﬁ÷Ì¨AYãw¡±ÜO|jç(ÍKˆb/~8ÎU⁄—õvm∏óªõ8’vo]MÛñè°˚/œü$ª◊˚-Gıœﬁ^]o˚zFôÏmüª?»˘Â,`´Wôë
+¯#dê∆]∑zühÚbÔÈﬁ◊dó∞†ŸìßdÖ¨nımjU€∫Ü]_Ü=\&#ﬂ€√
+ÀÍﬁ,´KΩLÿzqMπÅ∞ôL◊qÃöÑ6îﬁ»§£ÙG∫ÍÕ%Ús“ÔmN◊€%t‰bù—Ìœ˘⁄πQ“È â√Eæ≤VÂû™}\aWï>?úG1M'qÿJ{¡?;xöëÀ›ÎÀrµ{}%µ+<3;ÎˆBw≈ª0J5C^4Ó3L˜·Ë√,ìªHπcTM÷ÁßVÃ÷„Ñ£ç}ÿ&˚ü–èŸ+Ó≤yØ‡ €é£Âæ¥P(‚G»"vØ◊€º‹n"\qUbÎ•lF≠J\hZ,ö∆¶jqgŒ∏V/Xãú-Î“R+}`´ì{J6óøj4Wìx∆‡ÄÜ)‹4’dDÙÜ éW0RYΩ{˛Iü@ ı/ S<‹‘Ñ˝g–F˚«—[Íß2âwS")ÛBïÚ˛¨Y&˙©]yY…aΩê=¿êm∂ ÒŸRÆÚÜÒ<3Ã`^Q—≈aJ§v~ÖEn*P¥ƒµæÏø˙äô!øˇ=È∑èjo9˝#€VÙ¢æ√mÕ›g[oÏÍ}nÏL±È•|AÓjÜÑ<CAcƒ“Ï±ÎïËO◊·H*èäÑîº†N0sH∫9>*O-î¡H+<)ã≤
+Q˙âËZ)´6Ú∑QäÄùR—dõÙo>oÑÔ;ﬁV◊Ù°™œJÑnîÛ¡(œî»◊ﬂr1ÕôıgïÃÑ#ØíôpKËÀ¶‘îAã–XA∏˚aÈ…JVƒÚÍﬁê¿πä&–[ß¿Ç0Z2)ÆÊ&≈ıÃ§®Z[95±Aµ≥*nù;Án[9HÁ‹tOÜE÷øÍ´Ñï	.¢¯j¡hÈº[≥"êµúWW©ÂΩ∂£≠d=bªóã>.ÌﬁçÖÍÛ%Û¿‚ˇ˜≠}á¯á9‚C—ÓL31è2‰Íg˛%…’èΩSKs©Ú „ôÜ°ò9ÛÅI&™/‹›Ó´(S\¥9_4©	kmÎzg°ä69	õÁñï˚^ÔO[Óª¯ôKÒoÕÿg) ‚Ã±x˝õ“éÕTº‘•¶D¯& ˝f!Éœè∫Fx˝ÇT+ÜØÕP1º–S;›èaxπ^£yπÏπWJûqmN™ª“£¸ò%XñÌmx˚Ωcì…πÔb‘ù(VJ0∞í∆¢˙±,ö<?¡∂v˙ñÅΩÊ€˜íeÀ™…í˝Ìf©£Jı◊< ÍÃp…ùßìÄ°3ë=˚u:dèx ≠"'Êû∂Ÿ/ı˘ub?Õ®∑≥ÔÔÖNpÖı~Ì”wE6CO&..›°Ù|U~óÂ"r‡ÿŸ?≈;¿?—•p7˚Z|"
+Y=µË]ò˙#öH	©öTÓ≤$v¯^V•l@-∂¯Çgå÷∂'Ó’¥¶∞‘ÖΩ¬XqXiLüìe…ÀS¬ãö”Q_k7HTﬂÆÓ‚ΩÔâ ï.BÒ9‡:ºΩ`PËo≤ƒ≈›≠ä)l¥ù_Èm∂-∆}¡RÉ»lÒ~Hí ≥D˚aìpwπ˛°ªë%cµ˛4aÌOﬂ'o†Y`˙Ú‡SîÌFÖ¸±*€Ω6K›n%si=e‘îﬁ∏ÀﬁD_ƒªÆLÜMoﬁ4g|2◊ÔæãöÕáºñ7∑.`¢!%!a%,ìSÍƒÓå∆#é˙◊ø˚#yÏÃíΩ∞Y˘±õåöZl»	4me∫[vIrHu±.W s£É:`¶M¶b´Ù)YÍzâ,ò‚,:8˝uÉøõ2pÈ ¡ti»Ãö%Œ«ê¯Fó2G≈ﬂR*ë$±€ÁÙ∞À_óW§≥ﬁqN$S9b≥Ü
+fL:Gó.ñ¶KPÎêFO«1uºdHi*©AøÅ4%Vi∑è∆Hãï3÷Ä≈•;Q,µ_™nzø  Ú!¡MΩÌ•HÔeø5)è4˚}óª)ƒ÷¬~f◊ÓsG≥Ù¡1∞Ω‰‡õ©ÔLΩø«Œ•?Ç≠]õ«S^$‰pYÈ=.ï~n4#ú√qvÃ6Wõ"©bïF≠¶L?x∞∞_
+Ì€ÕX/dÁÜﬂJ‚˜ö≤+[zé™<ﬁåÒÂùL<¶Xê<ìïÆÊ(öÈÿ¯ #òÛ~ó¡ “ªPdQåˆµ?OR√÷s˚∂dµ1∞Ct“?çwNh‹K‚»tây‘GØ◊#zπM®-„Ì(^¥â\gôú;¯˜≠Ûg{åßSÌV∏√”sﬂ°í†ú_Ì–î4Ì’ªÀVc&2·»îSXIù60/ƒ8Ó>îj€jÇ¸w´¨Ívâ’å&)+aœ ZûGÓ$Ÿ∆ß¿U)?‰9¥≤÷ó’∫›õ˝~ôb	ztôË◊ﬁ ;˛¥.è6'!FS•˛ÂÕZ¨Àf®√f’ÊnBí±,â^StRMf\T+ıò©∞ ﬂ<81ÿazæÜ˛fyÌÍƒ∞z*m–7´f[o≠-”__K~ç◊€XgUÍ≤{4K≠»•b?˘Uú≠Dç˘/ì„ÿ™NÚcÌ’[9ÆœŸ†®wÃ≥ûÚònêˆ¸ Ø ñLFÀ‰Âﬂ.Ôá˙…à|AºÁpÑ˝K≥…äèùdâtJeGfÈ(EÁG^e–§N≠◊√ﬂZ€ïEì;-–Å(FzIF@Ö€cG›©Œ('k¶k‰ïÍˆ∂—q™ù£‘π*~S&EXÌ¿òÖÙ•»ˆªÃ¸=^’⁄Isã®xÈ¶…ê˛rµ∑≈‘ç®ú4©”^¢2•Úˆ™∫BM…60§õ,£oÉÜbÄ÷ﬁƒπï›¨À÷≤ŸêfG¬Eµf°÷”jS.ﬂy‰Ä˘c˙Ωf†ﬂ®˝m*Ã‹öàsõdë†"¿r hcÖl45™Fµé∞Æ‹ï·Aø‚≈‡≤,z]ç£  k7§ûæfs«
+√Ok˜≥ªB[ó≈ ßi„å—mù<+˛˙∫≥˙“~j?k2/™«Õ3j6YµO—’´ ^∑o™^‘ƒZãíÀ⁄ó(–X–™otz∞‰µ(0hi"∑˜h†¯´\≥⁄m,ÈòuΩ`;Cµ÷¢†ê§í à‹K@O°Â08^†ˆf¡™ Z˚≥kú"CÄÙU…¨
+Ø◊¨ˇñqæ
+€ár¿ªÈw]Ï˙<KÑŒ£Æ\ùOJÌÀuﬁu‚_ÂaÉI•–Ô≤Œ“q˜ºﬁT∫≥áÍA¨n ŸÇç¢"L*S◊˙∂äÆ2öe,ÔRr^4ãye9πfcø"Øø¶·p2rÑ4GhàÈùŸWÊ£∑Â’4	dÉDDJ5œ
+ñëŸ€åñ¿Z“F∑”,Œ,ñkn0]Z¶TxP,XÆ˛grY-õiLz±:=}*Õè‘ãNmAiÖΩ≈gKOewïÎ3˙
+≈éâﬁœD√⁄>P]>ŒÊÒë˚x†Üªrß®4·—sgîÌÈ5A®πX≤n≈ëöΩFÙœÌï˚R±oTÁoÿ+ÛkÀ\pïæ™º7®È{ΩﬁB¶UœIé¢:ßWÕ:sΩvº)∏æË†÷VF¨^óÚL≈ÉªQ’ΩjRu´sÕÈ†E#-ˇƒıòl1°^$aÑ?5;û˘∫ë˜iAe»‚:·ëÁß'ôˇõâ∆÷öO3¬
+[ÊÙ∫LÈ©ËXOP5ÂU◊Ee^b\GK◊4˛8ÇçÕ	j£o_CÅv¨ò2˚ñ’9/í_Nå∂YQ…Ó√Mïp|Å¨C… ÉrÓ,ví·ZéG+è»—•L¸ò∞µ√<úË±⁄1Ï°V]j&„:ùüÿ‘íªäT)n—ñ≤E™´…}oìÏ€b´ÿ®8…7‚áp0AoÉ“NÊΩ¢—ñöñπ≤¶“⁄øk1◊-kÓ£Æ≠,,nY2¸ﬂŸJã˛¶ZË‹^ÄÊì'X0hCÑ>\·ëø>}˛µ~c–ó≈®7¶–b_Ø"Çi4îVw…t¶O·jZ™ÿj·<öΩq©Wµôåˆ∞X’ÖYçX9L‡.gåÎjÀ‰˚R«´Od£≤√Fµü∆ 9äé'ﬂT+√O´›kD+]Ñ‡É¨¥"íwH›7ÉË“2∞î=éµzÁ<≤«“PÚÇq…jƒ;ˆÊõ¿"ÿ©∆*n∂⁄Hˇú‰ºúò…Rã‹zå+,Lª£ôÍöI{æ∑dù'ÏÜP,?”h^æ≤ÔŒNøi˜XÅlêaû•àóÎe-¨é≠-U⁄≥Kù(Ë∆»ƒ‰,f∆Êe´Hﬂk-Á:Á$=è∞'™∑Êµ∑“∆Ó¨§√Ÿ(€jûB%§NoâS+Rà∏hC1À˝ÛçL∂ıC&IÒÙI2á4'/¬Æ»Ñh©Ø}ûGíªËWm~ZóÃºÍ(ä}ÍÂÚÃBuÈ[X◊Ñ√ô8ér8;æô\ﬁgzq`ù˚πp˚∞Øónø‹,∞êe†IË»g≠∞ûx≠©˛E“À∆çTa≈ÂÇ<DæCªGˇïz$ìYø†[ÑP~—:h˜ê(écVÔaªƒâ2-doŒ6{ÂªÕs?Q
+ k«|¢˜E6ÏT éˇs?IX…4e8@.0,…s»Ëˆ˚o'~Ë|¢ -8õÛâ|‚ÊD‘∞En%äb4FF±AGü®¿HŒ&q}"üH¿úH É'¬|w\ŒîDÑŒﬁ2Ÿ_&À‰	öñ>QÖê*0ŸOd·YòY¯k¶æ˜]Ñ
+á8cL¿'˝ùÄE'/œ®'—KÇx˛Ìünˇ¶â9¬ˇ$?sò≥y›ˆyZY0√tî„Ñ&Ÿè'È'Í1ı‡¡äü»G˘√†äc¿F†ÉFÑ!º˝7† i¿rﬁ´ñ·√69|xD‚»˛'Úpo‰·«ØÉDÚÄû‘#ÃèAG@í	öüiÚì§
+ô·¯#"
+'=ÚÏˆáo'æ˜±±lµMIÄ>h ”`◊†E"¶¿?tsJF4åvΩGƒ{§™ÈGD$æI∞¸éÎC7ôêK^ /¢Óƒ'bÒﬁâÖG	&µçís;·$‡§C¿+X:∏xèÔëlàX‰èLﬁ¿r}{µ+]b+îl∞üh≈˚§˚LÂê ≠ oùÿ…&i¯÷g©&ôf”!ßËIÁ`√ŒíÃwŒ¬PJ`ºü¶ˆ‚„%'˚ùì¶‘Ûl8ü( 'äb≥ò9E¡¸3~‡w˚˝[Í≥XÓo'NÌcÁùëÉÂr.(œgã—›"µã˘FOlôÙÄ<d›˛£‰^P1“9zqtº˜”îy>fjs¸â⁄|¢6Ôó⁄`ûy◊ô$º∏¯H…\Ùâ‹Ë»Ü3d:ÿ˝(˛Ë,3∏Ã%*#W˛âyØﬁ†ó„I|!·¸—Ìücﬂ≈ÍO∑ˇ¯¨öq˚s˚ÉÎG¯)∆OS•ÚQZpYﬁ∫ŒËccJ>f+Óèû^∞ÃõWùxÁ7Œ±.ŒJÅ◊Q˜ˆè°Ô:Ë+FÉ€?c¡ü¶˙‰£$òåÚÂ¯D9Óír†ñ5°) –«•q*$LYÚâX|,ƒ‚˘~"ü»≈…+<O∆¬«˘åà¡∞iÑ’…ÉË‚ˆÄ]XV¢¯¬	˝Ôx8ãˇ”Ù'≥¶2„œ_€ÊÒ¿5IÜ}Íx5§É»ªRÁ„a(Ì(Ò/Y^$>=û∫m&§kSRõ0çØlÚÌ†◊@J¸”ùé©Gv	{µÁ'_Gøâ‚7áŒ˘˝Ô≥ã«‚wËÑ.≈D6WM)lb8Î‚–¢‡ÛNÛ4Ó¢'O%]◊Ø≥Lgr’V6h k›àö≠üU21ﬂl Üél}IM8≠≠Û$„ã÷I¬wRO¨Î-ÛKâ∆Ó.ÀîË†EÆ)˛ô*„ˇÛNUw¡æºy!ïT´LR¸É˘§ö«”&√ˇh2;ïª·(⁄Ò=5¸˝ŸnÜd-rNÒOÎÃS∆QæÏız•ë.g√≤œM%Ü’‚iÀ<U¸sóŸ™Ú“M÷≤dã£œB’LÛèUY Úßî»˙∑áÎ¿6áı•_Ç‡•
+‡øÄÕi◊]ëÆ1ÊK≠•ULa]¨ÏeÖ—À™‡®Õî”Q9˝M•È(∏f*%g˙»úï,ÁÆÇb¯_õ6Ï!?;ÿ”Z^s¶‡±◊ÎV»P÷+¶ñ?÷Ñ‹≤&4≠·Ø
+OöŒbma^NÉS:ª‚
+sáRI¬r≈ÆsﬁL_GÀ0ñ≤d&“'K~ì•RﬁÏ «Ë9Ó"≤ä§»-∏B:'/ûùû>''{/ˆü€Hœb>≠†ÿT#¬–v%ZÁ<¢û?ïJüdê3UkDπ+ÿﬂPfê‡öπØíA-ó¬˚JÜ˛y:Áû¯!/'â’®ﬁ¡9±…
+8ÕBí…ÜØ/xAá±sA_∞J5‚ºydºÖbÖπçö)=à¥6ïB_ø°¯§`JA¢I~e.§hÜ°§ìrc–T=Sxàïµ4¶"I5UU+Ã0§iæ‘÷|Æ;¢Ö∑Q0—aßøƒ2È√7π~ìMÎÔπ—~~©%«Xû<ß‚¨ƒPIYí„ME·ÄJ9<
+‘–≤ﬁìµvTY”∫|E^v]∏yC~Øπ>M’ıÖ>»ø˛›âÏH<qCŒ&ÉŸ;*nñ©3|äu»˝ÂZw€m±ª¿‚Ï¨Qáîí Ä ´õˆ|_≈ò∫Wn@Ω}Á"QaFΩﬁK£”%Ωrp¨òHg±∑∏LóÅ#xóΩ¯‚7	„®†¡éÊ∆
+Yﬁf	Z~Ï_RØ≥Z€≤˝Ü^ÎA:üÈËë˙ÿ“ÕRÀÆ~¶YA (?”aQ*¿Óã?1ÉO^V∞ïMK—©Ìµ$Ê◊˘õ≤J~ÖÁjGóıd˘aFñ_˛ÂCg}cuÌ’ √óÃuÂÀ≤ÄúW`\…K=0^r¨Fûz≤K∆h£¿a¡a¨ ê1HÂ)∂®ïH»ø˛Øˇ˙oˇ¸˜§⁄Hˆæ≈›}o@∫25îÓüT¿tˇ‰«ßré≥j÷ 'HU{©É‘„È!ı∏
+©«?H=û§ˇX!µËòéJ©LW’Üa4Ì }«œd¡Ïˆêõø_ﬂ¸˙]¿0.¿ó˘Z ÄnîÅo¨ı7W÷ÔrÀ”õ|+M˝à`ÿ†û°Æ˚·úï&Ü.•ŸΩu»}SÊŸ]Kª9~f∑≥Mi∑)_Í¶\ˇmjù∫ÇL_TûU≠nä:m´`^”‡P©_2x=s¬€?Ò∞ÖGE€‘˙Õ £ˆ£ÜiŸ¡ºæ·Aû˚Ò®›÷Ûœ¢xóı&	VΩ_û¢!’X≥xH˙;áe˜±√T‘pdˆ√ _”º.ÚW(Öønı‚geãƒWØßπì\Ö.ô∆µB~–„h∫7°˜wéü¬l∞:Ëa‰v<¸∞L«Z'Ö≈Â©ù'‰«I›!V$ªfPQ@{4é£∏√käF€ø”zÏF¥óUQ3¨væÀgãEßG⁄vÍH2ÁCπﬁ)OtXø∞7µıÎô◊^ùWﬂy•⁄á[≈“ú’“õzˇ>ÇŒúoÆÄ ßX…1´íòñú_•7´öàpˆF¡Èÿ	wØîÀç≤sx£‡”jˆ©‘xÎvÀ˛∫8‰”∏Ò€ä}á0˛œfõ,¬F¡	º»ËÛ"ﬂ¨á§Ω…l÷Ìc=)G˘FøËjÌ8
+Ê´9FÕVO#Œ^∆X–Fgv „#
+xb´Ô‘,]I”ﬁ¥r˜ TRs}/=qı„˝tu<gËƒ”Æ-¶UÛöw°ãˆ‡ù¥˘¶Ë¢ùêgÏ@›`Gõjtø«ÉXˇ ‹ƒr«’õ6ûKÄY»æ_sg¬3g¿JÁ.RVH8”E¶íøN'ÉÏë$ç‹7ãeÅ¥,nr~‡™ª•Vê?w<Z® øYaÆW~N~IîﬂV»æÜÂÁ+EB®©W}ÇÜ|7ç‡Ã>è±ÄtvñøıY›˚!˙äE ΩJâÎ1y‰m/∫¶Ú>y®M‚T*u≠Ÿ“8Â·g±D2Ñcä˙§ã™Æ5¯'∆ﬁu†´É•r:¨ﬁ j>Üál‹]áaj¢ñF5úny<Ÿø±ô»ç‹∞(Â-ÇæÙ~¨k®«[œºiï9¨ïÊ¿ñ˝2Q˘ÕÜH—ÿz≈˚VÈe]∞Ô<ˆz:π‘KÜî¶π*YyD@ÜRPrËﬂ~˚L8=ÓÔœ¿˝uObÄlådóAR)´F±û=¿˚æQ¨mØôp IŸò5OCé øùÄ(ç„t˝@$∆€YÆi0Æ	ú„?GŸhXzÆZ]ì
+WÈ8É`\åvQ_ÄîÀH"òG9Ò‰Úajˆ˝`»3€∏Xúì◊xjÿtŒoH|7‚âoƒZèq≠{‰9lOêÂÄ∏∏ì¿!2Ihîø&˙¢¸[ñ:0JD1¶gHÿ`®®ú_ ßU\L¸≤Vç=€Y7„¿85D±‘∫æg⁄" 2!ÆÿçqwÙ, èd·Í∂Ì±2«≈Ç¿-Æ}Yk∞—˚◊{JlF–±GÊX¸$»n2“Õ“pTä%îòº¡0yﬂÒ/ùòG8Ú\∫4–ÌìQá†ßû∆∏rÆ}√qah˘+ÚK ‰≥)D®Å∫ãÿ˜˛¡ÂIÄé€˘œu∂°[‡√Æü—ÛàD0Ö€‰Èy!r‚Ñ4®ÙYÌ:ÅˆªËÃI∑8)Y5ù®Ÿ>fÁ…ÓÄp¯ô6z@”wîÜÜ”FãX√ı
+ey6ƒT5†Æc4@‹ÂÀ∞r i”cFY†´Î⁄ò(ÎF?ãÑ\EMIâtbT⁄jê<XôW åNÅ\zæ#Sú≤*–0‚*u“	íbX}$ûN¸Ì≠zpÑiCêíXÑé†∂àmÄ§XdGd(SV/J¥©Õ˛¡H£Ó∫Å-‘qu{ÃÓŒ  ∂b_¨ƒ—òÈKqkxp:ﬂtå2≈™ŸûÁ«ÎŒ
+Îÿ8¨Ü8DN´1*√ZÛ÷	&@™k˝Çû”Ñ,zh$ˇ¯QB)Sp'ÃÁªÙ~á¢&ÁÇ¶=÷Eçû∞ï∆ÿ∞‹é•Cu5§©JÁ´Ò)"x‡äùFÃó_™&ÂÄßbà¨i·D:bú›CË44Öá±É∂+Ô^√J{≈¶‰è?€ÊÈg‘yKmè∆˘ì—ÿÙ§_,÷uMÓ∞;C :9}Œ®≥™-≠}&©uù!q‰á›!†Âó/?3õO<òÚì?Y‰rT)=Yxƒ€À~Ô·÷+ÊŸYH¡Ωî£(U ZÎ/tÛZø™FƒÁπ∫ÊÔ`5á(A–¸[ag>ª.ŒY^p∆RV¿πîÕ±H≥0ò€±©9à$F"üÎË–“x6¬VÌ≈¿ßxÙú∂ùÏ¡¢eÖçÉ$⁄Ë∞]¡Å–Îı¢	ê1¬ê0?^ÜÜ|<Ãú0oQMü÷'F)Z∂ñôAÄí4p-$ÎJbg}$eoR	˝W§"÷(£YÙ3Ê…àÅ•dÁ∫Y∑‘+œO©sêÖÎ@◊•„tw°w$óÀ¯∑ÓÈ¸à‚Ñãq‹iÍ4€ vqÕäπ3&‘ùŸF{üIt7!◊c"?'ËÄ¡EC# >0Xƒ6uãNoñ>˚“e
+.a^[À’iÎFãöFeÊå–ÒfÒ£Z≥Ä¸1dÏ2¶"ÂÚcœÏÕ∂≥–8=c7†ö¿€} ⁄Ì ∏u™≥ Ö∑u‰Œ¿\ÆŒ¡‘‡éñH≠Í≤±qn’P ÖGi|äeóYÈUœ©!WçDíw
+‰yÂ°J' 9æ·T°{òèÅb[7≥˜˙PíÊ¸»@Md≠Uå{“î∫)–±mR¥S« JKJ£Vª4bΩÄÜÈ.¨…T;_Û[%»Å	Æìqö±∫9bÚ5Y„ûä®fæÜô˛˜äπf®Àbè„Ü”Œ≥‹t¸tô¯ﬁ%„ÈÎ˝~ÿ,XÇxæ`˙f®Zí®ã<õ‚ö)¡ï0ÓbÇ))XÎ[Ö/ÍêKl»Àø¸rk}≥˛™Ä\“ÖSxvÆ„jgéú~⁄√bûõ¯®y»hΩ~˘ô¸uÛJW≥¶-£VÖâuæØ‹§«É•si?
+£i*égT;K:ëS'%0Rıóï>¥<üpZ~Ë	,à√ÏaQ¬èoø†vj—:‹j«ç©⁄2°ÆjHØñ,ª¥€i|d©÷u¶NaæŸ(rñ1µ>ıQcŒîí´aB”ï∏tB8k¶Ÿ¨L∆OiÃ\òk˝JÌZfS»x^‘$v”≥“±i»Ê]?§ I¢Üœ∏µı^dˆ¬˘ﬁSÛôjÊNˆ¿^yW; Öó<#°ËΩn[ÔŒ©ºEüUÆ|õjã⁄2¯‰–c0*“_0ä.5È'√´ÑiŸˆí}‰œ–ÇCû˘ ÙµS≠ØÕ¨ZüF°Æ„üËÌW: ïıñå∂Ÿ˜8záﬂº¸.Û"HÒ¶“œK◊øË◊~¬U„1y¡ËQ¬Ä/JLä~6[e[õ)ˇH°ûxÕÜÀLÎ/5˝û–¸;!Ã aäi≈
+g1Ò(ÿC mú“àöp+™ëõ6Ú“uWZÀºpúkó1E&ˆµ¬~ÉH˚NjÎ§6É†ú‘ßµ xı|·Ç∆Ä≠?≤;,õDùRE™ıEJ:F$Íµ˙Ω~π{µæA±œ¸0÷˚s÷ÎKg>·jE¶§2Ç6»I—ò±µJ.N4«‹»˝Q.5±úˇ˛á¯/§E¢≠≤É¶H£°J¿ıéô;+|”Û∞˙¶`cµ≠öIAÃÕ…Ω:1<É´ÿ^Rÿ˜sÄß≈∑)€ÊîVÈ⁄Ï0œõN∞\ΩÃ	]∞ÃëJ7Øz¯Dß„,ì™√∑E§ÄD# ø¥3`kB6DgbtOΩKúç⁄5õŒS¿µÀŸÁ4 Ù£Ir$óMÈñ{%∫~©ﬁÔí’W £§`Ï”ç˛L‰ë9pıìû·ë<h˘ÈEfsÖ?!/ÁâÁ&ïÔ·IÙ˝yüïr ºÿ€¬Ó ≥·G1ÅÉIÇ%+5Æ()WÌÉ3Ùˆ˚üõæôùù˙çJÙÄÚ%∆†<›ªdq±v±™;XK$`E4“wÑQ˙*V}AœV◊∂˚}¯o±.2Ñµ’ÉÛÉ7ƒ~]à_K∏Âu/ó¶ ﬂN£ßßœ≥º4Çˆù-.ΩÏø26uS∑è9ÁU⁄ú“ñFG˙Ìë«Ó÷ ”Ø$t<P3^:W8ô·;Elf•∫[Ê≈˘ä‰1\,?µ»á´‚£›"FÚ´ËUÀøÌT{‰©ld;XÌg—;8ÏP…2˚.R‡˝ù≈•öÒmÛ˘e˚g3^§9Öó⁄˙|â)vÎ–G9˜û¨√.ÙçPSz|ÔÏ∑mv∞÷≤ıì`í¥yÂy:∆âΩ`z£
+w=‡éå“kàH‰Ä˚éıÑ¿JÛ8ëùÎº»Ú˘Ôüî/Û5®Œ{ù]ç)ÔL˙±+®Ñ›Ê0Í`˛®oêøÊêP”,í@—(˙ç≥6ÍÉ)KÒ≈ÆXÇöNDÚËR_∞°-˙B‡öæ/ÄµVÛZõm^‰‰Ÿ7ßã∏+≈ÎÏr´93êo1€¶9jX5l<3j	áV.ÓRoR"€¸úÙ{7î∂ÔÙ+wpcÙw‰Râª\òÿ1J‡ëkú∂#vgµ?›‡Vk∞º8∏_“ÀÍ¿d˜[µùlYØ¿^ô‘´. üÃCÎ·Jb[2„Î5GÅ^.0…NËïòh`Úâ`l¿p0ôòzƒDoix≤¢–*™¡∂kÉˇ_ÇT∫"ÚTØÍ≈∆=*˛EÌìhÿ≤{Ú‹avd˛—6SˇÖåù»ÓY∂[vè‚™üØ£FF™ r}c¶"∆ûôZÂIåø¨c\˙_Qî´ÿ;‹≤àgcv06û∞∏'j¯ªÿÑıŸ |√ì#˚*˚∂-ª™i°˛‹˛ô
+¿¢Øéñ Û∏ı Ã•≈lHÛ¿¡∫¥zÔd ﬁoxPw”s∞õSÄ∫_˜‰Õ4'd›r‡Ä√≈Ú⁄Ù÷›©∏:—¥"<Ÿ{v≤ÿTj§#=æ‚»+∞!JåºHµ≠:2ﬂ™∂œ ¬æı:ˆ◊∑p’.jQ¬lM⁄ÊB‹ÓÄºÕÉ¿’a»îDn*27°õé‘µ vˆ‰Œö‡Ÿìºz¢◊êz¶ä~Y∑≠‹ÄfïUsÌØ∂/Ü◊2Á≤KÓ\&-2⁄k≤⁄‰ñ‡Ã–“`œÿaQÂëh€çÇ¿'fˇh¶Í0∏¨`'BG£fßùÜzs É±6?&|∏Yé‚“:öqõ¨—0(sÖUfhó≠TÊØ…õ|ΩlC”î»;∏˝á√ßOû€ú«ùºxz˚üoˇ”]wZI¿gXÇ«∑ˇqˇ≈”ÉΩd8»„|(ãSi˘rs·—ŸÛ≥Ωg÷C≥@9ã¨TÕ#≥ï∞+πjï|á\?¸Ñvn˚N:Íy∞ƒ}h/GÓFkï¡MU9† Çµ°-]qÖÜvâŒ_≈#…âÛ&f‚å4≠ Wëµ^eﬁ¶iı›xîdb÷ç>V!˚%◊E#ˆø9;˙˙˘"´S#'Vº›(d®ùÜ_‘⁄ÕE—¬jF˚À£ﬂ÷çnœ>ZÆ©õ«hèèÄB<?(åX˚»ì∫I¡#≥O*◊çŒcb/éû<€;4œK<aú‹7æ{rÙÏŸ—Ÿ©Ò˛—ã£„ΩŸó$SñŒcEûsˆ¢n5Nü~m^|yˆ˘‘Îgãs±y ∫Ë.˚dïwÀÅ’¿ª™?±u&»Rb(õ¬Ã˝ø¿ññjç’T2jìü˜∫ttÌKÙÿÁ>ûa*%ØK·®˘M1kõ¿é{õn•@Y ¥ŒuÙlhã•(∏ûÒu˙˚*≈?°µ·
+ëèni h¥Uäxﬂ∏É•Jyû¡;Y)Ko#†‡«Üﬂ≠K†õ˜WüGW>•œ”Wx∆ÏM-—˘⁄◊∆Ûí◊™1J¨ÍéFiì&J»’&!€¬#ôïÏ±HA#í‰ZDtÈ;∆»Üº„™(¨Ñ‘5:€Z£y{⁄Ôé1)ò“(hi √j®◊”‰m ÙùLá¨LûZø	ÆÌè¯ß®Ç≥è;2‘µñÆM]>ñ}¶òµDhBG^•Xv1D˝å„èÆhû}ìå)1%E˛öA∂,ìÚ«ı `ïª‹≤Äzπ˙@#	lYl`Í‚ØœËà∏4NÈwA*·Ò∫ ≤@$c\Xé6ôÕäπsó–œ™~ÊMN¯_a0ôCxrDÓk<éòÛ( $Á‘OùûUÅÅˆ⁄0`ûÈK≥bUWUÎÃ˚¶d P.2[˜€ºà%ñz∑WÎV\¯h£S[ΩˇK'Ÿõ§Q°QƒRf•Há∆±ΩÿZ¨ë∞xˇ' ‡PB·6÷fÄv[ÆØ©9Îïµa≠nl@v—√h¢ÿîÙ(ˇ4ÏÊéŒí,„ıfvî‰’¢äyGf=>ÚBÖ¬´úÒ^ÁE„◊jNñår≈
+<3éàî≥Œ|X4ƒæ◊ﬁ6 √ÕRGÁun.MØÕä ô¢+Ll‹Î "]UÅfΩﬂ"ô¥øÆõ„ÎÀÄÕirﬂ·àá¯GfÁOÇÑ.Lë£¶]rö"Û]ÑMVÕÖG_”p8eyÇecûPX§Y≤≈hy±î…h·—7	RBwîÖ◊¯<ß&?ÅŸiÓÚ1‡âü–âíô≤öò¸Ω∫îcçπ™74úÒ¨˘]_PW·¡ô;È	çôH∫òV8ˆ™9^5asö»Yc¿‹˝Ñ≥›uõ∞ΩM $¬Tøˆ3h®ªZ¬f_õstú°}èGzàrmªñ7˙Õœ¢n∏w?OLÕ|˛uw÷Õ[Ü£¯öbIa|¿&√7⁄ÈÄT¸ó%ÅP|°	5Y÷è‰ÕaJõˆÛ®ã¶˜€6mÄ©ÎåÈ∞è&zbˇpÂæ»'ô}›7B7å3(≈ò \Cîæ*9Ù)∫ BıÌ¬-MK€⁄»§ï≤œC#ô,UåπÀÇÌúHóùÑé`p,PíeÙÉ´FÈUYÀò…¡ísåíú.<rˆ∏HçwŸ¸?ÿ≈˜öh^ıìåLjÇˆÊF+y?Ç^∂Ï»ñhf}ÏO’«T‘3Ûë·TZêœ|Uø(ŒΩ”LJ=ˇ¸ú¡›ØôÜüG˚≤JA™}?“∫û~e¶û›j#mÍÚ»Lœ«…hL`YâKÆ∂Jd^u?Q™\òﬁ⁄’±¡D
+Ä∂L .2úgô9+åÍ®™ˇëh™≠{P’’H°mCw‡˜#<d∫^uäã;Èë#mÃ8í{◊ëV∫öq–¥/éún>H€Ÿ 7ôcÕ©Ê5]‘Yé4¨Œ≥»Eƒë´ÍÊ/Mãl÷q:rö¬”µıÚHá›Vƒë_–Rp¨∆∏H$“èÛËˆ˚I¬P=Xfƒ^}+„O˘∞^ç q¯˛˚ÕQÒ˛˚Œ‚˛ªÊàuﬂ˝ÍÄ“2˛™6 láºÉ¨f˘®Ô¯Ãkiô¯™Ø^õÖ¯°§Ph√ÁßoGDÛqmÇD{≥E‡ÍKËÅG›<…¯†gtSóp¢!~Ø“¡„<rœ∂Ì’J√YºêU≥∫`!çáÀ©ÚôVÂDí†ì„ÈÅéBÊ:Iô7ËÿÊ«±MåcõßM*ú9p¶I~sOYoÊùÓ¶Eûõ6	n⁄g∂iì“¶}.õ6IlÊõΩ¶m⁄öZB—.QMï"hc∑ÖyH#`Ö1!áêñ¶2®%%Me`ÛNGSÈ`™T4ïVÃih™å ™ƒœóñåÇË<´ÃBæø˘∏î©≈ÿìbé√SçÈV
+ºu˝cÕ=*úxÕ∞D6mõyäG-Ê*û¨{FŸ„∫«P#Yw-Ωì¿1o£QÛ/O†"∞`Òm Ωƒ¨/5–S<ZR?¶˜*Äó`xz¸ï7ø,7BÛ.øe~U¿ÖÊMvGˇb:KØ*˜Ã/úﬂ2ø™pv«0”2põWôt[œ®å∆m–∑]ªEôvHﬂfÕZ≠rjÍﬂ·»◊ôbhÀ≥Ï$√`‰‚∂…√Õœó	ú€ø¿±ì}!x ·/ù_ùV√QãõBc‹7˘”·¶ÚnK‹Tﬁlãõ‚’©pSy∑%n*oNÉõ’UV‡ÃvF&‹¨lÉæÌv∏Yﬁ!}õS‡&Á—¨p≥≈J∏Y◊Iéõ∑äò∏5/TTl!-–1k:î,Ωﬂ-Ko∑EMÂı©–≥Ù~K-Ω=öÍW_ª634°´vãÃ}¥C[›ö€û}sŸœ
+ÖßO	ïõ:,µ’ìvµ_@p¯9œ≠-;{i:Ù.æﬁªã/∑EÓ¸Ì©pª¯zK‘.æ<fk◊]ƒ≥3·µnoå=¥√jÕŒ[ûß3≠ÜJ∑L	°zSÒ–¯·º–ï[…
+3ÓùûΩ‚¥ÚÚ&¶√\Â›ñh´ºŸg≈´S!¨ÚnKlUﬁúU´´¨ÄóÌåLHZŸ}€Ì–≥ºC˙6ß@L¶¥B C(°cM9*Æˆ˚üìÁV`coåFºä5+◊^I_LñFTÕÖÖÓ¯}¶≈Wb EeúÍeñ˜
+±Zß\œÀΩƒƒ˙ìàÍfÏ+s±ÛYtm¬ëôèùpHa7'…Ì˜› ÓÜI±§óC(	1
+≈i@N–uîÏ?’ªxê†èN®û¥µ&b0pizº‚⁄8çü/6 „‚˙Üú:»õ0òœ*^eÔqΩ≠D]*g˙z*¬qqÄÒSye9L5ö”{ﬂ„(>ÑŸ˙õ]√4¥ <ÁÂÇô›õãÛ2aÆƒ:›/n∂'f]S€D}¨¶¶I±5c-ìRku5L‘GÎkóËw“¶t…ΩU-ô¡íVµJ‘}n(s1My>¶jææ"â
+W”é~ "$eXµÎæ©5´z#:◊Cn·~.Zœ-πÍ∂+f\uªÉ®∫ÃöÀEEä„(oÀc©∂Æöm[å≈PC§8ñ‹^[ÓpÀ‹≤°pH±ÂÇ°∂<lC¡êb^∞–ô¬•ö≠æ†ÈYŒ∞ —;fNV”˚›œ—Û~éæ˜wîuSZE|i§'sOßYF]ﬁÃ Ofi¥M	1?Íò•π6d∫|èô-Kïî§çØ†hBÀÇÈ+” À˛M(“•ñkÜˇÜŒ[ j"´°CÀÓFåµ• …HñﬁH›$oÙ+zïú≤7åöÑo;úä=2Ñ¸48©ñöÌ9û◊È‰Óß~cíc}ŒöFøÍ;Í◊∞|5¬,‰^;WΩÛ8uJ√‚y®Y˘ä˙#"qF„Ä≈.≈∑…Èc≈[6˜VÛdLå†ˆX·›c|]9\˘:w˘yVXÇØ≤NÚ°}•85◊ûë¸®-µ'á™∂ó_ﬂûˆ"`ÍaVV]AF'ù8A›4˘HûE.+ˆΩRãªeµ´tÕ0MoÑkZåπ∏ßÛ,Áå¡t˚[ìoIu47;ó7÷óQñóÓ„Ä ◊§ÙË[T˛(,%i|GOÎMD⁄èô|´™ïŸÄ'W‹!g xñt‰ epSº–hä%fÓbt	%tíJáG~‡‘R[z9Œc˘µó:g•óñ0ÌüS@¶€?±d2„gG~Ÿì˙∆nvoo¬·P¶ó◊_P'–´‹ı=™OÀ£W⁄PX´2‘Cö º+#E"m% ®¿ú÷u¯ø∫8ÀOk9ê¬◊Ì∂pBcóü˘≈ù·…h:≤ìï‚Ì%êÑ1=÷∂	ëM”ˇg-Uπ1,6I¢AúÔY˚XΩˆ À°$|æb‡ÖçZ…ÔF^«<õ»–S¬;~”=Ü¶˜î˝kx…ÜÈë_NàÃ„œV÷ÙH
+å˝(kozF V›m±ª£OÍ©ù)™—pëD#ßÆ{¿uqîåreÑuô¸4Rr.˜ˆ{l.BK¬8äY∆÷öƒ˙qÊ◊œıÇ UÈÏ—¢M«ÙxÉëù≤5µ˙{ÀB¡K’clıGÆ«_.á±‘ç∫"◊≥◊ï◊N—QO◊fm¿®NISΩ˘D?Œ≈åncm«j ˜ÍU´`e¡tC≥
+1@‹íÿÄ˙ÖS¿.a8˝’…”N‚0¨∑„Müƒ∑ﬂ>U≥gÄ¢¨≈Èd‘,®p,9Âh~Ô8RßˆQn€Ä^/“!NÊÑR3¢ßvM*@#Œ«“E„9ﬁ∞t¨˘F∂≠∫éÏ=qòËsÂö¶ô˝ù'\œMÒQfPG%Vúí⁄nc'¿©"L–ƒLﬁ«Tº"2ÛÙœ	π‡óTY0N >k9Y#6P3GiNvqK›^ëÉAz—+u˘UÖ°√aœ$∑∞≠Kﬁt]£Z»µ£ÙÓ,îﬁmKÈôÅÿO∆Åsı™°ûp4ßC°‘n]™b ¯™q†–Ö0îª®…¡cÍbÊ3•<ÜÜ¥:¶qî’˘ö{ö1‰*¸ëQy?“©ÌÀ£Æœéc¥™òTÚÖÒJe|π˚,≈Œ4"˜Tõ4Ò∞XÂÙkˆ4G≥:…bõpl≤‡áQä≈«å8RKUÃ≤ØÔô
+(û¡ Ôm…kÚåﬁ˛S¨;ß˘«ìdﬂïL?◊C1—óç‰míIºMÕV_∂6ŒÜs¥‹w˝±HüDK™‡´∞æ√0s∆«p,(6 ∞§íÊ{H{=NYô◊Ç§]Yf<«uyÊû(◊uÅı¬üΩ“67ÊÕG‹f<*öÎò4LgëÕd£¨∞ôx’Ò>ˆ©8Öµ·®zeD)Uˇ´Ìπ]Á° Wç•©«fuì˙ärc+∫ásÂ≈√Mlk›ökßØ∆5/A	ñîe(›ô})J6,áv5*◊^i ®¶¢ü)i˙Vñv›…π„±ì¿g_∫háÎ¢4Ö6à7âŸ¬™Ü\ÎÂnd’lãúÙΩMñï~C ´ng√4Êv«,·¨N-Qÿ˘ÑÏ«‘yçÑ‰å’„.ÁW®O)¨…n±™µïâvjã∞'Üˆ≈¢äe JU∏G,NU÷Jo_bÚî›\ëú˛Œ p£ax3VV_µ(n]GΩZ/›∂TªË«≤b:1MﬂÏÎÛ˜ÁïDñˇñ≈“m÷Iôá:∂ÒeóUﬁÿ–™„t∂¸ˆœ∞Á›ìàÄu≠Î∫Óî
+{⁄˙„
+œv]ı6n™;tÁC¨ÏúÉÊ¿ÓÉMV êˇÿÏØ¨ıs§˙(¶!KãÒyà_b"≤ñÖd[…u≈œ˚ΩO®:ﬁÎ¿eV‰ñ^QfÈZ∫á’´J(§Û´ gÔ´˜œÔæcKd^á›˘\k=µ°mÌLl—ÍºŸaµ1’9√°ãlŸ_‰ŸcuD\7)eQã÷q·Œ2Ò=Àé¥(…2Ás⁄¯XÓˆ_BåUa3çPç	ˇ°øÅüæç=\ÈHØÉeÇ1f ®.ö∫z+q˘√e%'æ	} ]h,:è	áºéNà“}zΩﬁÛ¡Ô®õˆﬁ–´Ñ-DO1S.Ÿ‘3µ#MïvS{µ¥ƒKÀËÕz’OA¡â˝µ‘qÍ€:O∂Ì‘û˙ˆ¸$¶µ÷r∂k˛òVöüQ˝h◊ø’Cä*XSrìøXÁÚªp!∂æË.Ñ+±ƒ™Z4⁄ƒå&›ßn¸–ã~
+ç˝ô◊nñìâÓ”Æ™ΩZ÷ûΩ˙“ˆ+≥U∑/W¨ŒN±6µ£ıµru≈¸ZµäGDÜÏµBØaT⁄B√/fÖY©ÌRÂÒå-r•X9p¶ü◊§m9ô‚Ñ¨´jÀ…ÿîV.}ÏKwÛ. Î•/F˜•æ]äœ¬£Îåﬁ€îaÆL≤QQ¸\Œ[≈‹^¥0Ãä2æMV£•µU˝¨Ü…†>À$xÍq¶¶-lÀ›bÑ[π©˙zA¥B.≥†¸∑Ve)g•‹3€|∏;9˛yÂL8`è'@á¶¿
+X Xç∂1N V¥Eã∂@Ÿ¢}‡Ω-=Ïi≠V$évd€·3h`ÙR®¥ eÿ3∂íªNÅ¸wàÀ
+·/i≈§z¥/P{8æ$«â‰8>jU6Ÿu∆~ Ú¡√"ﬁmãΩ2¿ÉÓîî‹Gﬂ%Ï)‡Aø-ˆ·ÁBÒˇ  ˇˇÏ}€n#Iv‡Øƒ∞ªáîG§(JTïIï§Í©©K[í´=[(L•ò!1ªìLvfR%ï,¿Ü±ª0ˆa`ÿã}ÒÓ∏˝bxÄyÿ10ˆqÙ'ÛûOÿs""3#ØARó™&—≠‚%3"2‚‹Øè≈Ö˝A≈%ç¿¸P˘^$Úçﬁ^§c∂?Õ›0Ä)újNˇ»Ùø8qkŒ4ØN!˙ıªB√rF:œa(˘¸:oˇ‡ ı4›ØìíøtS∫î®oπvtq=çBıõwFpY∫Æ9"lYæLıùı6˘≈y˝£8±(%hª¸R◊…'Â{ùÈ1•ÛÓ'ü`ª∏f·ÊÃZÒÛ|Ûı7?Ÿ∫»†)VÙ6z≥ó¥BÔπsIÌF›ç#`‰¥Qo’I}ë]_ˇ‚û‡Ædì‰¸‘í´ôô±‘é<”=57XòúÇÆª8óéu˚FaaJÙ*„fñX‡å"ÄG≈≈W`‹Uîó–<Ø\ ≥≤g˝SœÚm≤ã #ØÿD˘Ä1ŸÿÆ
+√£Qs-ñ,◊¿XnwÏy.qœ7ÿ{ﬂ{èÔS6ıo∆AËú]5Oi¯û“!3QÆí—)¸…Ô$væ%Ô¨:å]U*"¬ƒ"÷aãΩ®,qpÜÆ3§0'&÷æov@îÔ≥ø—ë¿™d3h;0ç› §`}¥‹ﬁ~Ô:@œ^ê&yfπ÷ˆ_0W1r’Ô9√€î«kKè°åicWçÚzÃÚrFëÈ∆4ê⁄ŒxP€~Ìcî1⁄˙ˇ“ +…à‰/ã’õÅc±≠`6}ÿ˜¨/@r˚€aœ±»Ì?üˆ(®õK#5jkÄä¥UﬁÛPÇÎœöAàâGÄÏˇ]~êH<ÛBBﬂÉßçs◊´iÇXÈÈ8Ω°úÑW#§ÏÚö∆ı¿ÄêD⁄[◊4Ã¶ ÍŸ‹"mˆ‚w]ß˜Ì÷u√ @]¥ÚdFé◊ÄÜ«‚^f¸ÿ0l`à çæë«níÂ∑,$J”Å≠Û–7:…B	 NÌÓH¥ÉC£‡åÑ;^≥N·éMŸN;Âëµ\W“û£ÉﬁÄ=8!»HÌ‰;iéd‚ÃØôµwu†+tBv@Üwımz§¯‚<ª
+§wµFŒ◊›™Ω!≠aÔ[¥;p´¿.z®k‰¬°Ôüyó[µ6∂ùU¯OSh€Ya_z tøgç∂jÏ k“∑eó˘˙k«˚[5`5bo’óªdy›m>i>!ç,ÈK¡#kêÌ%é˚ïÚ
+!A‚∏ƒ*V`¢ÖÌ!—¢H⁄ÈS©ºfú1GQΩpñßêêßÎıƒ_†P}kx4(£QÖÑ∂Ä¶ü”∞≈&”‘•ß∑@ﬁ∞ ÛX¥›ÿú€\!#ø˘ïë,ˆKÆO	˝SqÌÖ#í_∑ÌçÉo2…ÉM∆øJﬁç/≈R>Ã∫Hpöìd ≤ 9mé<÷cP…ı∞Á:E§ôëí≤§Û‰¶«≥cô]í∆·Æ7åH_È´:˙Õﬂˇ"›™
+û’÷ä¯b55#≠qÅ0–’¬±ÇZßÅÁé·®ù!† û	SèõE21Ä.ä±ö∞√0‡–&‰™vL~û^Ø0ayi‚“ÏYRÌuÇDI∂6—÷&€⁄f`µ2 _í¥y‰ﬂ˛€•3‡bÁcî6∑∑Hö8o˜&Ñnñ.·Œd”üÃe”G õ ÿ1óM◊I◊e4é‹ô`™∫Nù®A´ç[¡ 1n¡{•q–RÒl´	zt–ÏvâˆØ+∆4ÀÑΩ•ï∂ñêßc&cV££®»„÷÷A>2mËŸïÙÇg;Y+wÇÈ¿…ó:AZi<≥∫†k!„Û¸ÒˇÉŸÊπS§¡j˘i.lF–å‹|◊`=õË¨èíÓ+Å\” ù«®d¯Fgcã≥öZÈÇ‹Ë4fLŸD–éû)Ê:ÓY.®6ŒPñ◊Úq™ Îê:„Dd…ÏúNq’"Í±ç◊∆.Ô0Î≠¥°{31ﬂÖïı‹wlÇê†ö∫Á…« ïÎ_L¬uΩûGˆÉÔ∆‘∑”{Ûä¬ë`Y>[SË-I__IÑüQ≥õ¢˙eË+”z∆%Jd8íÆH–ÔñYUπÛOrπÛ⁄ÍVÍò'¿ff•àYi*M˝ÆÆ^Yòi¡3ÃÛ–S^xÌ«zEœ6&In&÷Èπ∫ä•¶ÎH;¿h`Õ Û
+√ﬁ]≠`=0JJ)F5=F f+ph%9Ÿ≥’‚\Å∑ø˚nÏÿûÜ£™b˙4Û»‘ÆHb9†¶„_’æ¢!Ü∑iÆ¬ ‘¨‡l¢pÓçÆ<†ËR.ˆŒ¸à§¿òäC⁄«∫À3?°hn˝3ÇuÏ‹€!≈â‹™#‚ﬁ—%2’«ÛlÊ«√g6:úgwq8wItG!*e(&du’îÿ :ú¥éJ%oUâ,Bó∏d"¡†ñÿ3íLíäRJ=◊SÅY1SA…ÙÙÍÈÀ1^∏Á⁄¿ü ˆ|ÏÒz‘~(æmdfÚÚû„SUâHyàjQD%ˇ&P#ŸJÊ"Ù,DËÃŒG’’[ÚEg…§õÀHŒgdÔ»d[ ◊π¨ö^÷ÌL+Î∆¨zı±≥ÍùàzZ,‹ÔFsIñwk;s”4∫®r∂I8∏öf∂±~‡Êi7Æ≈∏E˘ƒ¬«!KäRﬁ¢ÆƒBPº\Påâ
+ıõ/Ù™≤∞Ω1
+(æ'·7eüØD©îY~Ê8%N5R≈L∑ÒäG?Œ±$CdµT¨ •ªìì@
+6¶/” √rÜﬂŒ»˜.∞ôQW‘◊2êàg^ˆ‰∫a‚=«Ø5tÂP◊Njﬂí®®sOVbéhWñB´zïØ∆	æÙ<,÷îZ÷ˆYgπú©o7∑`ñÆ˛Ü≈tµiñí∞Îw9√ ¨X˛˙¸Z<˝OI=e≠I€-ûà<!∏ÑÂEø≥OÃ3Ü%ÕºŸ£.Îîì¯,ÿ|;CÀuÀı¡ç≤WÃÛWä∂S≠6ögﬁ U…aoä∫ÕÚy75í•pÇπ8mµv∂Ü≠À"Ê1ˇ™Â€º'ÓÌøÜXãk3Üé+µ1ı•Ê\]¡ ÂÍJyæVyç±Uª¨4TÄiíXœtPÑπél" Îò’≥e'∑–vËgˆeÀú1û¬å4;ë-†¯I›Û
+~µêï”J4XcµDhë¬YÃ@“jûˆÆõ‡©‚™O∞ô+ü	˘Dtﬁ¯°˚â∫+UàªÄs#SUm;“πÊP>K(ïç#Á(B˚ã!Üéﬂ~Ô;è“Öàùıƒy˘uæ≈YQÜæ™ÛÁ“Ùü‰”Ù◊LÑÓ“ÂJ$‰.,®ìPpç^ƒÁÑ(i4Y+”hÙv_`}¢Ò$;ïF â∫3ÉΩÆ{ß>´È, ≈≥	è0∑U˛rñ{9ß@:ÉæxëËÏ¥!5vöû ≈Oäíz[”∫bÏú2¨%°U≤BéŸÂ[É·LºΩ“õˆ€÷HKÖù i[YI£∂Á$-iyˆK“◊P3ıZë…} â-ÿØq€óæc€pÜ‹Œ
+G=πH ”Î≥I0fˇ *zMﬁcÿ˛y˜y¡!ﬁ|Òé‹‹lœ&éDkÓÂâÁækÄ∆%J[¿ó®∏KΩjY„⁄ŸôRzˇ≤n»+.lπïç/ı·´=ˆŸu¬≤`EMD®ÊS¢d	»2à±‘a≥Ù≥ã6O¿W‘Â∑P®hp‰çh7§ÊP–™„ÉœÓ~ø˘¶”eåè=ÊÚä#xÁÇ¬”Ñ»≈>G–≠∂"Øë>ìÙƒ'MrÃÚyw]∞{ÎZn,xCñÓëÑﬁhÉ,∑y")ãÕß¯;ﬁ*mÉtë Ë∫≥va8÷êa OQ¬:v≥ÿ™≠êïJÀ4À≠Î3ÀËMúKıŸŸÚY˜l];7Ê˚ãùK'`è˘
+„cı$7Î≥ıUkÂÙiç·1K#Xøaæõäú¨F`5ﬂbzUº ˝˘…Ê◊6‹ÊV¶}gÍåÓJ?´ˆ≠ŸM1∫Ò9SR@6⁄∫n\0øTJmπ–v‚Îü =ÚœsCgd≤G“Z7à5ºb~ìZÒWc‰ß∞\Íoıw√µN©{±ﬁ‰<–Érkº ?[¶ùıïS¯&:k¯âh]/+îøzp/Òx∆S ≠ÁåæÔFÛú±W}QpÑWñÌåú´sEﬂ‚Á—%amv»g¥CüûµßZö˛I–s:¥	PÌ!á¯ß7˙ ˜Hmd¥é6[v~kam≥ÕdΩ7∑jEl•ñ–òLO’(-Ù≥vÁÈjÔIç¯l?∑Æﬂ¨.¯(i˚-R›KòÅ?œj◊¿Có¢ﬁº6,´u∞Hí∆FF>Õ]
+‚.´¿Æoõ=ø˘˘5ÔÚÓÜ?å®¶êy“»ÚŸr˚t˝È2”ô≈S◊v⁄§¬ÍÊl⁄GòèÕ(>HaÃçœrmemÌlYÛ,ıK	D|YO≤.Ó’ŒÄÚjßÖ·ø ;•¥ÚTøe9;hJ°uı ¥Ó9NêÈd-∂ı'§¢ãun˘©mIH%Q›üÇ""ëYCªB⁄]â≥G’FõËmbƒEd°	ŸÀ≠ZAˇÜ+√ú·0bŒåÃhﬂË4≈7>—™«_#À∂¢wÜÁ»dWıoåI*´„£˚à˙ÉÛ¨m6`8©˚œ∫Î¥}j¢d,<}ÏrË«.≤C∏kÊ©ïÕ√bM8Ö<≠≈0–fCÕJêyívJõ®+H1gEdyjC}m˚ÿãSÓ2˜ÁÈqùŸ®Ò¢ÜÙõ€£º,Ô±`Ω«£ÕÚ∂ì9*∏Ã3°ôª4pµ®Ùjéà©≤êST†7≤Ïøl·≠IM^|ÒÆù≥ë+sûH˝0
+‡æ∂]Â–)*#~/ﬁìq·¿äíÊ¨èí
+¸p˜I˜ÌÚYiâ»‰Ä4^[æ#*X/d¢X∏ì‡RﬂÕbÏmüïÜ:s˝Táãà†Ãû%æ“ÿsŒ®Oá∑ˇb	ô%∑Bßæe[™,$’µ∞|yiU^æ\W	RÅObı0?ûıı=!«@¥±!îáÅÄäèGLUÊfê§“y+Ï‘r.=¯~ü`Á`§ûPÔÈeè⁄,¶ﬁã
+Í-Â©+®®ˆ3ˇ”®ÎÂ{∫_œ”√˙ùÃºNì˙ú&Ò8MÏoö–€4C_ìÓﬁO®ﬂõk˜"œF[«ø_O”#µ'Ëü"„b=VVì\m]∑%b–;µªt9]aÛ§Q}M<Ç°6~qNñ»âÏ~∞£∏ƒªåtF˙YÇKK‰5p,J0fÖÛ∆`øP∑ÔÒo9K31E!≥∆˝‰°-"JwG€≈hJn¶Ïë#ÍluÂ¨ÀÉ7u´ÁÊ¸a0Mﬁ!&Vã†ü{•kt–Ùqô¯è&2ÄÈK„_P˘s…ÜïﬁSÚC.;≥‡R_•& åø≈ÔØ≠˙FN¨S≤µµEÍæszÍÎŸ∂¢euSû∆ÌÇú!9≥lˆØ=ˆÛ
+;©e°Û3äu G(ã˜|áKúY-•∫<Ó¿N „¬{çﬁO≈•:Y…ù”f>N∂∏œ”føì⁄Q˜)7ı≈JJ»õÌ4w⁄<∞Æ®§U˚5PÏ◊¯$ßÓòGéß[6ìpDﬂs)˙2è)⁄rôw$J|Û˝¸√.ı;[êW[@¨Í∏tÄEBy˘"ΩﬁÅŸEVπç∫GîÑª´6¶NNY˚•Q≥>ÚΩÇ¢äv≈¥f%◊¬ ÈÎû5‹∑ùê'Ç3í\“i∑™Ω∫¯ºfex¨ª Ωb˙¬Æ*˙–p?}uc˙RER-‹¡/}â
+.P£^◊π¸∏ÔúÖö◊FIıáÕ^—oX)zÌæ∂Çê
+ISÔéü#òièœÆ>ÅC≠∫æå'bÌ˝æ˜ûèÑ"}„GAÍs…à%r°ñq1Uı˚<°¢&Ω¯ÜSÅπŸ'KÃ.…#’+f†Åù-õœy FÄ≈çõÎÖ•Óã‰Êë;Œ–;QòæD,ΩNÔ äL/{c7·?è]f›a‚”WﬁÖG$RTò˚R^^föÒÏ˜D$íûN%"ÇjzΩoãA#&*}khªT‹BÒæW¢◊√Ï +I‚ç!+)7îÎù–˝h¡-ªˇp_¬Á°ÌµZ-g¯—'ù∂kÛîi WH*0äÅÇ^éÄÌs@8ÒX5å¢uôÉAa}’N6Û-Å©kÆ à)T†íÇä¸äX{ﬁ˚°ÎY∂>Ï≥ÌÉ#f;W 4gÅ$_$µ∞>≠® ∏L>≥@Î±ç4=€r…Kÿ9◊∫Z»À;\<bñŸ^.ñ#K'ÅLi“ÆúÖ—°©M>4ñfú˘e5#XΩG8a€˜F%^äÕÅákk¡*
+1“i“AsÁ5‘e4Áñ)‰‰‘≈Àe”K'‘VSÜ3 åD2}ÅÃP3∆LE1AÃLÀã[ÃÓ:πêï¸8’nΩ€^Zk3„ Ç1
+T>+uì∫•Bó‚Gˆƒ_1C‘X$åM¬ª÷zwë tç–%`ô›]äyÙ1ô:°Â8FdP¿[;GG|Vz2;â'UxπcààXóM`ó¸]ø˘fΩ}—õ$R^Òñ¿¡2ûO}≠„3∑O∏a\b;∂.h"©]•˙Ç`7ìÅΩ1j>’h£ùsÌVAV*(π:a˙æ[^Ö=îòJ4b Æ3j7J|¸«_ˇ«øˇö 59@íÛH#eQY`·ü~Û˜ˇã0Ì„=w;ﬂs∏◊9{yπ9µ∫ä∫ûn<£NuÊfqóâ©!uãÜπ!uΩÆ…!uìÆŸ!uì∂È!uóñ˘!áä˜≈˜p@˛™tB…$6.NN∏&Kı	I…Ñ1v…+l∏'ŸQU¿*˙„Ωˆò¬øDû3«e˘Ux˛«¸»W›Æ*Äß¢É6@»–î0*ºT›¬™(û¶≤˝SKS€^nëCÊ™ÂQEıX'®
+dQ&ëõ2)á¢ÎÒ\∞TÊâPU›dŒ„I√çX'b˛⁄v‘ÖZ"˚õKl Èù·hV¢+'—ÿ}ß:Ω@tÊûuõÈ¢ˆ“Ø‚{Õ˙J˚Ùª±„SªÚ¢|]ä—%ˆöŒ∑ô.l‰ôÜ⁄L\‰Sç˛“å◊£Î©bï^nU4B)„\∂"˛¡!5Z•xÚÆØ˙pÒÓIa/Ê˝¸≈J≈, Q·ã›ƒ˘÷◊j€¨y/|C[≠ñ^˚ÓkOÏ4ohÓçt≤iS]ÃΩQ‹Ωﬁn„Ω©´ì`’ù¬u0ÒdÏ´#\ŸÔô0<)rIzé}ØY`üua9.z?ÿ~«MªEΩqfoFÙ≤·S¥;∆·†Öa[Ä«‚çﬁÉ 6W#;®∫™eΩ©Ô`4˛3¸≥ãˆÍo˘Cı'y™~ÚL}|û˛ÃûÂÓÈ÷·Ì˜ÄL√G.ÎF´ºÍuhı˙Äπì“/q˚úÇU=J9#VÇ⁄ƒ,3⁄ó}˙·≠mÛ'‚ ç„Ω~m[ºôhêØ«pkmõ˝£3Ä6ˇ¯)ÿ:-Úszuƒ„≠@É»ê†ı>wz}´“"†ì“"—ó“8¶§Ôç/®6∞V¸~<‡¡aòj"¢ƒlû±“ ¯hÄw8Åõê/íqË∏ŒJ<LΩ¿ÄCëŒ¬‚{-€A¥∏˝æÈzAãºX°\ò/†>^€≥‹ﬁÿe[Åk¨€ºGÛˇ¿¬Ñ¥–≤îóäTóíØëEèOõÃ;ÄÜÒ
+>QöæÖùÏJ{
+=I√\TëK§≤∏Á$ñüÍ6dLñwF¨‘
+É?E÷Z)kT§î≤FEã…YâıÚj5§ãåô$ú˘(∂ı™¬¨ãÿ‰â<Äõ,·Å^ˇx9ÎëÁÉÓπ>¨∂v)#∫ß“sÉÏºZØm√“XÌíÅ”Û≠`a“°v» Sˇ!¯ ·é	ˆìfˇê6Àöj∏üΩ<9‹yqpR€éﬁôØQÕNu2\ˇø∫˝LSd’ñl,œﬁxyîèu…}œÑ «√äW≠G‘F·»,ås´™Œ∞åÁ>`ı∑j˚óòg∏⁄Ì®ÓíËÕKƒfû°5)≈ëÜxÑ4ßz/*SüÙ@¯œôê¡Í≤˛˚«ªÇâ=IÄ7Y/,ó4v@ûyx–›Ω˝•-è‡r@Ä±nù!◊<Ï`√ÅœØ(Jﬂcõ…#QéCﬂû7Í£∞˘ÏU}·˜ ˚‘wπ¥'Ç:UpÎSÀ~9tØÓºÛÕ3≠EPYaHC/Dˇ™˜û⁄wé(U—Ä•>6H‹—“´ù5Ï¯©Ä7Èh´÷n-õS¯¬hg˘%!Ü¢0)yó£>EÚÆ¯π“§∑ÎœúÛ±/*(`#%œe
+„Ê7Ã´éu&‘˙MIÿVAáP†]’ä’Ñ-AeíÇà"™k`˝ãûs
+oÊ!EHPe¶;vµZXOJEf( .¿ŸﬂËQM:bFI2$bUIRé“eπ‡Í¥ﬁ2aJ ƒΩëefΩNÓ√√·!}Îú^4>`\Vü@òªl:p‰cÃ·Òa‡ë≥á˘m¶èQ|R8W¯+í¡.ú∞RÄ™I>∆$Ô$•£$oˇÆ≈Ñµ∑8/ì“«C)hö&>ÕÚîÄ…∆òÊΩ ¶Á„1T@fÁQBÊ”… ≥3»Ï¸ !söÈk'[hÁ„J€†#˚3çÙ–ƒi-á<ÄÇFt\ÄíCåÄúÏ¶ÊÀ∆‰WUΩ©á¯}"r03‚(¬°ÔœÛ9J¸ —≠¬ 6I·ƒÙwâë∞Y«F¡lÃ)éO˜iß™~î8Â^< aáëÛ‰9ƒ˙≈C™ò}äNˆ)ÓË(rÎa’<ÄuÅ'ò7ƒö≤ï?ú≥ÉZíhî<\Ú]Ú|m|7ìgTQã¬í9Q ∂,Ö
+Ü®NE”OF3LG„er~îÚúìø¸KÚ#Ÿ˙ØQŒr©6jGûOŒ¨œ_$A6Âëê˘˝EÅ"ÇÅTÉHÂoäÖµT·»~TSdh·ãiS]ß¥Æ≤äsÉŒkÄ√-åi	Ës◊≥¬îÁ7£≠öâè4äW8VB
+MÜÛÈ7Ö£%–n2⁄{¥Bé'Ÿßı‘öoHﬂø¿ú-‡qÏÚ#v~ı˘5&ÿ¥Üﬁ˚∆¬|:¥¬~ãï
+4–	%‹O+k≠`|OùE“]∏y∑®úÁõ¬7H
+‡5Ô<ÏlphQ_?äO|#ıM~|∞‚’˜ºOo#>cım^‚rÊ{!˘†PL9sÜ‘÷Xu¨õÛë]4µC∏Ò/ŒÄLŒÛ5ÔQõ≤ªF≥H˝4È4‹˙ïÃ√?Oƒõt&Æ;J	˘çcøL5O'3OßtûŒ$Û:“√$bTfœƒìO–ë'ËîMP*n°"{Ètb$nA„M´’Ú3_.F¥Ô≠íìÂBŒî˘…È{t≤†„;LÚ∫„õLÚ∫Ië«Sˇ.9∆`Åâi–Ï&Óq1ªGò≈W«ÌC‹d≤ÁØåÔ–òCQdYÆ≥ï∂íb*RŒ§hö	™ôï◊‘ §ƒ'Ò∏+ØVO~B^{Óÿâ\œC ]©GTßºÎ…ó¸ £DûGΩá-å˙Q=P+ ˚ó¥7IËÂ∆âÎ,©“M≠™jcø¥ö≥kîP+-Úq≈òKV1FÂÕ1Á´¿r≈ 
+[DÀÈvY£»û»Ì*jseÿßñ≠∫
+ØÛ´J«$[ëı¸$.#C™Yá^£8M!+Aˇ|yÑ•∆QAaöâ¨ËgB¯&{E;Ídñx√Z≥ûdç@ë{„n&í5ëπz∫ô
+N#œ∫ãQ}Æ;ªE««LàÚzÉ¬UuÀµêv3<ıÏ+ıîy‚…äË#;“Ó∂å‰ÅÂa‚],¡TM,xLb°%˝âv«´Õ–Æ8â+KΩ˝¥.0ïZ÷∂?„Ó•ïMnã‘Ó}Ubs|≥ûoT€Ê∆äø…< ?ü]Yπª§ïv*„ig5±Lx§.`õ,ÌÀ*˝ªœ≥_ñ?Ãxòÿöß>ﬂßÖÁÀ∞ïÿ[ò⁄WØ¸ 0êg6ÎG!mx§UÎ˜vWª
+ÆœŒàGitÑ—HU«»7¢+£0!ÃˆŸRL.«¥¸‚P	ö"jS∑õ«Ï·H»S RÁﬁ©s'Ä$v"I3¶l-ü$1ÆîküônôÀvR≤0/‹‹¡Ï±{œÜ•U	Ì¯í–áÙ¿¬√Nn˝ã$-î∆"π∆Í•Œ`<xÓ[¨–ÛûsÓÑ+}ºêr¢> ˙Î≥pø¢¸“˜1 /C£¸ä{>¡SQõlëúåÕk\‚»ó 1ìmm!=k8
+ìWëı6öÿh ÙóF7Fˆl‘÷qìñØHœ¿Z2Çôi∑d3So… Ü¶ﬂíQå‚ÚK∑Où“®)øä∫È‚ú¯’ìR3N¨ûË"ï>;Z≥.APZ(”WÎQ-e\UŸLå£V≈·"¥ÙMœQ≤  íL≈ÇàT≠#i‡ë(Ïq_èL Xi~µ ^˙ˆ„≤¢Z‡nˇâ∏h'në◊^Ôˆ∑d‰a˝è¿Úâêû5yQã[ﬁ•œßtÿÎÛnR¿ıÜcÀ%Å3πîU±Fth¿˜ÿDãX@$öÃèJânˇ6ΩD3ùkav>^8zÔ1∏£VfRØÒıî7øUµá´0ôüí$∞÷√¡†"HU˙XUE÷	ì«2Iñò;∂ÇF1^…ª°'iÏFaàr™/l‡ëæıçÖÃqH Åë∞’˘eìdóU7TûyÜ™q˝@\&äÚcÂCf©∂ïi™©:_B"ò$„4-RÜ˛j’˙í{+U8îÙs[Øﬂï’´,¶[
+å|ÆñÀ™cuŸﬂU\(kGeÀÑÔ|ã≠5üRŒ ‹gz-H¡‘i£]]ªÆz∑ßÃPxté›V‰\5˚ A~ZÏúÒ&©ÙQ°ﬁÑ’•Áò8/ÕÙ√(ÕÙì	@©úéèJí≤G&¶≈íU‰S&∆sÍø>y9(∆Í€ø„IèRKy:#µd•4DÍ9∂Œ±ı∞ı£*ñïB◊)k_ÂsÑ˝#lA'A∂œÕ®ﬁe›¿ÂWââ5	 ã<4íûUUôò¸ÖQé´fÌk‰{óŒ¿≤≠ís0K©'πg[XÃ>⁄4Óf•ÎDUBLŸ°arü…Ñ’›—<ø“"Gñèõ—◊7xhº1Îµ[^
+±*Õ^U°`EåœvÜ√
+˜za¢oæg&B3Ô	‰Æ â{»aﬁAÏq8Õ?¿Ë¥≤¡ÁÊ.ÉÚ¿˘ ‘nyıRΩ√ÊáZŒZ´º•?∞∫ÌîóY8¥Ü„ê˘ì*,Ì†™sÌrª∏x˚J“›»•ë Úù^”¿PŸ7∂∫O´.¨±‘óLYSpSÁ>|Ì£á0´VÚA)Ï)Í*2Za*&¡)ôêﬁ x«∂Eß–5Í˛=À´õ‘·tÜL(9…◊ü;à∏üÆ7¿æKDùwÅéI≈>S’UR…NSñÇ?r«At¥mv¥∞O‰gûœ∫Ì*éVM†<˛äü‚¶7—A·¡©òe cywçBk6˙_`˚N/oâ¬bmõ{‹πﬂ‰÷^C"W>ÔT?UÙÆ¿ó∫ÌS}U’Ù,›3ñ™¿[Õ-Q¡í-˚ûsvvË‡ê•e”E¬ﬁ¿¶i◊k–Kë¿GÁΩ™p¸LéƒàáKH}`ûñ≤{¸IíÏ£=Ï$Ã´⁄u‰÷TIå≥å@›ä€l¸àÿ≥fÈ:"l<¥f4BY:Zm;":2fjjΩ Z…Kî>wäˆÈW‘ŒåÉ•~TWÅ“ ˘ƒüè∞ül	´`Ôÿã§nS¯h\\+yıü—(Æ◊‚R;ÊdV™«¢*ÉItöh•_
+ÕO~M ë,L˙ˆüÇè ï≠Ö”ØiAÆö√†xi√‡TπH%Jﬂ›í‰5ﬁ• amO⁄Ò¥Å-D'3∞÷¬2¯8z>‹ Àè g9CÕËvˆP¶®iö>ipzâ.¿√fU6)&≈ä@:RNê!ùó,Ã˜<◊Û+K‰ˆƒ	]òO¡T £úﬂ
+˙ùîh &q«F™ˆH◊Nÿ4;Ü¡ÉÁ|	‹ôSÛÂ%ïppäX^€>ÙBÁ¬#GñÌ{Cñoø°YÂTZëVXî¸íŸ€Ä≠‡>9üqfLN∏ b^óaVö¨/È¿a‡/(Áqë›~‰9å£H
+ ›‡r6»ËOø˘˚ˇN¢H#À'|”ÅûƒÄf}$øÆ·9Ü(OèœœiÄ∑-ÀuøÑç‘“s|øHŒ_ÿó⁄âÙÈga#p•Gπ!'‡~ﬂbøb˝õçFÜ’Û|j∏n∂⁄¡+ˆië8-7Zr‹ëŸ¡ı
+cﬂl«Ô&Ÿs|©ì-2KZä∂—d&ìYt‚™“◊Î”uc™<°^@’Mπ‰óL8ÈÂS!Ä∫±äí’Ù$4ô{:2ö©jÕÂ¶Ø•LE"ãû∫t`ëÜ9ÄÑòÏ^—6£“ë<qﬂ®ÌåY?çÙxì‡$4}"~*åˆ•ö*Õ}7
+†RŒSÌ®4ˆ√å¬ÿ”üMÁ·6ˆJ´}∫•Qò~∑}<>ÂdŸS¢£%UÂãßÀj€ÃÕ¢L"„l°ıwÅ©u]¶¶Øö˘ÒDÏπœ¿á˚áfÔ¡;∞Æ®§=x—}úﬁªëX˝‹w˜®}wê=:œ]?è kóﬁ≠πœnÓ≥õ˚Ï2/m](fsè]·kÓ±ªcè]! Œ˝u…kÓØõ˚Î
+^ö˛∫<zÕΩu…kÓ≠K∆ò{ÎÙÔûéªÕ}uzØπØnÓ´K^s_]Â’ü®ØÆêÄŒ=usO›‹S˜Pû∫»¸zO^∫îµ˜|t/«°oÿÀ¯Ó°Kî˚ŸªËé‡zÎú¶}t¸à>Nù«÷>˜œ=jˇ∞G‚ùCàâ}tè…/'Ô“‹+7˜ ÕΩrôó∂÷#ò¬‹'W¯ö˚‰Óÿ'W ~sè\Úö{‰ÊπÇó¶G.ã\s\Úö˚„í1Ê˛8˝ªß·lsoúﬁkÓçõ{„í◊‹Wyı'Íç+ üs_‹‹7˜≈=î/éõ\Ô…'ŸwÔ…ós¨ïÔ6¢®∆q©åôìå™<Zºº5+.Íë/©oπ€V|XÉí<çŒo‡= È&Cíü-ál˘u9p©ÑEÔµ;(¨[âÏth3{ÀJráÕrçNev–32Ùåh∏oÉä?<Á˚Ö›_´$®qıÒó ΩVË˘™>¢Ò«}ÁLŸπtÇæ´tYù§ß™iOYÛé´ÒáVØ|]ˇ¡±¯.»˙Å∑|ÌÿaﬂËéÊ«‘æÂ%ˇW¨åæŸ≥∞VıÊ∑Ëü…a«l
+~Ω˛¯H¡F âÇ∏ﬁ∆ı,pIë·∆õ∑⁄(ñeÌª$≠}è‘Z}Àqﬂ{œo√æ¢ç3À™‹∑›Üe)‡≤Ÿ-n	[X±-˙ò≤¢$[nk†÷PŒ¶ú¡»ÚAcyN{}´¨›pb®úäy„”ÅS°/¶wl-ﬁ±ÛlHÙÕìh£$ÀUºgôV≤üõÎ"i33l¡˝t#¿R˛ÕuÓK.Ù2õoÙ&0 Í⁄ª}
+´J)s´§ﬂ\≠U);◊4Õ'±•ƒ±Â^¿¡e:'k!æ{≈#,ºRç∫⁄Ó\*úl.ùJ‰Ÿ\B„ò7l‹W0XJüŸ\⁄: ˙#ü@Ehƒ0Æm◊⁄Ïå@*E=¬:%÷®üπ7÷ù¿ER∑≠†ÍYæ]/})≥|ØãØ™È…ôe≥Ì1H)+Öús_à≈ÏEêWåÀø™ó5≈ê¢˘ñ7»k'¿wL'î“ê˝áçlxI˝¢õ·„çgÍÀﬁˇûŸã˚∞≈#DE#GmªZéÓØ‰té4˛ó:rZœ˛ô”ª˝æÁX≈;ºπ‘_1óÿ|ü¡É·àæ”≈√∑M:_º˘lôÆXO≠∑2ô5ü∆õÙ§Oo#ö‘Õß∏@∆í 3æÏ;∂z%;.”Û\≥f≈*jZ~ànò ﬁ
+ÛÜN¿ôÄÎÑW†6Vt◊(!÷
+Ìrˇ˘ã›€øﬁ}±Cˆˆ…ÓÀØ^Ôø:æ˝õófñ	nmè7^Ñ;rüñpdÙ©;"ñÎúõ8We6)òÂ}sÖ°À
+Áâññ%û»øÈ§Q®`_¢”–t{1<ÛÑ7sùôzﬁÎ‹ZÖﬂ¶I/`éÄ€≠”¿s«»ßΩ_öKœ¬ÊÚRá4#fhz…æ¿Ü>ò¿ü&Ó˝ıwTë ôØ:p	êå£	ÍDp÷&ÏDõ|g£o1ˆXƒ◊	·D)Óo˚m*¥c\”rõi†Â_j¯W)–!è ‘√pc‡ ŸBq¿ÊeãÄ^ë≥€ﬂNè∑/†,¸ª±e£'@˚≥==F”Œú–j©ŒS«>ßaK´Ùùlˆ;9‘«ÿÚ‚Nl—∆Ö®.◊∂˜Ov»·˛W«;‰èıœÄ∫ØNˆáüø8Ÿb›ô–4S»•:ÄuGF:3KCmÑßÄn;(q"qîÎ¨rúõÃvT\¡∏OasëZâG@Ã´(f±ôom`s/A7uÄµÌkî-Ï©ïáB+Z∏¥øp£¥¶Œ∏[ƒ#j€K‰∫Q1®;áVÿo¨À∆r‘Õ+s·πgπ‰œ†3ˆ˜zÓ\Rª±ºpÛEıZ´ƒ•˝ïp„WëÍUuZö¨Ò°CÁ4Ûiy#ƒ≥çv{≠LVLù‹ˆ·Ìo≤√®◊ˇÍ»lÄBËﬂÜjTv¢É*2yëÚ«!Ó3≈5E#2“òaKÏÏÎÛ—RCg¥ÿò!Ë∆é∑7Ì_µÖr’Ø¸ÛS´—Èv£ˇ€≠Ó¬€	¬+H–5yèñπå{„X‚gâLã£næxGnn™)ù∆aò∫c>6åAÊ·xæ“å|zqà¬&ÿSF+”#Íús|«óROÈLıè'ã(3Ao∂¯G®€Ë=[Zk#‚$6£∏î´¸Qì˚ù˚éM*§HÓ˘FÚqïâ$∆LQº]ŒZ,√‡≤S¿T€•‰‘˚,ì±H)Õ˙√ÑN«$my˘ÏÁ˚'/^øD∏`(îπRÓk=∆5Rù›c‹äÁ;(èÓCÁÌ
+éBö≈øqÒ·£›±√€ø›{±Cæ⁄ﬂmÕ~¨ãÛWÙªÖÿ
+Î#›ì£W/æ˚ﬂnˇfF(˙0zkÅ6kÄ…mp	ú{_ÓQfAé?&Ø¨˜H Å∑√ZFû/Ï€òU8`H];aÜå.ß…háë—µR
+ -ÏÓx0DSÛKê8∞¬ó„–ıºo…qﬂ¬8ÆädÚRIUïFŒõıÆ%	‰R€ﬁî©2+zM†!U'°Ã>ÑÜù6∑ﬂ€îo™Ü‡S`ÕŒÿC“!4J0øä¿°ºÃ~-&œ„‘eê5üK·Ç5T∫“F¶3ñáæ¬É;ÃÂ·√∑*MA¶Rºú‹⁄U•“@≈Ñs5 æ?l∞˜æ˜ﬂ+s]UI…≈@XÊÕd?ä~ÒÎ]ÄÑWh|æ˝7–»û√≤QIC ÒÇñ*†ó`[Íæé—æ Æ≠ëH¬ê´2€˘ã{í1ÃWG*¢çÖS(›”J@ÃEKQDbêÜq‡p~ô¶0Ç¡Üqò≥ëgbÛQ ©®€Líƒ®Ÿ&ÔënuÅp©∂G\´´&‡èîWD
+ÃZ©ﬂ±l¿"Ω\œ≠¬	Ù«÷ÕŸŒa';Xºoeìî÷ã	≥„^1Ë·û¿ î‚°©®kô›ÊÏÄHrAùê«Øœrá"öùıuŸ÷\a§ƒwxƒ∆ÉŒBÀß,(ΩQo’I}±ÆeN∏ÔÕ;°Éë'¢ggπu≤âç¿ï
+^-Ñ0À:ì]“@xçÃU˝\’8î¥ÁçÆ‚Ë/dh'¸2brN5›-4È≈)â‡§“X,IÆïí9/≠zÍS⁄ıFé≈SZ…Ì_˚îâX'8Òıo;ƒ¯ÖòÔì?˛„ﬂ˛«øˇ∫ÚLU®Sò{$Õ¢≥Å°†Ÿ∞2†Ó$\<ËA∑ˇ
+äPÛ»w0AÜEÎ˜¨qL¿P ∂ßﬂ+ƒ6Ω]ô@xöÀ‹…GB.†Ìa–òs:vÑﬁ‚fÉés ·ã∆uN≈åå≠`‰:a£ﬁ¨#q∆H⁄Xh}‚H£æ‰ya¶bø‰,≥.õ˝ÊõNá=clŸΩjZ„ì≠ˆ˝Îóß®˝∑ }G"†)›ÈÑ√gÄaﬂb¬ÊOu|É‰ì…‡ä∑ÖÇxë ·ª∑ŒÈÀ3n…›*∂\≈f‡/*4∞ |O,¯oxµ–‘∆dπˆY™AX~…iW'(i÷Jj·‹îàu·Ê	Kïe4û(ÖF1-cÄ|s˘#Ëóe(fœòπí •KÎ öôÛâúXz‘7Äv9J˘TtBÛq5”ﬁ }0	Ÿù⁄	S<Ã!((c‚y7L°ß%∑É∫ÓÉm—∏®2¸º:U0¢ZÄÖö$+U¯≠$“TZ}füãXGJï“ﬂí¢okµÌc:VLf˚bk
+í™oöÜ»X‡Gü∆RKkö<»)Õ∑⁄?¿rﬂUÖ˘bH}ËD˘ÇÄ¥≤Rl3î,àçx¡<»w˙ _’OÊ{yÑ≤Çb3®ì»º  ˘äÜ≤3A!&;ˆVçhì#¨ÄèWõπÕû≠â<Ü?n¸©Éâî(≠≠2iÕ¿xØÆ!àï`K
+≈v´9∞∫:¬Tb}Œ8˙¬·Iwp˚ªÔ∆é≠îÌã•˚uM·>Ö	˚œ,ﬂá%5æ¬• πF1Ñí7ògFñ…è	{”yÔúKê&aÌŒ∞oe–¶±øÎxp£sì˛˚jπÇ
+:·‹¬°≤#g“Të]∫ûe3¨€	éæ˙≤Q/ƒ¥;ú≠Që‹\=‚ïn™Ïmd;KUŒJæ\Í∂'≠wWÃzf9óñO^@LLY#wOÏiT´´,ç•Wk≤h¯XM–ÛÅn∞c.;·Yô 	©ãøõ≈ÅΩvÇ±Â:‡–@Ï:°ÆúÉ:äbg ≥;¥.ù[g∂á7MdQû&ÙõO™›∫≤}˘ƒßC{œ
+≠H(ﬁ÷©Ö¸ä#eù∫¥’rÜ¿ÉòJ±UÆ¯EçÙYÚ∂¯§‹÷àósÊn√j∂
+◊xCñÓQÉ	Ω—hÚ3Ò∑ò6±Aöx{Í¡¶6Huµ≥”¿±Ü_¢ÑÇIÇﬂRî\ë\m’V»Jç0nœr∑ÆYÚÎç∏l´ˆŸŸÚY˜lΩ2U1ûÈ/v.ùÄ=„/(åÃ O’í°÷W≠ï”ßí¶ÜÃÎÄmÉ¨/≤</~É‘ë£’·Ò¥¶˝%õ6ûfıI∑ª∂~W”\·ﬂL¬¬ú‚˘™òà√ÒwÒRñ€ßÎOóÕñ2: \»Qı6˝Â«âÁπ°3"‹∏ íêAÊß‹@„¬"â∑}∞˜öuØ	qŒHG`:NÂÉ⁄Ç÷çë=Ï€Û◊Ã∆Ê˛ikd]!£¯iÀ–¥«ﬂÚ”ü™lW—Kÿ∞ﬁÄöœüX‘T`Û†˝‰ÛkQÄ;k[°w‡aéÔqà¡-ç˙(l>{º˝-ãŒ`<xÓ[LºﬁsŒù∂gus&Ÿº„ª˜Vge:’§¢µÎ,Kó‘quÌEh¬Û=«˙!úœ	s–ÙøÁ“yÔ[(KkÌ"»≥a…'úlÈŒ‚hB+B,éPcO∏UK®B>m‡I *Åpã¯ÁÇnDÉ9s\Pçû≠¬´FN-ˇòß’¥'\Fßb’2ŒVWŒ∫t⁄e§8åó¬Æ|“Ó:mü÷àoŸŒ8ÿ∫~≥∫H‡?`Ì∑7ÊK9¿‘†,ù„><4Ä√áå◊äif—2ƒ·Bjà_∞Z [◊+7 âáf˛YAÿ·	˘{ÒókZ µπî‚¥*¡•ÄÀW⁄°å˚ÙM1Ö ô“Á
+=ê‹‘fÛ¸>Ù≤$¡€ﬂy∂w◊∂4•·byÉ0ëF∂T8Cr¯áﬂˇ@¸zÙ?yô<,Î~|y"6Ô?≈±yqº¿äÁ√Z™ªoã‚käP∫YJ“õ;>µd˙M´’Ú(DEßö}ÓŸ{õx%ï“Ò¶Mœäà—Wñˇ%“WﬁBíΩ]¨R]#óÀ[µvç\Ò.;¸¸£◊ëbÀTÔÏÙ’≠Z˜ã´[…∆¢	sÁlç˜íKo]∑[Õ¢”È¡◊ıF◊cKÈ]—pîhlˆ}i+Y]ÖÇÜ›˚ˆπ$?€‹R$ªº◊È—∆r±ÔõêôÙ∏W.≤Û_∞˘cw·≈43TÍ	â2&û-íNI=¶%ı∑:ì!∂Vãº“ö$D†à2MäÀ7B∆˚n„≥Á2BÑ6óbRm≠0f¬7;ﬂd•·»{Æ	5~qæ ¢Po<ªXÙÆ™∑€ßƒD_¿˚¨∆GC+äΩdáÔÅ]QéEÃ;.jçhT√óí=Ùê ≈Ò’ }QÏ*¯—2RP4fœG?I™ù3\ÕÇå3E)ü`⁄,mW2Ô<Òü÷@ƒ≠<]uï≥ÚËÿM¯˝ÔC∏9f<˙˜:pü¸«?ÊoxdZ6»OYÒW§£Ù¿ê∑Ω≥W-®„¶“3á>L
+3ãñ1hrt¶≤3aA∑∫Œ ¨_Ô√Ö\L~Ûÿ6#†¨s]Àp§ºÑŸteÿv0qU°Åä—’pû2íºO*© f?•!∞cÛàé√#¢ûèMàX› «=v&‰»ı∞Ú ØïãÊ!√5é¯à≥¯FÏ9¡àWï€êΩ∆Ã«@ÀjÉ‘Û0ëÑ¨¿v«çù‰/…/·w∂LêJóNõ@™Ô·}¨”R ÇXyW∏œ~rÒ 0 9LåàÒ+:DÚ‹	Áq O@t≤Û0ÄO,@∞ƒáéÀ‡ú:ÎÊÔ&n˛n‚€ó]˛3ÙÛO·÷Á÷ú!ìÕM‹?≤?˚ûBJñ ∆ ÌR´˚ˆº6] ANÂ≥‹•èy¶uû„?W=k¡kQ™eYÀo∫ 1´]îh˘ÛÌ†hD9_Ê,:9g8YlÅévƒ“ìq◊2ª X◊Q2òéÇÄy-¸ÅËef $π1SLyÏï√hò‰≠ ∫Òëàr(™∫|ê7Ì∑&Í.æ⁄ÛWiMÑıt£\%$≈N++©
+cYú€ìˇ7j•öR3©≠%Ú®üN^çøfyl$r>Úﬂ¡)OA∫∆√h!‡ﬂ(ƒŒ¸J∑ˇÙõ_ˇ◊"Òw£$(ÄæÃtŸêñEr0%_‰‰L≤ ˇ˘wˇÒÔøfr∏· RDà-ìì¬8Iÿ|5¸ıˇ¡≈ƒÁÑƒL≤e29ì6- ®â±ñaI/î'∆blc£§ı#ﬁ)êØXÆ$≥©-t©~[»H>“a/D¥ãƒ	nÙn`Ïö[˚Ö–ªMò«Ÿ}o5Ôa'1ka¨yüÑ.¢º«œÄæ†”7O„∏‘*7ód!ıá=coøwùÄ>xÏLqØ˝E∫.#å‰4 Ì37ﬂa∏ÿ]d˝¸ ÕwqÜe.k?≤5 ∆~∑ÈúRb;ùŒœ*yux÷ òiŒ;Ä|c”;1—‰Våí *·c ìíäTjU\œÄdR≤_yÉS“]+`Mûü]5ÍﬁdMmfí¬ı;πèk¥Éà¬i÷"ˆ≥ÖJ>è8∏¥Bûø≠ı_OÍK÷Ç(ùäYøyßz>5√:º˝D°(ŸñéŸÅœ=Ú≈<ÚÉèó˘†'Ÿ–grìVÅ“Ò2 ï±ßÅ3n·iê)zÛ—s8<ó√$N‡ô¿Òp4ƒÿ˝ é{∂Áwwà)]Z9ÅbfD·a|GíËœàÛC{-2Åb´¸s—Pp˛äåÛ ?3“ÒÓÛk|Û≈ªõÈ‹3H$åt¡ ËLòbÊ”^¯0	flY{‘ãCÖ8Á$¢ì-„ÆRÇSΩõ#º<ì_∆](_ËUj†€˜Úàb&*'è"ò&ü‹c=t•È±©.±k®bˆµ’'´Oçf◊ãì˙Ë-Ií&-U;¬Ç2`N∫Û∫Fvvo®S€HT±±∞Ù⁄ûΩ‡Âv§X¥¢•ñ÷5JAüó9 ó9JmwzØüΩò∞ƒ◊fü9;¿ÌØÄØ˙æ‰Y|9x<ƒ«2pÁa€ö¯ˆ°Ïz:πﬁ≈Ò„∑≈◊í(mL(Í`\@y6Ûc]/˝Ÿ/é^ê[ÏÄ0°•»jk÷ß[R∑ûôè±π,¶XJ…~˘'N…xê%+pñò€{”6œBƒ”m‘Pf ©mß∑ßº(bv˘\√äPª+º‰9<wœÀ»M‹Ë±∏°k	#-Å“≤Ø˚´yR—?"◊T≥`±âHT=*wjÎƒµ<Jµ‡IL„ôÜg¿äAêFœ=”†¿∞]LËbb…˛ª<Ÿ_pÙ9•ÒHﬁ":˘‘é±ﬂÎ!´ê´@”Œ«éHØË7çG¸⁄“sÆúï8€H? Vù»WËø˘¢`]¶ÿóÓ>0«ºÊ•∑g‘KÏ∂πû(x‹«Êª}ä≠Õ£µ?ô K∫L¬Ãx‘˛ô”sDù~õíûá	•»±\sD·ïÚë
+«móÓY§Rüﬁ‰wk‹âçÊ©® =Ã9∞Æ®<§ôúm±…]x“¬àœwá6∞ŒÒ∞á˘ΩE+‰ıŸ6r\ñù∫9ümWYS4}EÉ€ﬂŸcègM›7ÜvR≈x£˛]MÓãﬂÚ÷2≈EÎ)6ß≤;'@‰Ëë3Ωut “Gá≈©∞ﬂé∞ZfH}¸-jÄ w„,X—˛wcÁv@àX% ¡‰”nZ>Õ"8[¸·4©÷e–SéÈ_•æC‘?B˚5ÛÀ?w\¶óRrÇ	”VéÄNªΩÙT'4æ√Œ-a™SúMœ¨±õá\q≤N4ø˚Ä[:ÚD∫)‚¿Nö"*;"ÆñF˜aÏ_Qå≤¿æ"î—Áì:'bôkx˚/\∂frªLBc«Z≈°â9YgN¿ÊÌ±f;≈mä¡®∑ˇ<‡¶òv$|BÖ·ye€ÚCBw[ﬁÃΩBDˇ8ø˜¨âN1·ya≤O˙«?&=k∏o;°‹Î∂¨ÎDuØ0ù–´8¥¢omóÓ¡⁄BzúZaôÌXÊó áÿÀ+≤J¨u• 	¸"”Lj¯•Ï¶Ù4±‡"‡}vÙ'Óp⁄.GlÒ‘•ç )@ØÏ˚Q‚âÔc üø‘q‚[AøS¡€»˛eœ;æ‹* çR∏∏)ÓLSõQËK»SíW]ùÖ|O∆ñòU·…õ|˘%ªíj"˙úU«y)¢„ ¿´ºh˙~›&¢˘>;R8  3%=YÂﬁtïÓ§'r◊3Ø76êã≤¥Ø¯É∞|∑≈wr#RC8Ûxkæ≥5å2⁄>Òí¢√E£-ø®låÎ(B1`…&ﬁ®:¡$öí%åx£õËT·Ì6˛QMWñ4≤Éù
+©ØúO∆˛∞H)`‹,˜ù≥pR@f7œ°8≈ÏL’l]XékùÇ»äªËÜweoCTÈU)¯Zéc@¿Û†∂£7™e#.î!Ie@∆õ˙±>√?ª,úµ˛ñ/æo∂˙~≤ˆ>Æª?’ögä◊ç".A~Ñ! uÏÁñ√Ω‰ÁÖ{ëñälÈ2^≈óXû÷XH™o*Õ,¶ÀÂ˘»ì¡7§>¢5£0fh}‡`ËD§ÕB|)TÛÀmFBIåÉ°Ú˙bû3ƒmı.ÀÑ˜ÕIFf€áAô·5ŒµFXë≥†™,\_ô‰Ûı©eó®–O©ªÖJ‡r&Ω¸ÏÌ*k$*£ºjäxñî∆p˙S‰éæ”•F´™\)g8ó±˙Ë≈iC˝5ßﬁ•*õ]GÌ≠Î¬2êmØTƒ±™T±Ì9±C]åÎ:ƒràx
+Ω"@∑é≥“(^=r+äÎ°¿A42«ouL'^∆õ∑:ì(ÆPfôKê)d≠LtK
+1W∫ÌByä)âÑ+åÇ@å<G’Ì_"É ÷)}¬‰®Í€Tuàä-ÃÎRí! Âˆf§ñØn¢™Ã˚•:FiFo	˝©mc¿}’êÂw&5ÊÃÔN”=&ÌN?LîÂ7˝HG‘vÏ¨à5˘∞)w≥N>Ôô!ZˇyË`é∂“ÊmÚf1j@ˆøkM=‘+œ}¶+e7ıhhy%ôÄ£)áÃƒò|1ıÄÃÖ’†Y±ÓIÜ˚ˇ   ˇˇÏΩÎRW÷ ˙ﬂO±Mªªä”EA#R @6Û°À»›sE+©L Ì™ÃÍÃ*¶â8q˛œx"NLÙDÙüôòΩ…<¡<¬YkÌΩ3˜53ê,ŸÆ∞Q’Œ}À}Y˜ã´ªOr˝Qq4ÕN˘ˆ˚ˇ˙˛¢º∫˜ÒBß>6Ò–xõì”4‘LC¥çèÆô¯RH˙5ñ^O/ÃÎ¨yM∏´âûıÿœIo∫ﬂJ>QÖz–~À±∫OXoò›ﬁ ≠±¬ÎZB‰*·y%”ñö%ã“'ÛT/9X®#»Ql∑
+Òx®qˇWsÙ$¸\E∂Ò®YhDv´#„5wÀd R¬À≥Ë¢å†|—™⁄(’=Õkl[ò9â˘˚ÕÇõKî
+–b6ÙÄﬁqΩø›x˚i-ô,íóÆQ‚£˙ìy—‘P6îiÓørH¯„d0úÜQﬁñÃ_qA../ë_8zÇW”j≥ÚcÚCº°,qæLtÙa∏3—yçf„‘¯ß‡◊öÏO≥V
+Û5C\=ŒÅ5ôEÛ–z¶»ÑÉ¢v‚|·/J‘ ÒöÜ‡õÅY´òÊP∞fÿ)¶”Ñ°”iTØQ≈œ‚	Ù‡ÉÂ–Ë«èÓQˇ4K[T)˚‘?≥ÖÏ¿è!Â∫dÑF%^ªÊá∑·˝—uÀ}≤C34]Qó¯˝u±r[ƒE‚êç!›‰ˆbÎ’©ëÖ“πU√tÀÃ9vŒ´&Mö7ŸsÿuÏ‹‘E„	l‰J=Øﬁîq/Z5å QÀÍÀJ~∫ãjéUö+Ôú·°ZòÜ’¢(A`Óî{%l®ÕÊÔ!m>5≈^”7IkTÛ0]ï¬/ß^imÙm ¶$úX‚∂â• ‹g &˘¶ÇCRcπ≠RP+b	Û*çpπÇıÍ¨≤Û†œp<D@´⁄¯4πömJ)⁄2t}õDy’≈Ôu}ó<C’û8’oUèüöÅ¡z«zÁÚ‹.Ä]@¨˙\h8Åè~{Ô@iÁyÆ¢;ü≠7Öê@‡«k˚haaØ∏¸c]ä à °—Y˙É˝*ø®¢∆å™ÈπQÛR›"ï$¶ì|Ï)òC!5ïÿO∆QÚÑªhòä◊˚˝$5jN	Ä≠=™∂•◊˙G¢ÙFì'’ƒ o@≈ZßµÅ|∆¨‘≈7’ï˚ÕŒŸyƒ]|û«É,êR%è[#N·	{€˛™Æ+GéÊﬂ6ÎîD_√D|§Cg†Cîænı¿Õîpjﬁbˇ>	?ﬁöôBÃ“·0'∑f πa®yK»ËXaÖÍ∞&„ø√”§qº˚/§`ƒö#5k!)%/ã∑_ô•∑£QmÑPe—◊ˆ@Yã]±7ŒË≤lØÕëﬂ6õc√hv◊#ÆÊ4ª¨•˙•«}<p£ETh†ÍSﬁE—q=QŒbQZ˘Üî-t	ø’‹ÄÑ+.˘çÖT»U˚ﬂå∏ãLAs™‰˚•$"˝e∞v˘""¨J”ÛßÃ\¯9®æ:z´1”à∫3SıZ3µ3˜>dLk‚øÂ3U»≤$]√¶ª-í≠Q>_µ5hrvD|÷]⁄ˆ“3Öz¶•PU?X›S„Voı—XuÛãÏ>wPµˆøπfﬁD4-eˇÌòZπ˘‹Ùwø÷ÛÙ≥”‹˘ç™®©◊%∆Ì®‰
+Ü@3;ó[8y{‹#z¡∑Ÿ˚üœ‚A*S9Àtxë;àI#w+bfu‡Àû¯≤OP~#¨9‡ª:i÷€`á(NÿŒÒ fÄDä∫&Q8&É+ÜAïÃ‡^q‘p⁄¶’/`w_†˘bÚrQ≥‘uE_Tû{qÙòÕkÓUd‰~£Â¶y™Ó—å«y®ﬂî Ò
+≥∂¨^©ØÄ@Eºo‘ÓœU’4cŒá<5âjê>ã⁄=∑i@]ﬂz\wÃ‡éLÔÌ¶j ∞˘Ê05±·g…h´≈ø/sŒûºÛqÂÏœ¨EÏxáµZo™≈˝˝‘’ñ˝ÔlîQıﬁ"ø?Úæá™∫›Œ¢@–Jh4:Aèj=74’»®Û\(¡ä…–Ωå≤ø}}v¶Êb>[YãVe…∑n˙’ì“ﬂó¬9Vô„ã(ˇY .ê∞“a¨&V>≤# F“Ø F≤π®k˘æ:éT5NÏo∞›("öM]P≤_FtΩpé±vé(÷Nﬂ}˛°—"9ÅL(&]à#ã))¶…9Ö˙ô“~'SÊ@Q4bˇvæx<ˇ†K#ÃÔòÚÛ√îZvzGn˙˘[«l}P|⁄!à,æbÍ”ºijwÓT!úNx”'Õ“ØÛñóËÄ¡^‡Õõ¥ı•ÀÜKJ˙ÑôbÀKáú≤⁄QD(n$=Tﬁ≤ˆW7£˚ºõ'mA´zt·brÚˆ+]Ã}9ôø≈Òaÿ€∑@‹˛ p◊zS’c•°˙ØÜ“»EN-È-l•ï“ßÜ“X^™§4™”Ï<ëQ[®Ì«¶2]„Å÷PÕ∫q√ç”ã\3∞=yö$—–J5S<9öûb2^ˇ]0†¯gyÀRFl~/ûΩI∑∆xù&)EäÓ∑näØfù49
+ﬁEr0†N-≥[pÈ†ŸF/µ[}%hÔ·…6≤L}YªÂÎ1"ª=Òö[7A~ùX[æ˜~∏ÅH÷®V≠Ñ«
+]P:∏‚	: Ï¶ÉvàˇüÃ(¿U9‡|1±(;ák8…¶¿-≤‹îù.`∆YÊv)B¯	7≠0|Õ¸ÉTX0ëy
+)¿ùî‹‡7p&–ëc£ƒÇc(Î_…¯ 8óÌ%P≤A’ HûIÄæV≈◊¢±^Yª˜à<‹áí¡ΩÜMsú}»áíıãZw8˛˘EMÚ≠"¸öÏÍà ›Åû©∑‡•´±ÔJh≠yQ√ˆü–æß…‡¬±)X~4∏à¬È0∫√v¸B/iºÖ'S◊zej.;‹¥SÔg®˙º*>≥qÜQ]è∏b!˘ì∑⁄ÈZ˜Û=4Ry%S8vI˚ÀX/p“ö¶fôÁV2œZLÔík∂ºt-œ-√±À
+Ò%5≥¶Ï$E ’æOÃrœHﬁ@‡¢Â;ÊÓÅ±ha˝·ò}Í[aÏëO{Ì»ŸE≈Ê9DÀ'pñÿO¿Úœ58(ƒ©Á[°l2
+NaM·î`<ÆÖﬁbü-–˛“~^Q¡h≤–gó´kÂër¯ÊO°n¢£d_NCñFñ•…¬$˚≈uëÕ t˛5˚Ü?⁄¡@dàü“?O√`HUê ÄÏÑ„Ã}D4äãaDë¥Ô]}∫Ú"]ëfπ7∏µOmZ¡VºŒ£Ï’pöÀ»Î∑÷ïìûºï¢êÃH	3Õêë¥èó°®Vß>ËÜGWòI∏@?«È´›gÌœbõÔ∞õœ‚atUÏ¶ípΩrCEŒtX->ìß¡SÿMzÑÍ»4ª˛oÓ∂Tºl›˝¨€NCÖ˚âÌ(F;Ö˚ml©|€π•	ﬂ—]“ÛâÏßÕ(îíìœbO%^ù< Ç›A7ï ©≥ﬂ≈(∂´E±(mâ~aõ–Ú‚˝?≥8¯t7Ωê¸Êˆ|˚≥3’nx›Â>Œ¢8˚MÇ	
+∆ı©@m{√π(‚7∑€Ø't>¨"°À4XU˚Ωáº7%Ô€é“˜ˇ5˝Dvz?ó‚∞œ??‰N7 Ø1KªÒ˚üER ≈òÆΩª˚ LæzÀ˝:|«$,±RC„M)d—Ÿ÷M!à<åŒnI)µ ÂEÒBñ¶∑ÿnÏb2[öÚë‡)mêŸ¶Àb}Ä≠- ‘$ò¥[
+_JÍ“,nS"˚kÒ/PL±ºÀ˝%máaÃK¥=m\¿¿ãè°]πÈ+KK.ï°{2e:9ì≤ƒ1ßÔ ü|Lfõï§!göÿˆÙ*∆Å∫DEâcbO≥8:î¥l√©â¿%3ÕÏ˚‡<(&Ö®dG4Ä≠ìTnù"Ãh84hwŒƒ{t€•2]ûîóùÙª´Y4z√äË˘qFIÀ-EsªÜYôØ"a∂˙åâ≈Ùëïœ~ß÷-Øö?,°Ÿ˛r°◊g¯ß⁄∏¥ÿ◊e—µæ7⁄’2÷´ËtﬁIÀ,∂~Âv±J>ZÁ^Ω©ªP≤vZ..&uH†'2ÿ.Lñbòm.^Ù+ÜsŸÉ-ˆ`≈"î~xé1Oñ∫}8tsèøç2ëxëM°ﬁª8G≥»ﬁˇ&‰±£âTàî˝èjû*∑.Áq„ÍÉä%™#jdME]ä±¯ÔS®æ=¶É£h@ôH C:∂Æ˝~^ˆ`ëFç´Ã¨ò]‘⁄ ôS~#%ÅQA+â´Ué ?√s˘M÷}ƒØg›ï¨rÀ<€∞ßgﬂˇ<é√¿ﬂ® f”Ä„U¶1µﬁ9ÚÏ∏Ë^gÛhòN⁄XÇaÉ©'°√D,(˛J(î¸ﬁáu9ÁEò◊í◊¿≈j°mÅ ¨Öé’A=õ]ƒ√l¥”EàÕ∫m¶ä|è´≥â<‹¢W@ã¶âlòpûÂÀ3
+7ºƒ‚2ªZ¥„Sëˆ‚™7x°óa`)CGÇ∆dCX£v‘Âße^h‚˘âdNÀm±P0”ú≤0…<9ìê·†qgöM⁄Ì†√NkEºiJ¢∫≈NäÛ‰åˆi¶≥¯åÉ˛*K:aóG=wc8mW/œ⁄∆¨àÊŸÇQ~ À›Ω›ŒÛh›£∫‹y∏ø<îÙhlíû”Hóï%≤˙∂,Ö¡®J]∑ù “TC÷πıV⁄HZKú£S‰iØƒlDbcπA^™f	EÚ	ÜxÅ’ƒÌπ™cπ¡¯æºÈÜ€AÜ‘çÕ„<Vêr‡ﬁíÇ ¨ÂCÚØ¯ÊÂ∑n>=ÂÊfÌ•Œ2:Òø∆ŸÔhÎI’*Ï<´†òßŸ«ÖZFÇÍTS∆.¢äÚ|â◊H≠ÎókiÛ"!˜bì›Ú/aê_D°Ûfö∑∏.ï ë/˜5 ◊¨œ“q0à'◊pëk˝y˝Ñv%i-O7œü∞aqŸ@(æ√†Úºﬂ6dFO˛–_ÈáÀÉ7ü&3zÚá^‘¥|ÍM2˙ôs¢œÇÅ¢≠˝D∏PÚI⁄ ®)2Ç˜‚EÕ–zuÃh)‘ñ…KaÊsf·x@qÚê≈:◊∞êwf ´ÿ«œëyúôu¨8ºM9òj˛Â√≤(Ç¡S{^&‰§µS&Áí</“I˘C<Ë´˙Sﬂñ§7fΩUÛ∑Ët∂JeóıW–™L¿!o…<-î∑0
+Âm1LVK[’˙Ñ.Õ√2íﬂ.ÕÄ—Ÿú8)1Ï≠iÀ‡?’tEºëÆ∏≠*¢S¸7oîÌ76m≠⁄ L/´Û+»5Zfû›∏é=h@°ﬂ)ÿFìòÒ'- “'¸®”7y∂Å ´IÎlÃéŒ˘(–µB'µ‹0ˆ§ÎUÎŸ@‰ Ò0VI6„å]ß£π·s√”±büéey:`µÍ˘7Ì3#ˆºπ¿ŒNµÍä™.ËÆäzZ |ÀFk&…_âø¡ﬂ((d~˘E!Î{ëæK∂o&Ì{¨¢ß'õñíüÜ1ùh9õ∆oÂ¡k?Á/˝-,È∏m,Gá^π·éÔ„•v3#ó~Êjim%BºvwÊJ°öûΩRI≤_F€W.Z1;Ô¿s)*lœ2ú◊a: ∂3∏¸$yØ√hCoÁ—Ë^Ãó∫Ÿ/8ùUíâ_	œUÆÔÔL◊ÔLW%”UBM∏ÆÇ—∫oU∫ÒÛXxCø™ÇÌ™ììzÉ ¯)ØÎ≤¸2î*W_ÿ¬}‚j®B'°‹OXOJ¥¥HLÙN ‘˛ı˙ÚÍ“Ÿ}Pª∞j˙ ò]ˆΩ˙K!ˆ"'’≈ß•…ó{’
+Dnôî}Ràú2Üo√uàﬂ›œ¶GYèÜV=—O?≈hƒÉy1Ì/S¯Úã#˜O◊ö7Îw;ûﬂ∂ùÕÇáÓëb¬£`˙ª±ı∆Nó ≠ŸFã˙MyJÛk0Âë"∏5ø¯©≤ZI£ã‰´Bæ8Ñµ‰ôíà±1u÷8Ùºƒ˙ÕdÿÕ‚wàçIˆB;∂d+†Òπ¥›ˆ-¬n?>‚∑BßC˘nb‹“,Ÿ]%óüÇ¥Ú#¿∑ªã-Ô'◊£*Nªpœö°ã€˚8ÄMlÃî!ò¿¯lÕ≤Ä˙ÁW£®Ωj•Ëö±Í2tXˇsQ–„ﬂ)Ääû>a
+@¿øì N∏$VG°vR‡±Íßk"»%¥°MA±ø£˙ﬂQ˝›Ø‘o◊´Î!˚BÂ}0‡‡ˇá¡˝Ô?8Œ“Ójå_{“Ó¢>IêDÎÒÀÛ˘w”ﬁ—„∫¿M–˙√0ÚÜŸ?0Vˇ®˝ﬁÿ¸s∏6ø$XÏâüJ‹]æy3Ã›`‹*å=;:nö	¿*2É˛ãoU¡ˇ£w¡p*√˘ßzsØ|¥±—Øç‚^?áw±u£ˇ÷Wc†ƒôÕ∑n¥üzMúç<¡2˘÷ç´TogtœŸ‘Û@o=Œ“Qäoyè¢≥å¨çÌ2kƒWéfŒb„y$VY´\„Wªœ‡]+ûÍ˝ƒ˘N¡£‰¸ÂXÑp∑ä¨9Ô€ç\•zª$∫§“Ω"ì¿÷ç]fçı¬—ÃYÏm?…∆hÌ2Ôhj3g±{¥£IêMvYîÉEﬁ±îFÆRΩù;†≥@ˇ¸“[¶˝¥f∑≠W6KÙ˙59fL*0Hì≥8U$¿Î_WGÔÛ¯p{ˇ≈˛ãoˇˆ¸ÂÓÎÉΩ£≠≥D≠ØÁCÒÇΩQÄ\$É»{œÀáÿ ÔtxFòè_pÒ„ñ”ÛÛ(Dø‹≠õÚ˚≠;±@”©‰¡$zpÂÌôΩ*ûÌJxkB2ëO|óRáÈøıuÕ‘Tb[7⁄OΩÊy°˝s˚∞@~ùe(êäÔÆ:Èy*Î‡wˆè0§òŒ Î`≈N‰∞-◊Ω›∫HGë¯JﬁÀWpÜZ#´»b;˘≥kyq ≥.ø Fu≠–¿µŸ*Èh$◊/ s"Zbı∑9>^i˛HΩ‰ºƒ=WΩ∂ZVq≈èÕEºrÖ"fN<ÑK4~ˇOÙâ›…ﬁˇ3å'iŒ"∂Oπ"—ËÊF9√‡qÆ‰O‹<KS‰TÔ˜‡j·r·Î´!]-”Iä˛Fî»∏GÒ¸◊5õNGÇKˆ·åïà)◊Ä.«ı£pÉægÈeµ$É[ﬂÍnh¸ÁU^ÔzØ±GÊú©LkPÿìÙ_ò·9NêÔ_Õú Æ¸èE(7+∆»≤TØ®ùÍ±±5è±@o≠§{d√(q4L7rÖãx„Ëãy¢6?»ƒD‰gtçÀ‡íqN1œIüû`X∫,e\·Q4	r(‡lúC≠‰˝œ√8ß^—˜q¿Cä<îp-£‰ã∏ñÿGíC`ª“NwVvés`	UŒ£|"rHGü∆cË-±àªã„[ºˇW2∫·?Æ ˚=gCÚŸ°»_èªWÍ*Úﬂò∆Æ…û{„•;kI∞va©íwÈ]´g1‚énãOU«{œT6ﬂ8(€aòC{òV-¶˚Ω÷ç˜Z.íí¶I:˜¯˝ìıó˙kÏˇ?ˇÖ}efÆå;TΩ]⁄œÕEﬁ4@I‘E7á#9ºà(√™«ìµ_•„ÈXBNåJ9Ø@L`∞a<,òw
+•"pÑ‰ÅNm‘Âh9Èıóﬁ‘=cåR#˙";Ö≥tå˚ö°l£*ã—Úí'åÒNE:òä{`et)å€Eh^$aFäqªÃs‘ ~íi#ØLú¢ﬂ`¯ötcúS#+q´c∆≈·KDFÔP?∂B‰ñ#á‚´;Ãﬂ◊–¸ΩLà3≥Âªæ·ÌÄﬂ∆!X˜	L‹±U«ƒ∫‚¸Õ÷§0N1Yµ%oŒÈˇµ4‘wO›-s{JÉæn≠Ô3—˜•§‚P”q∫B€–†õX47’l∑ΩÅŸxH∂8
+∏ÖmÈHÚ∞=¿¶NQX€1µÉ˝¡”†áƒ%’÷ûGV†ÒHYtcÙ"‹d>éV‚Q≠„äX=ˇ§À(∏rÆ q"ÿúX33{ù¸X9¿ÄæE≠Ü´¬[â°{øÊ‘©znÕf5ÓÚ∫éKSÒ· ´<˛\~ƒÛè~≥ÎˇÛü˛ﬂˇèÒ∑<ROw˛1û˘.Å—I"Á€é∏ƒ∂ÃÅª5 ZπÍ_WpCÆ°«£∏YõéÂ—ªûryª≠]p‹ÚJ∏è∞æ∞ü=T∏Ocd£`ÁU™{ÚõπÅ_ç>f¶»}BDqí|Ÿ⁄ÌÒäúıÜÓg›–˝∏6ÕßØ±ˇßªéœﬂˇ|E‚Û~~ÿ•˙•”Âò8ÉŒ≠y™Iw(—
+¡‘S—±I	∂£¯˚uiéŒºvF	¿+Z %s◊4jÕ8I‚Ä˘èëh∑äDRvÄ–≥¶Ô:Ç{a<©…òÁ£û§Pß”~ñBÿõ¸"Ω$o\ Ô=+#¥4#Dèà⁄§âÔ¬i”æÑG„Çîló3≤Aw`{ºº˚’W*rz¬h™ÑD∞.d[—èly-î}I∆Ø#Ô>wÕÏçV Ø◊"Ô7ƒÎG?Så∑K±ã;q “∞ÑáJﬁÓ?N3&sÄ∏çúGŒ=>åŒdûÄv√c’Ó◊»>⁄Nk¢î∑w¸b·&3∂Œ∆MÑã ïbò#ó±m≥%'∞yÂc`º‡jÓ¿4¿æÉóõ\lÕ¡vˇqé]D∏÷‚óìxGtΩ<V
+ò“€l9¶WÒjkn«\oÕ-˜·KË:;¶göo›|ΩtÀR∏ûEL„ñçÉ•∫€…˘‡*OüÛoÙÄ
+Ôhé*àÜ[¬écŒv:Ç≥`±78ûk˘–¸©˝∑ã√+d.0¡ñÕù@Ÿ:¡£[;„Ìº<xyxt%Ïèåˇ¡Å«Ãcsñ»≥xá— ó6?N”·$3.¢õ† ∞˝n†È5MáˇÖ∂™˝Ç¶Ÿ~7?ÔıX›<àŒQ0PmÇ·ˆ0>OPs–j4GÇc 0∆¿nNCµ<æL—NG	Ô@<˜%ü^ÙçÕE«…≥≥ïÀúöZ¢Lå5k‹eºﬁ~πMRÚ≈ävEœUU2Y6Nç`ƒ(∑TK@iÑGmíπY'Æ#rÓá?%“ü@∫∏Vï'TëΩj"≤Ãõ≠êì‘\#Á?£˚¬∂Ö¶≈ÖÄõuõG—MZr.>/™«9“‹h,£U¿B%éÅ≠.ﬁ∑ÎÀÂTZ°U’ß 6eùB›/Ì8d(*k©˙i≈Ü√Yó#≠“ËIˇ≠ı˘Ã®jôΩ*‹*±¢£/™†˛2{PådåGo∫EÕ3_}ﬁ—^™˝äüé^ãäfIY∑©%Ù∞kTµäîÛ VU±PNÇ€Æ∫˚ñ?êﬂ g‹HC<V~h≠’J˙o≠ﬁ~éwŒe£bí_œ£ÂnzôL‚Qt¿ùó7B¥˜=ˆÙ≤ù√k@cﬁ~Ï
+FOÚ¯öXÂFª√tôm¥2£˛ääÃz°—‚Uîç‚<¯f6s<QŒ#º˘0¬ß #ßc8è⁄Ô≤á4Äâ·%#nÙcôµèÆì¡A
+D√q
+@n (◊Œq≤√Ì∂Ë$À∑
+T›O äcnÄO]’ﬂ⁄ÕçˆìÒtrà)’_ ∫’ÿˇ ZS´®?ÀZ√Ù<N‘zFÅ÷ﬂÅYŸ.sˆ|4=ÂëbnÖæ FÓrs%L+'«Jà*ÍO≥óƒª˚#∏”≤Ø≤ƒ—£V›.Tw~;≈âigkPZΩ•ﬁR+µ⁄h–SÍÖZ Î◊“OV>	PπÉK¶˝TköH‡•	U*i=Ω<¢^ôwBt*»'ªL_! ™ƒ√Ω+Ä0qîƒ2πû®Ù¡q√ªgØ«¿êÒ‘YÃsÇÀAΩd/ãÖ∞t≥Ñ /a_Ü¿µ:®úJ0„"sBGôBå∑óMÆ«$ÁñYGπ@á&&2d±\gà’Ÿã∫ÄÍœ£	¶åâÚ'›ì%%OS|∆⁄X>oHrE"®(@y«Ù2LP{HmC¨ ´uSÇ•P;»Ê±vÙŒ#"ûd◊¡1ŸVËÊ?Ω|—?è†+ÒO‡‰”·∆`<ÛéG(Ï,ƒ∑≈Œª›0èª#ÒYn>tw]Ùºb∫1à‹xW€Zë≥ZMßD∏ÃãZX”RßÆÊm™ YÌSK¿?ããL ;6I!∞#4∂:è™'°«Œì~•»UçÀ¢íqoﬂ∞n∑ïé4‚Ωü""
+0{ë»»$U#ˇ ‹G∑ÛÛukU{“•Ú 7ﬁ}^|*|ZbéçÊUúÍ—8SºÃ]±¶ﬂ"2 1ﬁÎ+µƒU…s0Ça,oãìLpı,O…BpêéX>Dyû~ŸrÃ¯„`2∏ ∏êe&∏1:ﬂÀ≤î)⁄b¿πŸﬂßÒ;2Ë;•ëªŒ!¥í['î¬∂sÃ¥Õ_YI∂æΩvrç'[s›`AÊ4©ä∞AR†ıAÄπÈ9C\bÖˇu·€vF≤πz¿”ö“.‰ÄÊ-ˆe∆»√¢©˘ı7v5ÀjˆD˚â Ïy0πËfÄ0”QìôÒ‘fÀkÛ"—YªﬂaèÊÌÓ#Írã…€á6Bd?‹`ÉiÜ9â.ô“B¬·6\D+»1“h˚G/≈ÄÛ˙÷óA<!hñ⁄!˛⁄!ã~AÑy}«≈¨k8mí Wº¥fÊ	¬P•⁄o…aoHy∏∏Å)†ªIË7˚´ß@∑,	äB©∞}kúQ ™Ça„i~¡eƒ\´ÈBë|≠'ÈèQí%¡1--Õ9-MﬁFcÓ»¿óËl0˙Øﬁ≤è⁄ÙTv€Ö%Êê/ƒv6–A´wØHpCß| E‹∞ó»=Ø”4ƒı÷^f⁄ít™⁄ìP÷Á‚∂˚÷`gh’©º7Kœƒ{ª‡—Y–™›Z∆Òb%·Ç∫[pÿ\lM.R8Ù≠W/èé[GçÇB˘‹ï÷ó'/°◊ÇF¡x<˝/"‡i±[W∏6ú:‚$P|vàâﬁ§√◊æ√÷6†∫ùÔÊôq10è!Ädåi˙
+Â ñ(§≈¢.)-:uŸß»Ä∏ï ^lÅ<¡ÔºÖ„JlÃ¡†–ï>™:f˘];5FwååË%ÜÔÇLíÍ√pL4˜rê¯ö≤ÈàÍî≠ò∫s<¬=((€F3¨¢"∆ˆ¨ÚﬁÒ8<qÒ¶p¬Õ•∏S˛ÜÁ:a ÙÇ[sók®X‡∂N`«,†kyCU{@ï˙ â<5ª}ZˆΩÒ~CßQ	ﬂÀß[ﬂZXa_á÷<Öí)Jn±56¥ÊP&I/Û‰¬rﬂ8Z¿FÔ#Æ&zê2êw¿ XF§«_ÅÓ¿!„!x[ˆE4ıÔSêüu<¸É“å§√Œﬁ‰büFVëEWË.Çµ®N `3…ÁH∑0&WÅ8ìt±QêLÉ!^ùMG±gú„ﬂ)∆ÊÜNin&¯Çâ=∆/ ZÓü~t~xˇ3~¶L#eÜï´ËTÃ£ktÎ&0ä;«≥¿Ó#mA?1Äy*÷)öÙ“K˙†„ø.#8©÷ˆÏ]Ü"«üµ5|™!yâ’Ã∂Ÿ`ªQ>åœ9Ûé◊li,\S¨ïıÑ'ú≈|H#¶üFGe¥ôvVµjöaWÏåâ’uFQv„¢ôoÁÓ≥Z≈‚4>=µìÚC \ÜÈ9ó;AÆ≤å~4ƒºM·m°gÊ¶·ªÛ7»U{AªJ„yÑà≠ÔÉÛ¿⁄~~™7ƒø( Æ›éC˘Ö∫≥∫¬-–7 åÛÒ0∏~!f†>äF–ıC¬Vggé˝‘∑Œ‰∂“ëÃÖÂÒhäzc6õs™Ï"*u`å‘p†¯÷éM«´q@?ò€95Yˆ∆ãäÆ†™´Ú<ÿ«|ÌmaçV˙¿Ù«¡5·Prã5¿nl§˙õJ¥V7±Æx°«[liﬁ˝R9“ﬂë®à…CÑ
+ÜÂøâ≤`ïµ%ÈTÇE¨Z°ÜÔ}¬kºA6Pù¶ŸΩΩs·êtokmõÃYßG´VUß#œî)˝©ùΩæhıﬂ¨ïjWnóFÕø±ènËˆ∆	•?DSd¨ç≈—Ø 3ò®Æõ6AëŒìS—‡àµ^
+,!W¶¬…ı&Æ.F‡'»~Qﬂ∏'ºùyÆºı:ÊíŸgÏ∂Í‘àÌx](ÑÂI€u,;ﬁâkã ¯^€k2æ6ó´ä<k˘∆¢†ÛI™•˙]«jåin∞n∑,NΩqÀg»ª9x “t@µK“Ì	‹∂HZüd÷‰ˇ‹íYR‹ï‹rﬂtÍ2ó·≈J:2ÁTî6„?öãKÃS£úkÂπÇ’k∆˙≈2l*5≥xjî^•™:_n]£˜Ìp7Åjº“nú£.6
+Më[ÕVçWvà@'èHõ{êa>ù∆√òlsŒ∫bŸÕªX€†°®‡÷òH˚¿'PJú‡ùÔf—YÂ€„1:Õ£•1ë⁄∆x.‘ÕªËb"$Ñ†‘˝˙&ZÆkqb6øãQªxm^SµÿQÕZ≈UeR*W¢”M…{Bµ
+¨≠˙≈Läf’0Ø®Êñˆè≥hêf!<úàyAïô§úúˆ<¬ºDZÁZ1B“Ìã9mgÏY<∏0YØ÷q4bÉ(õD?$¬®?,mPE»Œ∞!™Ô&Y'B•˚4
+îë(Ëâ—1_g50é|#úºRUª¬ ª¢ıWSπ«|€D°·-vkûRÛ‹hÌ\««Ï∑⁄(ƒûÜi˚:)f?1¶–d„Õ∫6º÷L˝p€∂\¨æv˚^ ñ •’Ö)p@ﬂ◊¢í¥ï‚ıäjuÙF≥KË[nLC˙6‹¨RøÁÆ÷∂Kf¬yi”Ã´ıP?~@@Ø¸ÆN p› A·`¬m…ƒm“Jı	GA&¿+Ω  4ÿqÈÈv1€pS»åNX⁄•=mµD5h≥6b≥LùG|ª‡»∞WΩ	Æî|Ê¿{”·ÑÁ˚€∫˘ªëv¶≥U{TÌz:úá¶7!Åò2„ëè.W÷b;B®‰‘õj3‚Fƒ,˛z∂∑Í›I#≤ÀÌ¡LŒ(_˛&Î[RFü1ÇYÕœÒ¨^Ω§ó€"…W)gfÕ˙ñ˜âg.\C).ﬂ.:∂>È≠°ú™„æ›OÑ–èe<ï${®æ
+3≤zÖˆHÄ’⁄_›à—E4	∂¿ä"iå0ˇ÷-	VV!Ñ1“Z˙1©ﬂj)—EŒ67%±≈ëQÖzoú[Ìí#h}ªƒN’º≈Ôy…x@c,ò,™˝¥8Xä£∑ˆ\3≈)¿∑’Ö ‚∏¿∑’¿ﬁıëõFŒ‰T§*ÉÅ©@mám´\G8.ÌñP¸k„l¿ƒ¶˙~* huò∂≥Ê~Æ÷©àv†E9hä|ÓÖ~ö  ÷UY@››’„¢
+l‰¬Gçkù÷úÁΩí«öÎﬁ∏Èæÿ©?Õ∞ê^5ñöOπ1UgPJàÍiêOÌaöﬂKÕéßlLÂŸ¸{c´;‚´Ÿå…jåƒtxÆH@∏ZÕ}ºíEBŸÃ≠xÎÜÏ˝uÁ‡ı˛!KIåç;˚äPOÿ>P(,ãFËÙ˛gÜﬂâ'¬Xß≤z
+}I3†2ıà&iWpª÷q†uFÔãF¶%±eW¬?é¢ªÄŸ≤› ùÚ•ÓxS|” ·ß·« DNDØ%°P©ÛˆB ∂ÄBEE¯ÊÄD#ﬂu60É‘‡«ªı&»)›1∏K≤bqÂ÷…äùüÍ–|k=Í†ıb\Ì∑üVKìc©Hø;åÂA∆4ÎZÌrË¥ªwt∞ˇÌˆ°îÇ”,Fê4∂
+ŒÜf0iÚ˛_Ô¢!bì
+ ›`4§yj¯ô…?ÕÕ—SkíFïöô•·ß÷
+å~á´⁄gf∏™›öÜ†Um„$ÓË
+ß@.NæÙ/`ëπ”Ìπ‡ü'Ö_è˜ËW‹"±x T7ò;ﬂß©ÕΩi]ÍSÙµ˜ÅE%l
+ˇ≤˘ó(˙qx]:BMG õØ}Úl^]T™óf[’-qH”&‹Zü◊Ò‰.©í´îÇ{W¨
+«ã÷á¥pä<≠lájc6zƒãä˘TÖ∆®öë›Óû[QùIFï√9≈B3]\^Z“√ßmZΩj7†\8ÁËf¬ó˚Ü[öÂp·–DcÖøÜ1Ç©UÈuù∂F˛ÍÕhãµ1î(MKƒ0’Î0gØR@C53ãsœÙ®å∞s˝U.≥ıEŸYŸ8≈ŸBÙ–Ræê§I§G§‘«onÛ8îØ2Ã&1–¬Ø›hÆY‹5:ô∑S`nÚ$k]ò∏F).\ò≈∏b3∂nnò∂¡ñ:ÏjÉ≠¬?òµ–ŒR˜ë∫UƒÕ‘Zˆ®eŸ∞g7ãÆ‚âc¥æ6⁄™›NçN¨/,e»)b˘C[=©≤ò¬æˆ(¡™ô	X	*æRÌG<Ö••íß‡a1ãP¢F∫véâıò±u—3µËüK‡¿?ó=vQ$ÎïqkÁ¸A.Ω9EFN¶Á!ô)ßåò.Wà¬#∫Çs?≈àÑeı-EÃ’Sw9b’5z1∫oΩ"Æ∏+›ÍÃ…ôÔ∆∫XQ‰8wp’^w’Åﬁ˘◊£TÃÙÔuM€!€b⁄
+2çi Uÿ”g—;|ÄˇJ° A',§/R8Ä–∆óG‘ù†iŸ◊v’◊÷—´gı˛Z&>ˆ≈ÑÙewıKØà…Ôä+3>Òt˛ÿ±éπ»aÜsGÊ
+wº≈Fë|˚òÙÀùùÿ+ ;V¨Ñ·ehÓ:x·;÷jzîu;I”…“óÜ÷õ∆©>ïrì-aúeºÅ[Sx∆7Ω{M·Z§K¯®%¢∏‡	4$B§≈Il,©,P(
+øª¡D¸]gwÖêµΩuÀÎå’e§m†8:ÿ
+† ÊÜqôßπhU≈âVÉ&∏es±\ıâ
+ø6=öÒS»ˇvaÌ“sã—®OªºT±9‰a‘ÙJF5ÃZúHÀwzÕ‘évg3V⁄[Pü·¡_ÒFå∞£ºÜœ2ﬂ \!ø¬≥ùã4xÏ:«"7©o•äÁ∆"Ÿ/$≥úŒ˙.¿äPÖ>sÙba:0%!Í≥nlQYC‡êxπ∆‚ß}]ﬁex—còû≤-}.Èt2ûN⁄-|f∆Û>VŸΩ><Ë0ôrÙÚSµ¬Ô6∂1ö£tîã∑°aáµ˛∏0˘±’¿ûEÖ"N•C:‡âaÈhU-@VÕDñÆ•ëÑ1f{>«ä™Í+€wèÉâÑã	›œa}ÉaÀ!Ω’ßM˙r˙¶U´ëS77G2¢u†´+œbÍ
+RΩ∑Gìt#¿îA<åy˙o∏wp®}˚-´-˙s7≤Œ@éìëtÖ;ì,2jB ı◊Ï%5˙÷ç˙K≥ôÁπ“À¥È4´Ì$‘NÕõ^OSYØp·h7<Jä\!'-Ãoë/ N<™.»B<ñ\∂@·ﬂ0Ω(¨ø˝ òxåoóOÄ¥Ç˙o∫1Zc +‘6Üû∑“CW
+Õj≥0˛Ñ|nì<&fP?]§–Dä∞¢£3*Â$R*¢4®êê4¡GO-u˚ïrGÚS‚JˆÑâ!59÷FA_8Y_}waJ¬LâHë’∑Z*Çr∫ÔxÃRÁ;(èì¢+-U≈ê9$ïDWã´Æ<VÓ¨!Óº!ßEæﬂ3á8YÎví◊ª};ÒÊ¥£!W¸êÒmëê˜yä	TÛñπåU#∏Ø:ç≤˜8èrò(√QﬁÂJzXv˛_ü¢=p{Ä%~OÇ˘ªOAö¡núèeNZ8]L§YVpT≤‰® ¸Oß1GÃ˛ìf’f®Æwì¡›y`|ÇÉY≠Õ™]d˚ªˇâ‚˘yÖZè¡0¬tœö2ﬂsäA∫b*Åïâ‘lu÷ûYÜk˙WŸ	ÿÎàù«„ Áü}ÈøÅoÒU:è« N∏≥õr€{îEÄr<ìı˝Øˇ˛PÁÒØ@&;O?é¡˛¡˛#<«˘±ˆøù/c…q Gˆ"≈vb˘Ñ)Ç'¥ãìá:µ{WÒiƒ»zD=Ω$?OhùF<‡(∆Ü©áëÁ‹ﬁ=£†GÂñAqÅ\˘§#Oã±ùøzÒ≠IU Úmˆ˛Á≥xê≤m8¡1¿àVΩXrL	I5AWëË√LjU
+*È•+”‡I#≥‹`öÂi∂ 4>tÎwJxÓi_qNQÃ	ÍºÇQ…÷J˘Ë˙ÃÚ—ôv
+SUË;√UâÕw"¿Äk^ÏŸ≈„;Ø∂Ï≠r±y6óªàüg_ﬁY“KΩ$BZÚìıTìPû`öºÇHª&]Z£⁄D˛	Ò¿´Ã∂ÍÃFÛõÎxR3êJwö$π&GQê´{
+˜ÿÜ±r1ëÜﬁ^©™+)€|¥Aﬂ≥Ù≤P	f∑üT“õ\;¨¶WÖﬂ›’⁄$´}OíU˜l•$ﬂËäñîZà÷©<™.Y3âòq¢®öÏ-ˆŸ]/ö€54‹ÉR®˝ä
+BéHÑê˚R œHÌËh¢(€ö{ÂÄ1r5GmàŸ8π“ÌvY;∫⁄``„>∆êä¿ªAáù¯˜]'wÊ´G§¨n$Á|Ò–r‘wí¯« Ä&zÌ"c ‡éÚc_»Ç£ÛÒm
+l⁄±q∂”d!åı§ó.πeù7≤4ùNPhœ≠Œ“¡4ﬂ@;FÃ”^˛ Á•≈˛í(VUÚÜ¶OIºzÂT¯…OÂ)3∑»a‰ß
+ßiõif&3∂≤Â£2 èÎñqÀí~’5É‚⁄t†*Ÿ1<o¶AU?ﬂƒ#∏;l,ÓTu´™}¿OΩ.V©[Au»O≈˙∫—d˘ôıX4’´*£ºÅ„+4∫FÖøzk”–ãyt_ :Z©´]aÃZÔ∞kËyÌæÆD@baπM@
+D∫<ètﬁÖ‚È j∑ÛÈ®√N˛÷a·~{¶#ˆgv9) Tvÿ“¸≠Ä‹¯©-‰¶œ„ÓIﬁæœ@ì[`ﬁß[[§E\•öÖ¸E Ü«
+≈H‰h§∏∆„ñ!úf#Ä˛˜ªÕ4‹˚{ı¯¸„]íÍ^yk2–#w˛<ãCÜÑÊ ÉG·F˘≥œÜÁ œek$!⁄xïÚ„öî6b_7‹Ë=»D¯&ÚËÉoVÅŒ˜"É@È÷hÖ∫‘êóÇVõ∞(ªí=S¿ﬁ≤Öÿk¡àﬁöÑ¥GßòÍ”)&∞{∫∞\;™(Ê#èH˜ÎJën±æM†à˜≠]¶b%°ÁA'≥Û ,vÜ)ºfimÊD1p¢Áj0L’íV·2m4†=E~$∞=ﬂ|9´AÀ,ï<‹'íi‚Ü˜◊ú7|@©ûÄÂLáC‰C· W3c¸sC/,"]ÙÂ|npøï)óÈ†]jdCÎòNØ*nAï©eìu´Ω∆˚µO’Õ[~¨÷çS˜Ø‹ê•ÚÜ(wˆ+∑ÉîÎ3".∫x‡±LÑüÕ÷ÇEM3‰ÓJÅî¯ßπ≈6Ó4ä	À
+ÀeÌÆ@ÔÙ¥‹0ùpπ-π>∑oΩâ»ÌœÕH≥Ë©˚4Ω≤¢∂d8MnHå ∑;äì[HÕ2`# ™∫,Å{^Î¬5”¸sÓÒL2#Ôô€9èÅÆcÿô—!xíH^Áâ~ØùäNœ‡Ó›XofSIªRXJ>»9èº,NöPHÒIªµ–¬8õ ñsti˝!çìvk±’ã–DöûêÜ}v—3uT[•jî ∆Ó,˜ESSˇé˘ÊÔñÏ~Y$ªØ&ÕL¯’5O“˚ê⁄]ˆÛP®ÉU¨ô°ı©πHñ®°fÁü∞∑/¢‰ø9ÛÀ¢d@~ù!/as_YÇ«π∑u›é8äFEÄãºã¢;9º˚•aÍQ;ä´Wüã®HÇy™v√|OusT Ÿ÷˝ÂÈ(Q5‚À‹©ñ+?Õ8m&€An6S;oõ˘[{>´Ä˚IwŸxx}úEIHπL1ˆõhøü¬6°èbút7öl÷∑ÑÅ˚∑”„ø*4.;bö¸5B≈uWü$Avìuú\ÓÏFr^˛ŸÊî[GÿÛc1ª≠§∆6w`Ã(èÉ‰[K‡ï˛1¬ú≥h2qΩ5∑ÃñÁœI<@{52Åº’∂Ê˛p÷;[={T ˇ∫}ÁÙbˇåƒ‹08çÜse'èVÇÂ”u,∏í}ﬁí# —¨◊Î–/n‰àÙ)`Íñ∏‹9‚§ãVæ^]]{4„”$ÜÕCè∫˜„£]„ﬂ˝pké∂dé•òÂz¬ìXÀ≤bFΩ•”GÎΩ6£C“/OÚ„4N‚±0ù`¯ÿ6©Ñ Ñ∏Ç?Ó∑_LGßQ∆ Ø· :ác…b@)«§^ƒŸ Û\_fB∂#«ãı]/÷Ù"e{åG∫∑ZøπOàá)√2&ë…ægG⁄˜”Ú®≈=¶y>á˘¥á∞¯—`e˝QÌ©5áÈ{ÜÈ˚Ü9[Y>[uy%˙á¿ü_»q–ÿ«◊∑º35õÑ"ZÛ\rmË(MRÄÔ0Ωbp¥:ñc;ëúß˛B@ÔfÂñÖ)YúflÖÁ‡EÕÒnQ∏^≥∑õã(ÙU‹\tÄ^wÂ*
+‘§?ÖB≠•ØAwöƒHÂYêT
+)tQ\%ÅTÅ ]öÑ;£@’¬¨
+Òzø˙CÛ7®∆p%ZS∞›C`∏;!4~ëõ≥\#åx$Ëô•iÿﬁ’$£∏b≈<üª'≠û‡ˇ]5A‚Ñ‰jée‹‚·Sá¡ü•7∑bÓ€x=K≥«ry„dV,Ym%AF_dPØ!x_8C-∑ìa˘q£`ëGb„
+D˜ÿx1ﬁΩ˝ÍÜöíhÍ-„qêxm}±≤Íb whÈA˚|>o™^Âì• ÁB⁄qG9„∂‘;åN”Sô∫bN£¥¯w+qÏ⁄Ú⁄⁄Yùà⁄nœ≈Ï£\÷cV¨F“ˆÕås@¢ˆ∑¯∫’5æ}+ft≥ÛÚ‡Â·—	ï≤?2˛SÄÎ7µ¶’¬¢ÕEÒ
+UËY’øcÁ≤ÏŒÿY±±Æ¬Œ‹K`B^\u˚‡i Tm’9≥_£äê‚£†Ëx„3=‡o ÔÒ˚Ìﬂﬁ~PD\√.ñË	&T‚:¯}È⁄Ωyöb#Ãë˘Cã<(¯©†`¶`W˚gk31j«hÌâ≤œßÑQú›J.iÜnQD˝‰ÓÓlıQ¥t:Sw™zëÌﬂˇsí¡ıpˆù≠¿ÁÓΩ?èÔˇK‚Î}˝tu0„
+?ÜZ·Á¡‰˝?≥8Xxï≈#œ‰ggËã| 2pÔﬂ Èz0€§_NQ&ÓÏmmÂÎïıÍÌ€\î0ˆWÖ\A.’X<;éµ£Y_T£jÎ—é–!û†/¿ﬁ0‚élÈ`:D€+$∏üuÈ6y.\Örå˚˝tU#dHˇ˛†€¨Ã´›gfà∏éÀ8<.ÆúBÄçêª¨ ¸q ï "•ΩoKb’÷¬#¯åØ†ÄPØÚ[Ti≠£Y´£ÖNæ,{
+Í†˝5T˘âí∫Æ∆N4çKQ8Dı6ÿ,˛ú™ØÑˆÍ∫ÿ~Œcm≤^hVñØÜ ≤òÔw!Ò»JcÛb≈ÖB[ΩjÏBDú™ÅﬂK@rA5∂ƒ≥Å§î˝°ı-üä¶œÇQ<D÷0í|!è≤¯å&0√2m.^¨hªÁÀ_∂òßRÃŸˆ÷ƒt´&'˝$˜`Kü≤W~Œ˛¯ öªDŒ =⁄^káæ^1vhŸµCñjÑì≠7–˙VR≠7–ÚVP§pÇj&ΩíÌπÈ–U˙@§{®A5&Îf–|x;U§?æ˛J◊q∑9‹A∆0√
+j=§O_I1ô∏≈Ò˜	Á%=Áë¿™úÅ_“`‘Á˙®*±ÂWRYw˜/ª(ç˜ˇ
+ß)uJéY∆¸®jâeU-±å[ﬁx™˙Év0≠»5Ïÿﬂ`e¨Å|Tï´úóÅj–£È7¬éh∫µ˛ô°»Y÷Í„„H√Kø˝„πÙÕ/g'
+∏Á?,∂‘4)^dŸL≈“´Q±<,RúIï‚÷O<$˙ÙLÁ2»·ïM¯òœ¨/ôa>wPë¨√Œ≠ﬁYAÚaë+“hñ®<Wã…¡>…∆Sû◊Kº]˘ì”Ä'È¯MCq˘Àù˚%·≥‡ÖÂˆ4ãÇ1¯Ñ?äeÁkq$ˇjqB”u˙¯¯‡ÆëQ(–ÕsËÊa—@!®ØÁóöâÔ?)∂©πP~v∞ˇPr¯F∂¿m&Çì!Ò
+˚¯îÌz¯
+Scå’1«ºóX}`Oƒ!°∑'!e‡˜üDJíZe(∫8"‡IÂ,§(wˆY∏%º≥ ç@¡„µß\8ûÁ¡FA{r*y”:§¶∞ıø^î—pï>> PÏÒ4¢à$ÑíÄ"¥¶(9‰4O≥ 'úEc~CÑ©˝^çqºä£jƒa])ha[Õÿóù∂aqºbU\mÕ≠¢⁄~rÌ{By"É0ûÊ[7k´é^·nó5-9j`ÄÃ^l≥z	%∂±ìËÏ»8óÇ~pbtÉ}•EgÂe0ñ∑∂*C®8∑ìs‹∫eªÇ¬5mÖ
+7+1‡ßDb	âZ*)≠ï.WÒ∂⁄\Ñ„1˘	∞!4µ~_Áø˘‚ˆõ/æ äÌ,D¨2»0RL9Ö;ñ¡æOS∏≤AÇAåE4·ë8Ò]áX\
+ﬁ`<-_Q("o1Ò◊ı	eﬂ’# A˝V*©GlÉqM=gπáK1ñÍY”—'[ƒˇïèŸ?ÜXÉe˙‚”ªrÖŒÉI˜ŸNu∏fZ…«lãµÀ’ÏîãÿQÆc,X«Z¢é±˝µ;⁄õuæ∏-qcÏÛ/˘ËÛ d'”,Ø˚Eë4ó&™Œ†{|e[D`ä»Sê|ä)STkÍúöÀŸb…ÂŒõxÕåMúèÙºQÕ√õ£˙"¯" sL…XΩJT_“˙ l>Œ@j?WoÑutÅ„.ke˛d@ç,)¶a>{ˇØ)†a:ÜÒOH‡êÓ5 hŒ(722a–5—¢»TSxÄâ#vk∏s≠…V≈∫Ø´Òã≠h‰‰UZµ2éè®Å4”À’Ë‘ë9⁄‚"€ao(Èæ@[∏S1ùmı—|Ω“‚†Áh(ä.RÖ´á˛Mk¥€p~tÓ"K[°∞<»¢ˆ)Ú,”¢_}?º¬k§éB˜à¥Ãµóâ˜Öô‚töÔ…K©ÙÕM·¥˛O‘Á¨˜≠fÂıRã˙CË∫KÉ≤VKﬁ€rpqu≈ªàäE~€¢˚3k˜˙KKüÃX@’ª¶üÍ“ØsÒk'$Í”‡µƒπ“˘∏5≤Ù¶ÿÁrUv OYn_[_´?˝IYPÙâDe&&}'oÈãŒK°7Ò|≥ÏKøådû{òˇAze;˘L€[“Æ≠y>â>œ‚ÂõM
+èá÷l∂ëa‘ì7Û≈!†à qÏ,√“-}c?Ÿ>˛´Á…¡NﬂﬂÊ’pö{ûæú\ Ë§g_0«v£Ì¡…wWœ·%ıÄªuìH`=L3ª4
+£A∫m¸~˙ ,xŒæQ:S‡¨ÅF0¿î©3ÿ¬‚¥Êª07ûr¯5¬7æ∆ºº7¢=•cı"7Ñ±»ﬁÔ¿õﬁ≤ì¶=¿˙π{¿Õh‘Ïço˝∆s`Ø^µp	Ùr*ˆÕè6ﬁ=Ç£?fı/xj`œÅí ß£îGhG®p'¶CÇ®J>E°™û⁄∆™ˇ_îÄNÄ±ö¯d…zÇ´‰~"ﬂP<˝∆ö√s˚,´wŒ>ÈIoÈnÛË-9ÊÒ]teœAé¥^Ÿﬂ∫ÎΩJã˘Z|äè\ìêW›‹qπ∑/Oëää"…U¢'8RÕÂä)$†3$ˆ6ÿ;˘1∫ñî˙,§a…h˜˘ÎÛ¡…&|√ŒÉ·8HÀﬂ4ΩÚ'Ç§cµ-º≈Õ-Õõ(€.—ù%®¬ü¥¬ICç+Üœª¯õ JNT$ÿÔ¢vëAª¯∂?R;9ﬁì‚€ÜÏıõ/
+Pı•∫ò∏êo ªl=¬◊.Ë/æ»∆´îIß˘™s/€∞Tñ…ùPäƒf(% ~•∑T(ã ◊ÓπâDÒ)M‰Ÿ˚üi¯ZH.zQ–Á∑€Ø{z©À_·¸˜)ùÒ‰⁄	˝Ï÷ba|Õøp∑¢ur∂)aßFv4™1HBÉ™*ñ√,
+¬k∏åp◊3` ÇS`æƒ°V_ÆáN%U_ãY/∆˝Æ∆¨ó£˛z‘]ê⁄+R{I‹◊ƒyQ\W≈}YäÎRfö≤œS—–wK.KcÁõ2Û´æDCÕôy+@úLÖ'∞l!˝+3¯pFÅÉÉıÔÆÛØÂÊYπ“8=JœËZç˛.RÙàxvèñﬁ]®¡‹=)yú…xîí˜HÃ3gI»kC#öqÑÏŸQ‡u‡\„Û¥»ﬂ ~âê-ó™MAµMRU≤ñh”6cwYª;RU	X|âlÓÒn4BÅGÊ]ä˘~¢Rô§ùÿyˇ3Nôƒ1Çu%üÒÁ7û%˘åpˆ
+E°í$à\iÚå‰@&S]4cXSòÒx0∂bYj4í-ò·È›1≥°QØ*üÑyÿºπºb Ìv…’◊ÀJ◊PH÷]°˛±„˝ÑXëé8Pcd=p¿ñ âFûÀà…üxÚß”µ‰Y—ï<Èµ∑íB1ï”ûü_Î‡ìΩygÈ«a$3
+˜÷ö^MW\O€yu°≤>ÛI¢ãÁˇÇsîR˚]¿£Û©0	ÿül%qn*:i:ﬁ8Ñ2‹ ä	ã©”í7ÿöx:r¯åÓ¡v±wqŒ/(ø∂#ƒ3ò	ÆvÜr€àªzõô	gk∆=ÖQ<Å/ò	(¥tñ ∏8Ùü Za»≠P°-˜£†Ä$”DÉ¢€»6(ÅˇÅö‰]∂ÕP¡ÉåQBJÑ0hÆÉé/<©ì"%1T»&Lâ√·MáÉô`D=9ê{òÌyïS9f±‚‚"kzúø∆–P˜"ÇùƒÕ·\$›˜ªÊ65Öf∆ç}JC†˘Õ¿Û	Ä”az«CÛ·Ä±w„†Ê*◊≠¶(’5˜”∆Á66Gºo¶Ù¶hq]¶⁄PÊ
+ñ6ÖÚÕìKm◊e⁄Òﬁ2	ºÅ7Ú}Á@R‚:Â|Ô'·Ò`h:∏Õv5çdQ U4o≠cÊ€p*≥ÄÁ_≈√¡5JG¬3ŒÓp]öq¯>èQe&‚¬Ò}'ÊÖò_s.¨˝âr∑¡%ââ8»Öÿ#F˜?j@∑Xﬁ≈‚nøãœqùs3¨≠#B†7t2QJãÄv≤’G=UÏ`˙ı±T√˜«ùãÃAÍå;J—güÌ<ﬂc;À˛»¢Óﬁ–w¬¬$ q◊(÷Ò.ùŒxÓÒ£’?2!9\dΩî‡˘Ê2K⁄∂O}…∑èˇ˙ KÆ¶l””º9ùØyV|æ~]·◊ﬁ≠~˜∑∞Ó;˝Y˜"ßí=≈}Ãóîc.V˙∑uŒIüÒ ã>ûf„a±Ï‚WÉ£æTı’;ußõ∑ù…„”$AT qÑ¸\°ÈÎ±Ná|O$2"E@(§Ú^âË6¨}c)\Àü5ÒÆ1 BÀJwÛ)˛z\‚«Œ…Éêã*∆%aã4 6
+	¡íaB⁄ îi“¨Ñ»{EıÚ@4	]öÍ+¸0ŸöÅÅ5ç¬‡l oÈ∆¨¿¿mæ£[=Í*?®ÙáÆ≥.?÷∫¿`üÀ∫†zÛ#ûó˛Á≤.ù~‘CÉÍOÅÑO≈aî´∏»∂«(M!…G˛°Wâ‘Î3Æëü¨∞
+QÀQƒëN!w{£áº:±¡àXˆo\-iëHdŸÀ”÷Àz£ˇ[2Döü*◊gQ˘
+Öù	˘™iaòl|oæá©R›I|§ó$ém2kú#W¶Rﬁ≈ É±|_ &ñ≈Öo·`°Û‹M≤jj—•Ä™O*≥ÍWº‰¶P[ô§aùJŸáñÁÛcª}°M–Óﬁ÷Õ≈…≈l}âÑ◊\ﬂ≤',Nˆìx√…}&Ë¢ˆ∂êáŒﬂs Àz	‡ÂËÎcÏ∆¡}ªóÛóÛﬁìÇ’ˆQzö=x˜áE$+∂çî£Ø{(wË¬⁄Œ3∏9°º€ tBtÄ¿ƒó‚D™T≥	xπyy˙C4ÅÛ∂™ıûÁ~ÿÁ˚¶âÇ˛ n•m	µhlÇ‡Îm≠äﬁlà&Ω°a%b.y»§M•˝A√˘äeÀ”◊«{/^CÀIÈèUª´Smh›œ=a≈‘–1õÔˆ˛Z5x<˚l∏‹]fÛ|Ôx˚‡Âé6#gïo´&Ufüt)ôπÀƒ˜vˆw∂w˝Û5ºìÜÁﬁ∂Øˆˆéèºœ˜˜ûoœ˛ Öy·]ﬁ¯ÂÎ„√™∑=⁄·Yl<˚|Ö£sÆÓ+h¯¿òƒ¬ÍAf%¨—ÚÜ¢ùköÌ4’n»œGù–øªÍO`Æ 2‘e ¬;Iå⁄AK§√L©õ1ìUõ¸Â(ÏóÊ?Ï4≤®r„◊UL»>˜xAüírh>tjVÖåÿüP≠ÚÖñ…;≈ÍIπÈ	¸81„≠3n&6ÔCDˆlf3.îgiärÀÄ<8ÚªòyMÓmÊÂ»fŸıhOû`À’Yä˚nrïB·jÁ0eû.?1‰‹PLhªdßÔ™\ì∂ìÓS(€∫/ñŸIjìf∑ﬁ.ÔÇ∂z¢Ïk›¡Œ#ü}UÀm’6«ôjmä‰59z∂-<Z˘D†Tˇ¶l>ãá—1LN
+ÂWH(œvÎ∞å˚Úå≥ZmXﬂ˘ ›kÍƒÃâÍ◊yî=¥ZÅ3ùro,œeßﬂ2õB/ËôL^≥ÿÂ…¨˘zå˛WØ˘Cﬁ)Fl&ÉãM˛Û3ÎAùm õjè√ÇwA<DHs£Á“7;'..öF¬ÉÂÁ…vÀ}Ö•ßp·'Ã'⁄—ß÷1ÜÈËù≥“ˇó/Â›@≥	Q4eÜ^È-0+`ÈŒq"#„´Q˝C•†™ÃÇ◊á/Z=}¢'Ko˜£4&€©<GpJ}º*´]m‚´+œ∑ÖFê|Gó{Á4≤pN˝4Í®œ#<ûπ„	ÙóßIçg¸Ä¡^O`˜†!Ö#(ûÓÖÒ§ÙYw6U:V⁄∆9¢eÇÅ3®¯io-÷w˚8›çÄ„„˙Z)–V£<x¬É˝qˇŒ+û›A£ù,‚^óA~ùò
+…^2∏_™õœ`ÀJz E6æ S> dfhpï3¥Ü	–®€* $ßÄUØà2w,ü‚¶]m@t:SÊ≠ë…ÓàäÏ˝ø–¬ò˝˛gTg¡_≤È°‹üï≥‡´á∞œÉ…E7CÀ;ŒÇ7‘Âµ˘n>=Öæ⁄˝{§ªÌDó∏⁄*ÃP|‚P·”]+Ê†‹'YÜwE∂ ü≈Y>Ÿ`Ëı1¶‹
+˛
+|.Ë¿Q¨Àe£˚Òd7¥C¸ˇ¥√Z<¿ﬂhπ[ò”ﬁπk# Åº≈¢HΩÏÍ#±˛ØÛ)∑!,ñõÃY>•–F_≤mË£(√H∞)y
+»7û»‹©Y<ä‚,ÃÉïã}vÅ+kGYfÔxÜ 38˛|e˚/hiå3œÔãˇÃ´◊l^;)º@eÁ¸ÓÌá¸“’ª<êÑæË‚6ûƒ∞aî°cx}é Û3‡©5;À`•»ìc/¡‹‚J∑‡€Zt¢ÅxÚ¡¡Y„ø“IX‹8¡_¬mQ'9ØÓ£
+3$PPOLHO™ç´k˜N·z¡ÅÓBaöµÁ‰éEW¿v«Â~mÃu∂˚∆Ω¡fu<1ßA2 Ÿ=≈ŸÔ≤c¥@ÖÀHoÀ—Ì*∑v‡0Z8ãpÜiÜ¿uH>(∏ﬂ gÄÖ¢∞√ÄÙ  %D∞⁄GI0Œ/RÄ9¢)` †Éµ/chçf„hŒ˜ìŒQÑv¥S¸›5_eúç‹h~B∆ª©óY¡;:Ég‘πÃÿ√ÏN4hhØ9“\5œÀ
+ /ëéÚ ¡·)‹g≈ÎÜR Q™Œ¸ßj«	R®≈‰˚⁄‰#Ó5èaÃ0‰JpŒ°◊ºÕiv;¶—©mÔÎpFA_°YúQÑÛ«gt∏%PÕmóìF.uÓÎKMF.gÉJ'èπ«Ö#GÂvÒ±SµhqiñrQxtú≈Ÿ®L/±á¿ÄÃz4]‚ç
+Ö≠úRÊ»‘⁄ÕÍ√ÕíßyŒîÂ§÷‡⁄≠kÅa∑ÃwfÎ÷\‹†&6æóΩ5vÅÑp™–‘I°ï‹©fôOFW¸z¬±∑ç¿h€Øw(∂ïÿˆÂæ3SëO9Ô–ÍœÔp{pé}R∑—°… ”‚2“röia™záââ⁄†˜uóÌ\ô„hƒàé~
+j–Äè~
+Ñññ(ÕR˚kÜ€ï„≠π!‰≠§Ê¬}OƒUI»ÒÂ«H`¿¿ghwnzW8mª<0—Â(™õ∞®H3o∑fø=!p:7À•îI15ÖÉ¯e§Í[9Ê‰ŒYUÊwÎUZ≤Í•‰∫'›˝u∞ﬂØ≠óë8Æè¯& Är+¸ØŸ–0ƒ,—í ˙å:V¯ı1‘™≈iÖyDç{çÂ¢ìè,á´QÑ√ñ≠rıoºw#kÅˇ#—5ÓE:ä»~N¿&“1ï8IJjÎ≠ÆˇI1£"E;èƒ#^-Ír™\ZtŸãHJÕ'⁄UéÂ¯
+ˆ´4(¸j
+¶”	Ç¢Ö≈@µm {îdÑN¬k*ì&$‹4›∫Ål+]@ÔQ∂5Gãñ¿—o—uPπ˝|^¸õiúŸÇ¢%s7\Â˚ÔTyàC° ¡>ÒcúüÜ”dÒçÂ÷rñ°Ü(°‘çˇ¯ö‚Bù=∞Ö:GA
+:˜ÎgK©T#¥ËÌãIQ$UEÅŒîƒYæ&ÓÏ±∑ûˇúÆ^©¡sÑõ≈èv3˜Æ6ÿ““RœY◊ô›œKyì˛_Ïﬁbü-–ºhAÆ±¿gvpÒ•ã≤õ›!&÷=#Í)vÚØóÄ√P¿ÍpcÑñ*ïBƒÁx4ë%ÍüNs4“/DHÑghceõ‡70ÿt≈èüMydu@‹‰ah
+8◊œÖ‹Ëû~ﬁ»Õq®“1@˛ÓssòAµ ·„#…3b”QÄæ’b	yªß]ÉB∆l.ùÇåI≤€bôo√ˇEñÜX	⁄ñŸ›ã∆áßŒ9hÀ⁄1:ÚÈfgõ»æ3WM6ˆΩ,ŒÕâê‹0
+?÷2ULòèGáGﬂ√I,ÀŸmßæ°ç2:)5ßy≥n
+ìŸ—wıÌuñ“¡⁄Fp*=ËÎ;”ueJgƒéúO•Cv”û\/ˆ-U®}µRø¶¥=JQQ±`èa2-Æ√mDQÁ‚Õf/ŸC'“¢KàÕªÕMKÿ¨≥¢Ã,ƒ˝Ì÷ÌíçSákF±√7ÏK,*
+0
+¸ìû1C)˙Ü›öÈ|‰ßº7o=ÅÅÿX±(Y5Éû(≠–ø∫Q¥TM&˜Ñµ˜U™Ü'Ù∏ﬁ˙‚0ﬂ-> p“rÖùw≈ãßç‘aƒÕ€KÄ˝ø|ÛQ(ﬂº>g∞æ4˜Y≤£RVd≠rñ˘K˚©fù«ü˛‰2æø‡XﬂT FFÍÀ}‘*≤ª•`ç,]ÑÙú_3∫‹^˜∑çˇÿ˜£!ôÂqı∫ã`_Kçÿ]á|®Ô]ÂMÑCÚûx§CeD≥íî©;Ã‹Ùh‰DÛ4¥à‹¥¯òÌ:ŸÈª¥–cÃ¨
+ìjBµ&sH:By£x›ÅVô{\®oóâÄ87v‡ŸÿnÕDà^*ﬁT\,¨Ÿ±lZÈòõ9ﬁXõq‰F‹ëàŒòÄ™ÊÄ£‹”`Ó≤«ÉåtrEE†æQ©eËÀÙ‹ ˜Á‹<\ì}™ÿjj€,∏≈·.àÂN2èa„iIÀxÒ<\|;Ëö&4ËÊaÜèw‘·.*S/ÂÅ;CÍ˛-ItÕ-‡@»;>75VI8cbË:æ«uê‹ƒÜ[—‰jâgÔˇ¯"Œ’£i]ﬂ„„ ›¢z‘»hªv[Åﬂ|2 ‚Èl9#î#.cﬂä‹8ÕK®áG∫bƒìGÂ≈µ:YÍˆ¢ëX
+d‰+Ü¨¬˛˛G∆ìÖK´∑‘"»‘ı™VÂ¯©QXMÁ=>¸Ë
+Ò¬,ûú4UªT‘hö+áT‘zC%Jåç÷∫}Æù§I~&Òd°ÿéÎ%>Ú5®8&«∞±}«{˜◊ØC#Më´âsﬂÁÕ@V&RΩYΩ°∞b',RÀB¯ãY≤•…QÆ(∂hÊhü>∆«|üéÉS ‘πë∞π ”œ”`»øà	¶Ø‹»äæ„1•‚ÄÛ∏]v—û‹©#m¬º1•êû`27%'S4yf<lcLGö$ﬁ…npÌlOÂÌ∞|Íh{Ñ!-≠¨P≤Âi;<πöxG{IËÌ¶xÊÔ$î≤ôÁ Ì.å^vçáÌëZI?bÕTìn(¶Ì¡√5Ä;æ…ütD4˘«bîoeùzkrw?è©ß,>=Mìox®◊ºﬂ∞–ﬂ~Æ€‹ÛªgGπBzñ-l≥õ^&ìx¡à9\H∫ÜÿÚIÛ¶€I0ºûƒÉôÀ”]¥©oÇí’™]ƒgìÍóúv≥Fò
+xò·S@æ”±	ë8€yàÅ|≤àÁOÛ '^ÛË: zúÑõÜﬁÍ8!aAÄ†ã<Ï6¬‹åÁJA™‘-Ê◊°dﬁ∞I≠Ö¸Å®À CÀJ˙'g©Ø‚|?à±T°íí D˚®=åŒ‰AÜØ‹’{Ûª„ÁÙtoHßíüVÇåà≥ç´~§<h' sm2@49Úıq`>m‘——ÙT[Kª≥≤F…âY◊)Ô«ü∑áv5Gg;H≠Ïèî]uu©÷j«é⁄∆nná£8·ÜÚ V‚.Áì`Hä„…öıC kÕ&/è¥~ûEGD÷Yπa÷È•®≤w† éíN=ár˜uKì„,>á” ÕØ_§2ÓpJ‡&I'Q˛D€„Í‹öy˛JÔN>tJ:°£°¸éÖ∞;6öÓîË∏£!·éâk;€—Òh«¬ûGvlÃÿQ`á#ΩNÅ⁄:*jÍ®„G!ùj<—©√ºÔ8Äz«π;^‹±†p«ÜªÄÌ®ê¥c ∏é’:»ÍËÄ™cÇ£éu\†∆¨®îóY"u®—±ÄB«:Lø‰˝fw¥Î‹·w∏„∏∏ÔUÌT›«/,œ6/xGÎ 7ò~hh‰g5_o•Ø˙è‡•uzè(É¥—[Gÿìpø
+~Ÿ•ß®ZUŒA˜UjüÚRıÜq¨⁄øT_·eÕRrÂ†≥ô0èz0—å≥	e#å,Q69&›:Ï+⁄`_*;ht$∏Eâ'å’ïÒ9_’®;¡©( 8sπËmg<m‘Ú9e/€ÙKÃgên|ÅRjÚFzÀLp€æútyÔÛwq≈XZjÊã—«à·öK∆◊é(‘%É2`E…≤ùÁ§ØÁ9ô¡„¬JÄb‰HN´ËÙì–“£Ã‰¨a†_3.Ó’¬:û‰?&¯„N·«)∫ŸWgPi¥÷ô7¡Áy<A`*Ù’•“i‰¢kÀ˛ >Aû˘F∫pqÇÅmÁe ë„àb˛g—YîΩˇoì-ËhÔòldŸúü”{•.˛Ä.B”gñU±‚¥¢©&¬çÀÖØq!/æûõ5/âS‡›,ºÇé‚j	˝Hí™ ˙∂êè“tr·?°NS~‘‹b&Æ÷ÉK}π ìÓ'˝X¬Ø¬ñæôPÕVü› ∆"]|qi+\QC hÉÍÎ°-¢-Ë„6oÉ0HÆ¢≈j£ó~÷Ñ¨√8LYìO|!- ª’´R>©GêÄ	W %)ÊÅg_πlZñÄtr‚Eü(˙~=ÏwªÅ‘z¸üBwA¶Üö√∫NhVaÕƒ6ùpn√È∫u[e“ı9È≠ãªﬂùÊôt∏ˆﬁ<<Nπ≤ÆÆØ	–‚ä¿Bòπ∑$Ú˛‘™Sıƒ@˙&b´#|*Ï5∆œá1}Y@è‡Ö”tÇ£Ø∏”ô˘F∏y˚’çJhWÿ’ÙJ+%Tø®!K∞“-+k›$+xu∑µâ˙ÑÅvUçrï
+–a†£¯ªÈÑœÚïÍSÏu”nYyãî(ÊUv6õ
+ıYÈÁ8ºÊ+{«∏≥Ô\E`0k∂)7
+•G„<¨)-«˜"+
+Ÿ.ÔD√È0»ZnªÊåî^<´QÈ€°Æ*º 'Káä∑˚>ºˇoJƒàÈ$∆‰MËN0%ÔKP¨Ω˚1BveEÅ”qã·O4b”ëRìr.°óO≈™xî•ﬁ·≤«OL;§Ö˝!¸]ÎQ•Oı0VJ«DÙ
+g5C·YX)ø*Vù≠˜Ô„≠Ô+)/úFT3;π.ó £b>xª/‚hÓ\Dp…J¬—´≠º‚Ùÿõ4¿ôÓCg∏ŒÖ”|Ém”—˚SyYg6∏Î›´ObP~^Iñ¯ΩÀ“ê.‹°&kHËuøü‰ÃJBﬁˇºÄ	c‡◊nΩ;Ü—X>`öC Ö'Ôˇ5à≠lbÍ^‹≈Daﬁ÷ÒÊKÛiíØá1R∞e>ê‚ÚARvUÕ…„±9,nl#ÇyŸäVgp®PÙÂL˙Kw∞OÿÚXyu„2Iiù¬K"ècêË…eËFˆÃELreŸ™ÑÎZ-{ïÀ¶P◊xs3V¢ﬁ ;‹»îG⁄’≠˚/09'…≈‹≈+ñ≤WŸÆÜïOu!Õ/‘À£Y∞”òüwI˜˙≠€$&™⁄L/≠eÈ,≠ﬂ+Fµ[ïEps6)hà∆a2L˚ÌÕ»kVØFcû’™$…x´∆¯Øë
+©eSëÚèh‘¯í„5W…7ôèÄÈ”Î≤c
+πénÄÈ…O∑i|qVhRPí8≥π«s‹§Yÿ⁄9a	œ⁄Äqy˛>¬2B`—˘ÓÊiVΩÎ¯ÈwYÈ°6Îå∂√òîfÏ˝f«OÔs<-gË«◊|Sj∂≠Ód÷ ™@˚_ZxˇÀz¿’=(L{h®÷ÆyàÙ◊`B{W–4	Ü–‘pˇ?   ˇˇÏ]Îr€∏˛ﬂß@5ùJﬁq$[ëc;õ8£» ÆªN‚±ìl;ôùîí`ôª…%%;ª˜]˙´”ŒÏüˆÍ+.$ (ÀéúZ3πX)êƒ˘pp.ﬂg>Æ‚πk∫˘Zî€ß ¡Xx˚ºg¥·*c‹£•bbΩö|Ô<ÅÁÛd∞∑p‹”}Ÿı¶Oá=&≈⁄;ãÅ"ú£oöÃÉ1πRx¨xxDuÑ….ùÏ‘aÛ‡'	SmAÁ4U£˜e{”uÙ˝ô7K∫Q'{A6É0¸iùÏÚ˝‹≠c‹9T‰Å¨∞î a…i…,Ÿ∑¸¸˜z†‰§H5√W*ƒ∞o+
+—∫ªÉÏÜ-‰uÉQ˙£÷QÔ@qå∫™#Nˆ˝sDcÁxLûqå à8aÒ Ωo¬ÓíŒ9yà@ùkÁh‡≈1d1©C‚ËQ◊Ë(ás‚G¯T@M≥ﬂK›62® Á+z[\›»—’∫MT3˝Ú⁄=‘¸îØ$!éô•¶»‡∑Qã÷çNééí5g‰ì	˘`>0öW∂®Ô¥ÖÇˆ}W!¬zøŸ‹…•VêB0—z∏Å)⁄N÷√%ì∫kZ∫:ÆÌ£‰bZÌ òçhÔO	Îæ∏ã\ iÜ°*"∑-ö5ÍÇ3ÖXÈÄ<πs!Â>ÚòÇ©ˇ+_ø)Æ·è˛¿"ïË5@äl*Å“jjìµ«ıuTû´áè2Òwz$Ÿ¢ú„Iëë√ûåû]ÁXfïì©ÅKÄn%Vk§/≤LAv”∑hCÄóöwµ∆‰‰∞√√Õ¸—éRbQ∫k&qáMb:∞ô«àõõ“úõâãimxÚ√¥LWÎ 1?3Yín%ë6≈Å/%4°Â4‚â≥)àß¿Å÷öñ˚«2êÕviÑë-ø˘(&Ì aÌ⁄˘a °ädç£˙£»Û;óÌ€PÙè*˙«î/…Ÿ)#eÆ;∞?cûHπÁ%ªáPGòOÃ˘"7¢XtñÛ3,ë¶À6Õ%˝˚öòÇM≤zó›õZ≤†ÉKÛ/#ãuA{ÉÇ
+{3∫œ]ÍKîîÄô+¨≥!CQf∫æ¥¥cÀÃ0fN‰ªá#E^4kN#W´nw⁄¨¡ÑÔª&(®‰ñ}È”ﬂ‘O¿j≈ıì∏òcæü«Kò«ºx∏¨2˛∞õò√Zä1çˆJOˇ\}òd‚}Ñõ≥üká1»Î'~0å√ÄÆŒ¥ã¶æn ó◊˜9«vpè7¡ÛÑiDP}?°Îºœc™é
+<‚®ü„È3 Ab°ƒ≥ì¿^mÅ‚–Ûà#Ò“~≈±t`≥Æc Éó°»t¢/Rø÷Í›Í–ûá–Í“^h‰”_À ${ÙV°Âs˘n&(≠^x˘-öÇz9c	ú-pêÛ
+ô≠dâêSò√◊}Èoúúd¬Çt‚Ê`#’0AC±ãJ}1Ó_¬∫'>d70˜œ0¬(∆>o≈íèˇ∞l¿>ëÑHDq8òêÖÜÚEΩ8∆c∫q Ÿ ã ,E¢˛∆?A˚≤@¯—CÉ°çöòÖ3»˜@4ÉuÉ•«5•s6«2sb}Ü◊)=A˝ôúÖßÙl√ùh‰sÕy¿¯Tpl˚S}ëÈ˝í·%5Ç—7…&é8‡¶o–ù≈b2â∆Çô÷1˙2K˛%–≤Ô{„‡Í? ˘dÀ≈π#å†ë1·À!3âƒ≤†e’uΩﬂ¥‰ïa≥∂«´öM·µVµ‹JÈ‰H´Ãj{ÁõÕvsøﬁ◊çƒÖòP2®)ïås”¬és”B€ﬁ¥†ôBbÉel1p®m(ÜÄé'≈ﬂqÚ∆S=S[B%™„ÙqS∫;∆glôîåPZ}âÖCzâ∂µ_‘®6@áƒ)∂–√)°eÜ#·Uëö[Ê!(ítN‰Ã›ùÓ≠Ûp"∫≤:Ö|„¥"w∑⁄HÓ>ŸCvºæ’à‚2°˜@÷ˆﬁà8§xZ∞≈41y≥◊ßîHÅ6“ÖQÅÀ;åR2oÚﬂ=¯ÀLÁÕGß%ıøst)?ˇ¸'+*Í'^˝vJU€‘7àmòi-RÊöß5HÕt‡%Y‘æ˜ãÖ=ŒQî^yRWUxÅ«™|‹˙=:Æº–g…1ú0§Ïs…∫IN^´	∆©`,»ÊÜ≠ –°)@◊õÕÚ,7S∫ùä G«(»A÷ÂÕREπ…Xﬁ˙i¢Bñaq∫BÓ…ûRjÛÁ≠µŒ$»≠9∂⁄tC©Aı∫©xk!o—û.Jr¿Á¸LuåZ[˛›ï√t^˛)˜#_˝éV◊Sl\2∫gò{;œqbQ¨˛ÅÍÙ±‹`KãÌ›ámbKêìgµf_ xØ"læßw	2πk∏d¿Á=\Æ\Úárc`ô€e|!PyÍ_P∫zπN˛+≤ÉÏÕCÏÀ´%≠n@s√«ªïjm∏…0ìHLã¶Ã∂È¶ËY`‰tå≈›!Ëq’ø~LúS™ﬂxD\ rD:rébmnjs€¥67åa@∏úû'˝qCùW,œÂ'Ç«íWd—Ö⁄o$G†éÆU¶äJØÜ∆fA™< n	fõ…‘9´øKy7ÒÅîsfú£p#fUßS$Pn“P,ªôD÷®?®Ø5cı¶∏±÷¸1ÙÉFΩE÷6]AùÒv™ @îL<>ó†ÇÆ ÈSÎ+‘ˇ8ãÁî˝Ê´Vqë∞§+H{KÜ ¨ †3_]L~|˙•G◊ˆN,å≥kµ»ÜUs•Ìé4[õæ—›‚´•˜Ú˙‰Åæy›=¸Æ{¯∂_!qC©óSM¡≤≤Ö9mH°ßËS¶=®Â1zEØ£∞ò›e*|tBnº7∆M®å$’®OΩ`N¶¿Oﬁò<üÇ∑ˆO'Ø_5√6Æ—ö]·y?6Fg∞éÍI¶?YO¬Å7©Ø≠£OB°A\„%º7≈1–òCQ&∫¥|gãÂ«•£óê	+™ÿfºJ\Àñwﬁh ≥(rÈ¥BÁÉIàˆöL•™›∫ª‰˙ ]?Ö”wﬂÿƒ˛*π´Ä{Ω0&É#K»üxËéÿ«Û◊–-cá>Ò¡Œ-`_⁄Å¢á>ÈBW¯r‹Ò:¯
+fÚ™Ä}9Ú˘ªÄÄÏ˙o%˝ò{8,›∞¨2æ¸ÔøECó7´uÄ€ΩfÇ:®6}qBr≤ë‰N¨g˙I‚Å{æ~¬¯†Ísd¿!äxd%úÆ&mÛ
+—ÍÔì·‰B©™[Ìˆ*◊Â¥Ô$Ö$óÛV≤≥¨‚™BÉ≥ÆÉYe·Ê%∏πÜ,ì4◊6ÄÑ}—fY90#dí€|m†RßÓTmJ∑ÂRñ&åêx…Ã«^ä-=ô^_÷Ú,˝|¢óè™à^»/ïPW•›|…JÍŸ÷¥pÓiÂö©ÆkN∏·»RL-ÀûçTU”UHQÄ7ì
+Ô^W˚RÊ= Å~∆So¬7¸)˛œs<ÕQT“BÙ§§£…÷~l˝UÔü«apL˚xµ›œb‡˘!ä∑7MÖ“∆X±Æ]’Bdaù™·ËîÖªNH∆Œw8’‹'c√æûY[ç∫<æÁbÿƒ4{‘Ôw≥ÀÍV©1!€e°òùº%Ï7k…{C¸H´È.E¥Vä€}∆\©Ë§à_Œ"à@ß‚MŒÃ¸$ìÀmWˆÌtvöYÈ¬6)	`≠íIrNî’3I>0aíÈèïMÚyÏ„S:ÔîYæòB|Ê-≥Gn1 !◊ø°[„0iùñéÊÓ⁄¶QµπJÜövñØñô^ﬂ&&zË˝ÇcWwvEÏÛe»RNê˘";›ë’Ô\∫ùˆGd/Ø#/Â#fÀu«ß|dë7b∞#ÀÚæzf[†V‹—q∞Z[ï¥Å^miCYxES’`|40;í'Ú9"ªí–D&dõêE¶„⁄^7I9e·¬Lîw»£†°O’õ¢y@Èz @XÈå∑·Úªπ^8Ò»˝4å/«ÃÁ{	tÄê¬ÛÄL® knﬁL˚úZˇ¸›s©¶êCK\§e\R¥U‡ŸZ∂ 3y.@ñ-^™Ê _íi¶\HDìËI&väûô©ô˝È%ÒiÓ„ó»õÃû÷ËëG1>Øiñ‚3ˆOH≈®a¨∆∆‰5Ù∏¸˚kg≥Yî<nµíπ∂aÛ¬ˇ»ˇ7ß- –ÚZ€è∂6vv?t∂€É≠á[€;[õù›á€ﬁ∆Ópc{Ä;ªù›≠áªÌøMœ€Õ(◊ÿuÏ„So>ô!∏ÂRv»uÏ†\(!Ωû`Ê˘Å˘äeÖ¢≠4Ù-d5SÖÃén“)3CÃ‚P{¸díÛÍÏòjÀEƒÃ´£TÊÛ0øuåd}Ñné”≥ßOÛh,a ¿“ÛaÛû<≈·G‰AR˘Ì÷Wµ\÷´Åm,ãH$∏‡‘Ë)JSWsÚ¨˘~„s∫Ji·sˆZ¡|‡Å	?Eæ@/|–IÜ7lÃà‘)áFZ≈]˚˜ÇÙR”£îwAºEıä¸;»`êI‡˙ıƒ„°ï7øe"…çÏÎÏe¬Wˇt–ë~{|»ÓÛ,≠1s£kºïƒÿ›ãqm µJZò	∑zÊG¥g®î2 ∞NÍSÏ.øÜÏOvﬂÜÒà¢&;ÖÑU∆C»Ibê¬ÛyÒœs‡Y£Ÿ¨yû‘PÎ◊Xcl± úË∑®Ú<ßT¶≤Z+Oª∂À˜úneåΩ&sN“ÙK∆l£Ó2èÒ>¡a’^ÒºHÿ˝öUœ˜n}}RÖ‰+8_ŸA‹ÎyëwÛ.X·∆ÊO/)óﬁTejIM—À<»4U-¬ë÷È|Ôäπ∏b0ëÓ]1„Î≥∫bõm≈v‹}±&Ó=≤‹áoŒ#;`^Dj êﬂÜSlÊÜ^Mü¨üÃRw,—∆?Ú¿M£·$ﬁ“ögá'üùÖ#&<Iæî4˙÷ù≤‹Ñ_m◊å¡Ï™∫fj@◊P∏ãYI©ÆSr√4ﬂ-îˆRÿ◊Lt∑‘rébπGÛ‰l∆gáaiîc‹∏‡3Yo∆`çQk‰ëG0Ú)N¶aë
+˛¡çm“ƒ	DÆY
+c]˝ì,îLr6ˆ√,Ê$ÒOÜPÌ£©áÅö<üIµΩ«˝Á›ì˛áì˛ÒªÉ^ˇC∑◊{˝ˆ’õ'-8«¬UNˆÓ‡MˇCz∆w›£É˝ﬂıˇ"ŒxÖÿºé«æ∑]ñ‚D˝ 2!0T˚t»¸ÒìgÑ„8Dµ˜Áƒ»…<B†∆InÔ¨|B‚¸¿-ßVM‘√1<B≤Y~ê–*ı»ög~åhAzº€gr@•ö:ƒC†˘Eû;3uæÀ$nq€∂-ó[†¬RŒ˙`A/œ´W ”÷Ëë!^˝Íf÷ü›D©@’&o¥e‹	ﬂCGêæqŸ⁄C›˝ó‹£7u7€8¨º7ÅmJa∏˙N“Éú	ÛF~Zí£ß“]3πòybgQFœ1[ÛÆÆ√R™âW∂oê*åü°∫‚\‰ºä“jzˆûRT@π¢ÛÒíBpÑÔ 	¿à¬úØ÷ñi√ä»µ‚3≤⁄‡"b™6õÕ
+e¸üâ+‰ÛÿÛa8ˆÉ/⁄î'pÖ'ãÿÛ°|‰ΩQØÄQma˙lñb◊Æ~¿2I+n◊÷OÊÉŸ’o3hãiH˜Oo˜ü›Í‰·(⁄;\8ê≤8Smèu¥˙*6oÒVãWÏ˝#ŸKxœˇH≥d¨Z›–è<Z4± AEjëíJ'∂`øÈÿo“{¢+‚QC@#.nıú<Òyt)ÅñÅ≤†FN∂ÖŒÒ≥¶ˇJéuàV‡jßQç¢bå•Â*kÆZ†fÙ‚¡f™>;YdK∫ƒkuAŸÂ≥¨0à¢C≈ÆàŸÏÿ™EM+F•∞≠ 5_÷_Y€{Nl√ãõ-ïñQ€dñûxìs bçîxJªì´EÖÃ¡@óZi¬ ÷„”&¡ëò<∆gÕ!óâSj§%´(÷ó⁄CÜsCYÛ·çX¬ıõ+ò¡€('∂∑íFpL~hnπv–⁄”V±3p[rÏãI´÷q¸Xà¯R√c∫UpÔ¬C˛K∑"gÆç,•˚¨±qÅŸ¶»!à\C©eV1RS˚U¥ÀÙä”$732Nù≠¢≥q[Vy+õrLU¿†I¢‘îU¡∞∑Ê}∫ 1ysﬂ“XP—™ﬂÏw˜_?F›»{h6'û%FÁ·dÊQÜo[$b2tÎ[πJrÖÈøWu],L  ˘¬œÖÆ}3¥–˘'¶‘ç]d9ÒŒãõØ<ûêhê$øAJﬁA˘•6gÃí’ÿx‘Ÿ¶W<ﬂ,
+lkEËC·KËÓñ1“˜4€ ˝ñπ≠Ïà‘©îﬁ0ma’7"¯H˛Á›ˇIiƒåPn.≈Úº‡ü!EI˝∆`!WçÖ®GËk≥Í‹˘d<,§j%*µO:„S¨,="˜~˙ﬂµØw˘ıÔ˛  ˇˇ Â˚B

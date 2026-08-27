@@ -80,11 +80,23 @@ export const DowntimeAnalyticsModal: React.FC<DowntimeAnalyticsModalProps> = ({
       try {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed)) {
-          return parsed.map((item: any) => ({
-            de: (item.de || '').trim(),
-            ate: (item.ate || '').trim(),
-            motivo: (item.motivo || '').trim()
-          })).filter(item => item.de || item.ate || item.motivo);
+          return parsed.map((item: any) => {
+            const de = (item.de || '').trim();
+            const ate = (item.ate || '').trim();
+            const motivo = (item.motivo || item.keyword || '').trim();
+            const explicacao = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+            let desc = '';
+            if (motivo && explicacao && motivo.toLowerCase() !== explicacao.toLowerCase()) {
+              desc = `${motivo} (${explicacao})`;
+            } else {
+              desc = explicacao || motivo || '';
+            }
+            return {
+              de,
+              ate,
+              motivo: desc
+            };
+          }).filter(item => item.de || item.ate || item.motivo);
         }
       } catch (e) {
         if (trimmed) {

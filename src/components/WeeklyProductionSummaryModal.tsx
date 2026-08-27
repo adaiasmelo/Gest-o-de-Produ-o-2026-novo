@@ -4,7 +4,7 @@ import {
   TrendingUp, TrendingDown, Package, Clock, ShieldAlert, Award, FileSpreadsheet,
   Layers, Cpu, Sparkles, AlertCircle, BarChart3, CheckCircle2, MessageSquare, Wrench, Share2,
   Target, AlertTriangle, ArrowRight, Eye, RefreshCw, Edit3, HelpCircle, FileText, CheckSquare,
-  ShieldCheck, ArrowUpRight, Flame, Box, Users, Sliders
+  ShieldCheck, ArrowUpRight, Flame, Box, Users, Sliders, ChevronDown, ChevronUp, Filter, Hash
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
@@ -84,6 +84,69 @@ function getCalendarWeekRange(refDate: Date) {
   return { start: monday, end: sunday };
 }
 
+export interface RecurringStopItem {
+  keyword: string;
+  category: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho';
+  count: number;
+  totalMinutes: number;
+  formattedHours: string;
+  avgMinutes: number;
+  percentageOfMachineStops: number;
+  percentageOfTime: number;
+  occurrences: Array<{
+    date: string;
+    shift: string;
+    durationMin: number;
+    description: string;
+    timeRange: string;
+    operator?: string;
+  }>;
+}
+
+// Helper to extract clean keyword from reason or description for intelligent recurrence grouping
+export function extractStopKeyword(motivo: string, exp: string, category: string): string {
+  const combined = `${motivo || ''} ${exp || ''}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  if (combined.includes('limpeza')) return 'Limpeza';
+  if (combined.includes('desarme') || combined.includes('disjuntor')) return 'Desarme Geral';
+  if (combined.includes('intervalo') || combined.includes('almoco') || combined.includes('refeicao') || combined.includes('janta') || combined.includes('lanche')) return 'Intervalo / Refeição';
+  if (combined.includes('troca de tela') || combined.includes('filtro') || combined.includes('tela') || combined.includes('peneira')) return 'Troca de Filtro / Tela';
+  if (combined.includes('troca de faca') || combined.includes('faca') || combined.includes('facas') || combined.includes('refile') || combined.includes('serrilha')) return 'Facas / Refile';
+  if (combined.includes('chiller') || combined.includes('refrigeracao') || combined.includes('agua gelada')) return 'Chiller / Refrigeração';
+  if (combined.includes('vazamento') || combined.includes('mangueira')) return 'Vazamento';
+  if (combined.includes('painel') || combined.includes('contator') || combined.includes('rele') || combined.includes('fusivel')) return 'Painel Elétrico';
+  if (combined.includes('inversor') || combined.includes('servo') || combined.includes('motor')) return 'Inversor / Motor';
+  if (combined.includes('resistencia') || combined.includes('termopar') || combined.includes('aquecimento')) return 'Resistência / Aquecimento';
+  if (combined.includes('sensor') || combined.includes('fotocelula') || combined.includes('encoder') || combined.includes('clp') || combined.includes('ihm')) return 'Sensores / IHM / CLP';
+  if (combined.includes('preventiva')) return 'Manutenção Preventiva';
+  if (combined.includes('rosca') || combined.includes('canhao') || combined.includes('cilindro')) return 'Roscas / Canhão';
+  if (combined.includes('rolamento') || combined.includes('mancal') || combined.includes('biela') || combined.includes('cambio')) return 'Rolamentos / Mecânica';
+  if (combined.includes('energia') || combined.includes('queda') || combined.includes('pico') || combined.includes('apagao')) return 'Queda / Falta de Energia';
+  if (combined.includes('rompimento') || combined.includes('estouro') || combined.includes('rasgou') || combined.includes('rasgando')) return 'Rompimento de Filme';
+  if (combined.includes('tubete') || combined.includes('desalinhamento')) return 'Tubetes / Alinhamento';
+  if (combined.includes('resina') || combined.includes('silo') || combined.includes('materia')) return 'Falta de Matéria-Prima / Silo';
+  if (combined.includes('espessura') || combined.includes('perfil') || combined.includes('micras') || combined.includes('micron')) return 'Regulagem de Espessura';
+  if (combined.includes('borra') || combined.includes('purga')) return 'Borra / Purga';
+  if (combined.includes('treinamento') || combined.includes('ddp') || combined.includes('dds') || combined.includes('reuniao')) return 'Treinamento / Reunião';
+  if (combined.includes('emergencia')) return 'Botão de Emergência';
+  if (combined.includes('setup') || combined.includes('troca de medida') || combined.includes('troca de formato') || combined.includes('troca de formulacao')) return 'Setup / Troca de Formato';
+  if (combined.includes('sem programacao') || combined.includes('sem pedido') || combined.includes('feriado') || combined.includes('sem trabalho')) return 'Sem Programação / Feriado';
+
+  // If motivo is present and clean
+  if (motivo && motivo.trim().length > 0) {
+    const clean = motivo.trim();
+    return clean.length <= 40 ? clean : clean.substring(0, 37) + '...';
+  }
+
+  // If explanation is present
+  if (exp && exp.trim().length > 0) {
+    const clean = exp.trim();
+    return clean.length <= 35 ? clean : clean.substring(0, 32) + '...';
+  }
+
+  return `${category} Não Especificada`;
+}
+
 export interface WeeklyMeetingFormState {
   weeklyGoalTons: number; // Meta semanal em Toneladas (padrão 300 T)
   weeklyPlanTons: number; // Plano da semana em Toneladas (padrão 300 T)
@@ -119,6 +182,8 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
   // Presentation / Print View Mode
   const [viewMode, setViewMode] = useState<'interactive' | 'preview'>('interactive');
   const [activePauta, setActivePauta] = useState<'all' | 'meta' | 'losses' | 'forecast' | 'ribbon' | 'operators'>('all');
+  const [recurrentMachineTab, setRecurrentMachineTab] = useState<'all' | 'Cast 1' | 'Cast 2' | 'Erema'>('all');
+  const [expandedRecurrentKey, setExpandedRecurrentKey] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
@@ -344,6 +409,134 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       reason: string;
     }> = [];
 
+    // Detailed stoppage occurrences for intelligent recurrence & keyword frequency mapping
+    const machineStopOccurrences: Record<string, Array<{
+      keyword: string;
+      category: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho';
+      durationMin: number;
+      description: string;
+      timeRange: string;
+      date: string;
+      shift: string;
+      operator?: string;
+    }>> = {
+      'Cast 1': [],
+      'Cast 2': [],
+      'Erema': [],
+    };
+
+    const processRawStopField = (
+      rawMotive: string | undefined,
+      fallbackMin: number,
+      category: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho',
+      date: string,
+      shift: string,
+      mKey: string,
+      operator?: string
+    ) => {
+      if (!rawMotive && fallbackMin <= 0) return;
+      if (!machineStopOccurrences[mKey]) machineStopOccurrences[mKey] = [];
+
+      const getDiffMin = (de: string, ate: string) => {
+        if (!de || !ate) return 0;
+        try {
+          const [h1, m1] = de.split(':').map(Number);
+          const [h2, m2] = ate.split(':').map(Number);
+          if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
+          let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+          if (diff < 0) diff += 1440;
+          return diff;
+        } catch {
+          return 0;
+        }
+      };
+
+      const trimmed = (rawMotive || '').trim();
+      let parsedArray: any[] | null = null;
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedArray = parsed;
+          }
+        } catch {}
+      }
+
+      if (parsedArray && parsedArray.length > 0) {
+        const totalItems = parsedArray.length;
+        parsedArray.forEach((item: any) => {
+          const de = (item.de || '').trim();
+          const ate = (item.ate || '').trim();
+          const motivo = (item.motivo || item.keyword || '').trim();
+          const exp = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+          
+          const itemMin = (de && ate ? getDiffMin(de, ate) : 0) || (fallbackMin > 0 ? Math.round(fallbackMin / totalItems) : 0);
+          const timeRange = de && ate ? `${de} às ${ate}` : '';
+          
+          let fullDesc = '';
+          if (motivo && exp && motivo.toLowerCase() !== exp.toLowerCase()) {
+            fullDesc = `${motivo} (${exp})`;
+          } else {
+            fullDesc = exp || motivo || category;
+          }
+
+          const keyword = extractStopKeyword(motivo, exp, category);
+          machineStopOccurrences[mKey].push({
+            keyword,
+            category,
+            durationMin: itemMin,
+            description: fullDesc,
+            timeRange,
+            date,
+            shift,
+            operator,
+          });
+        });
+      } else if (trimmed || fallbackMin > 0) {
+        const keyword = extractStopKeyword(trimmed, '', category);
+        machineStopOccurrences[mKey].push({
+          keyword,
+          category,
+          durationMin: fallbackMin,
+          description: trimmed || `${category} não detalhada`,
+          timeRange: '',
+          date,
+          shift,
+          operator,
+        });
+      }
+    };
+
+    // Helper to clean stoppage motives
+    const formatStopReasonClean = (raw: string | undefined): string => {
+      if (!raw) return '';
+      const trimmed = raw.trim();
+      try {
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item: any) => {
+              const de = (item.de || '').trim();
+              const ate = (item.ate || '').trim();
+              const motivo = (item.motivo || item.keyword || '').trim();
+              const exp = (item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '').trim();
+              let desc = '';
+              if (motivo && exp && motivo.toLowerCase() !== exp.toLowerCase()) {
+                desc = `${motivo} (${exp})`;
+              } else {
+                desc = exp || motivo || '';
+              }
+              if (de && ate) {
+                return `${de} às ${ate}${desc ? `: ${desc}` : ''}`;
+              }
+              return desc;
+            }).filter(Boolean).join('; ');
+          }
+        }
+      } catch {}
+      return trimmed;
+    };
+
     filteredExtrusionData.forEach(e => {
       if (e.date) datesSet.add(e.date);
       const isStopped = e.isMaintenanceEntry || e.isNoWorkDay;
@@ -371,41 +564,59 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       machineDowntimeMap[mKey].totalStopMin += eTotalStop;
 
       if (eMaint > 0 && e.manutencaoMotivo) {
+        const cleanMotive = formatStopReasonClean(e.manutencaoMotivo);
+        const finalR = cleanMotive || e.manutencaoMotivo.trim();
         stoppagesList.push({
           date: e.date,
           machine: mKey,
           shift: e.shift || '-',
           type: 'Manutenção',
           durationMin: eMaint,
-          reason: e.manutencaoMotivo.trim(),
+          reason: finalR,
         });
-        const r = `Manutenção: ${e.manutencaoMotivo.trim()}`;
+        const r = `Manutenção: ${finalR}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
+        processRawStopField(e.manutencaoMotivo, eMaint, 'Manutenção', e.date, e.shift || '-', mKey, e.operator);
+      } else if (eMaint > 0) {
+        processRawStopField('', eMaint, 'Manutenção', e.date, e.shift || '-', mKey, e.operator);
       }
+
       if (eProc > 0 && e.processoMotivo) {
+        const cleanMotive = formatStopReasonClean(e.processoMotivo);
+        const finalR = cleanMotive || e.processoMotivo.trim();
         stoppagesList.push({
           date: e.date,
           machine: mKey,
           shift: e.shift || '-',
           type: 'Processo',
           durationMin: eProc,
-          reason: e.processoMotivo.trim(),
+          reason: finalR,
         });
-        const r = `Processo: ${e.processoMotivo.trim()}`;
+        const r = `Processo: ${finalR}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
+        processRawStopField(e.processoMotivo, eProc, 'Processo', e.date, e.shift || '-', mKey, e.operator);
+      } else if (eProc > 0) {
+        processRawStopField('', eProc, 'Processo', e.date, e.shift || '-', mKey, e.operator);
       }
+
       if (eOther > 0 && e.outrosMotivo) {
+        const cleanMotive = formatStopReasonClean(e.outrosMotivo);
+        const finalR = cleanMotive || e.outrosMotivo.trim();
         stoppagesList.push({
           date: e.date,
           machine: mKey,
           shift: e.shift || '-',
           type: 'Outros',
           durationMin: eOther,
-          reason: e.outrosMotivo.trim(),
+          reason: finalR,
         });
-        const r = `Outros: ${e.outrosMotivo.trim()}`;
+        const r = `Outros: ${finalR}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
+        processRawStopField(e.outrosMotivo, eOther, 'Outros', e.date, e.shift || '-', mKey, e.operator);
+      } else if (eOther > 0) {
+        processRawStopField('', eOther, 'Outros', e.date, e.shift || '-', mKey, e.operator);
       }
+
       if (e.isNoWorkDay && e.noWorkReason) {
         stoppagesList.push({
           date: e.date,
@@ -417,6 +628,7 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
         });
         const r = `Sem Trabalho: ${e.noWorkReason.trim()}`;
         if (!machineDowntimeMap[mKey].reasons.includes(r)) machineDowntimeMap[mKey].reasons.push(r);
+        processRawStopField(e.noWorkReason, 720, 'Sem Trabalho', e.date, e.shift || '-', mKey, e.operator);
       }
 
       if (!isStopped) {
@@ -504,6 +716,97 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
     const estimatedLostKg = (totalStopMin / 60) * 900;
     const estimatedLostTons = estimatedLostKg / 1000;
 
+    // Build Recurring Reasons by Machine in descending order of occurrences
+    const machineRecurringReasons: Record<string, RecurringStopItem[]> = {};
+
+    const allMachineNames = ['Cast 1', 'Cast 2', 'Erema', ...Object.keys(machineStopOccurrences).filter(k => !['Cast 1', 'Cast 2', 'Erema'].includes(k))];
+    
+    allMachineNames.forEach(mName => {
+      const occs = machineStopOccurrences[mName] || [];
+      const totalMachineOccs = occs.length;
+      const totalMachineMin = occs.reduce((sum, o) => sum + (o.durationMin || 0), 0);
+
+      const map: Record<string, {
+        keyword: string;
+        category: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho';
+        count: number;
+        totalMinutes: number;
+        occurrences: typeof occs;
+      }> = {};
+
+      occs.forEach(occ => {
+        const key = occ.keyword.trim();
+        if (!map[key]) {
+          map[key] = {
+            keyword: occ.keyword,
+            category: occ.category,
+            count: 0,
+            totalMinutes: 0,
+            occurrences: [],
+          };
+        }
+        map[key].count += 1;
+        map[key].totalMinutes += occ.durationMin;
+        map[key].occurrences.push(occ);
+      });
+
+      const list: RecurringStopItem[] = Object.values(map).map(item => ({
+        keyword: item.keyword,
+        category: item.category,
+        count: item.count,
+        totalMinutes: item.totalMinutes,
+        formattedHours: formatMinToHours(item.totalMinutes),
+        avgMinutes: item.count > 0 ? Math.round(item.totalMinutes / item.count) : 0,
+        percentageOfMachineStops: totalMachineOccs > 0 ? (item.count / totalMachineOccs) * 100 : 0,
+        percentageOfTime: totalMachineMin > 0 ? (item.totalMinutes / totalMachineMin) * 100 : 0,
+        occurrences: item.occurrences,
+      }));
+
+      // Sort descending: highest count first, then highest minutes
+      list.sort((a, b) => b.count - a.count || b.totalMinutes - a.totalMinutes);
+      machineRecurringReasons[mName] = list;
+    });
+
+    // Consolidated across all machines in descending order
+    const allOccs = Object.values(machineStopOccurrences).flat();
+    const totalAllOccs = allOccs.length;
+    const totalAllMin = allOccs.reduce((sum, o) => sum + (o.durationMin || 0), 0);
+    const allMap: Record<string, {
+      keyword: string;
+      category: 'Manutenção' | 'Processo' | 'Outros' | 'Sem Trabalho';
+      count: number;
+      totalMinutes: number;
+      occurrences: typeof allOccs;
+    }> = {};
+
+    allOccs.forEach(occ => {
+      const key = occ.keyword.trim();
+      if (!allMap[key]) {
+        allMap[key] = {
+          keyword: occ.keyword,
+          category: occ.category,
+          count: 0,
+          totalMinutes: 0,
+          occurrences: [],
+        };
+      }
+      allMap[key].count += 1;
+      allMap[key].totalMinutes += occ.durationMin;
+      allMap[key].occurrences.push(occ);
+    });
+
+    const allRecurringReasons: RecurringStopItem[] = Object.values(allMap).map(item => ({
+      keyword: item.keyword,
+      category: item.category,
+      count: item.count,
+      totalMinutes: item.totalMinutes,
+      formattedHours: formatMinToHours(item.totalMinutes),
+      avgMinutes: item.count > 0 ? Math.round(item.totalMinutes / item.count) : 0,
+      percentageOfMachineStops: totalAllOccs > 0 ? (item.count / totalAllOccs) * 100 : 0,
+      percentageOfTime: totalAllMin > 0 ? (item.totalMinutes / totalAllMin) * 100 : 0,
+      occurrences: item.occurrences,
+    })).sort((a, b) => b.count - a.count || b.totalMinutes - a.totalMinutes);
+
     return {
       grossKg,
       taraKg,
@@ -540,6 +843,8 @@ export const WeeklyProductionSummaryModal: React.FC<WeeklyProductionSummaryModal
       topOperators,
       machineDowntimeMap,
       stoppagesList,
+      machineRecurringReasons,
+      allRecurringReasons,
       estimatedLostTons,
       entriesCount: filteredExtrusionData.length,
     };
@@ -825,7 +1130,31 @@ _Relatório Padronizado de Reunião Semanal • Manupackaging Amazônia_
       },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 6;
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Top Recurrent Reasons per machine in PDF
+    const topRecurrentRows: any[] = [];
+    ['Cast 1', 'Cast 2', 'Erema'].forEach((mName) => {
+      const recs = extStats.machineRecurringReasons[mName] || [];
+      if (recs.length > 0) {
+        const topText = recs.slice(0, 4).map((r, i) => `${i + 1}º ${r.keyword} (${r.count}x - ${r.formattedHours})`).join('; ');
+        topRecurrentRows.push([`Ranking Paradas ${mName}`, topText]);
+      }
+    });
+
+    if (topRecurrentRows.length > 0) {
+      autoTable(doc, {
+        startY: currentY,
+        body: topRecurrentRows,
+        theme: 'grid',
+        styles: { fontSize: 7.5, cellPadding: 2, textColor: [30, 41, 59] },
+        columnStyles: {
+          0: { fontStyle: 'bold', fillColor: [254, 243, 199], textColor: [180, 83, 9], cellWidth: 45 },
+          1: { textColor: [51, 65, 85] },
+        },
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 6;
+    }
 
     // Check page space for Forecast section or add page
     if (currentY > 210) {
@@ -1472,6 +1801,386 @@ _Relatório Padronizado de Reunião Semanal • Manupackaging Amazônia_
                   ) : (
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-500 font-semibold">
                       Nenhuma parada crítica registrada nos apontamentos do período.
+                    </div>
+                  )}
+                </div>
+
+                {/* ================================================================= */}
+                {/* RANKING DE RECORRÊNCIA DE PARADAS POR MÁQUINA (ORDEM DECRESCENTE) */}
+                {/* ================================================================= */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-600">
+                        <Flame className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                            Principais Motivos e Recorrência de Paradas por Máquina
+                          </h4>
+                          <span className="text-[10px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Ordem Decrescente
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          Mapeamento de palavras-chave mais repetidas nos apontamentos para identificação imediata de falhas crônicas.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Machine Filter Selector Tabs */}
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-2xs self-start sm:self-auto overflow-x-auto no-print">
+                      <button
+                        onClick={() => setRecurrentMachineTab('all')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-black transition-all flex items-center gap-1 whitespace-nowrap ${
+                          recurrentMachineTab === 'all'
+                            ? 'bg-slate-900 text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                      >
+                        Todas as Linhas
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                          recurrentMachineTab === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {extStats.allRecurringReasons.reduce((acc, curr) => acc + curr.count, 0)}
+                        </span>
+                      </button>
+
+                      {['Cast 1', 'Cast 2', 'Erema'].map((mKey) => {
+                        const mCount = (extStats.machineRecurringReasons[mKey] || []).reduce((acc, curr) => acc + curr.count, 0);
+                        const isSel = recurrentMachineTab === mKey;
+                        return (
+                          <button
+                            key={mKey}
+                            onClick={() => setRecurrentMachineTab(mKey as any)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-black transition-all flex items-center gap-1 whitespace-nowrap ${
+                              isSel
+                                ? 'bg-blue-600 text-white shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            {mKey}
+                            {mCount > 0 && (
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                isSel ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {mCount}x
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* DISPLAY MODE: ALL MACHINES (3 Columns) */}
+                  {recurrentMachineTab === 'all' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {['Cast 1', 'Cast 2', 'Erema'].map((mName) => {
+                        const recReasons = extStats.machineRecurringReasons[mName] || [];
+                        const totalStops = recReasons.reduce((acc, r) => acc + r.count, 0);
+                        const totalMinutes = recReasons.reduce((acc, r) => acc + r.totalMinutes, 0);
+                        const maxCount = recReasons.length > 0 ? Math.max(...recReasons.map(r => r.count)) : 1;
+
+                        return (
+                          <div key={mName} className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between shadow-2xs">
+                            <div>
+                              {/* Machine Subheader */}
+                              <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                                  <span className="text-xs font-black uppercase tracking-wider text-slate-900">{mName}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[11px] font-bold text-slate-700 font-mono">
+                                    {totalStops} {totalStops === 1 ? 'ocorrência' : 'ocorrências'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-semibold block">
+                                    {formatMinToHours(totalMinutes)} total
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Reasons list in descending order */}
+                              {recReasons.length > 0 ? (
+                                <div className="space-y-2">
+                                  {recReasons.map((item, idx) => {
+                                    const isTop1 = idx === 0;
+                                    const isTop2 = idx === 1;
+                                    const isTop3 = idx === 2;
+                                    const expandKey = `${mName}_${item.keyword}_${idx}`;
+                                    const isExpanded = expandedRecurrentKey === expandKey;
+
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`rounded-lg border transition-all ${
+                                          isTop1
+                                            ? 'bg-amber-50/50 border-amber-200'
+                                            : 'bg-slate-50/60 border-slate-200/80 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="p-2.5">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                              <span
+                                                className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 ${
+                                                  isTop1
+                                                    ? 'bg-amber-400 text-slate-950 shadow-2xs font-black'
+                                                    : isTop2
+                                                    ? 'bg-slate-300 text-slate-800'
+                                                    : isTop3
+                                                    ? 'bg-amber-800/15 text-amber-900 border border-amber-300'
+                                                    : 'bg-slate-200 text-slate-600'
+                                                }`}
+                                              >
+                                                {idx + 1}º
+                                              </span>
+                                              <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="text-xs font-black text-slate-900 truncate">
+                                                    {item.keyword}
+                                                  </span>
+                                                  <span
+                                                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider ${
+                                                      item.category === 'Manutenção'
+                                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                        : item.category === 'Processo'
+                                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                        : item.category === 'Sem Trabalho'
+                                                        ? 'bg-slate-200 text-slate-700'
+                                                        : 'bg-purple-100 text-purple-800 border border-purple-200'
+                                                    }`}
+                                                  >
+                                                    {item.category}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* Frequency & Time Badge */}
+                                            <div className="text-right shrink-0">
+                                              <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-900 px-2 py-0.5 rounded-md text-[11px] font-black font-mono">
+                                                🔥 {item.count}x
+                                              </span>
+                                              <span className="text-[10px] text-slate-500 font-bold block mt-0.5 font-mono">
+                                                {item.formattedHours}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* Relative frequency progress bar */}
+                                          <div className="mt-2 w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                              className={`h-full rounded-full transition-all ${
+                                                isTop1 ? 'bg-rose-500' : isTop2 ? 'bg-amber-500' : 'bg-blue-500'
+                                              }`}
+                                              style={{ width: `${Math.max(8, (item.count / maxCount) * 100)}%` }}
+                                            />
+                                          </div>
+
+                                          {/* Toggle detailed occurrences */}
+                                          <div className="mt-2 flex items-center justify-between text-[10px]">
+                                            <span className="text-slate-400 font-semibold">
+                                              {item.avgMinutes > 0 ? `Média: ~${item.avgMinutes} min/parada` : ''}
+                                            </span>
+                                            <button
+                                              onClick={() => setExpandedRecurrentKey(isExpanded ? null : expandKey)}
+                                              className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-0.5 no-print"
+                                            >
+                                              {isExpanded ? (
+                                                <>Ocultar <ChevronUp className="w-3 h-3" /></>
+                                              ) : (
+                                                <>Ver {item.occurrences.length} {item.occurrences.length === 1 ? 'apontamento' : 'apontamentos'} <ChevronDown className="w-3 h-3" /></>
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {/* Expanded Occurrences Timeline */}
+                                        {isExpanded && (
+                                          <div className="bg-white px-2.5 py-2 border-t border-slate-200 space-y-1.5 text-[11px] rounded-b-lg">
+                                            <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 pb-1">
+                                              Registros Originais do Operador:
+                                            </div>
+                                            {item.occurrences.map((occ, oIdx) => (
+                                              <div
+                                                key={oIdx}
+                                                className="bg-slate-50 border border-slate-200/80 rounded p-1.5 text-slate-700"
+                                              >
+                                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mb-0.5">
+                                                  <span>📅 {formatDateBR(occ.date)} • Turno {occ.shift}</span>
+                                                  <span className="font-mono text-amber-700 font-bold">
+                                                    {occ.timeRange || formatMinToHours(occ.durationMin)}
+                                                  </span>
+                                                </div>
+                                                <div className="text-[11px] font-medium text-slate-800">
+                                                  {occ.description}
+                                                </div>
+                                                {occ.operator && (
+                                                  <div className="text-[9px] text-slate-400 mt-0.5">
+                                                    Op: <strong className="text-slate-600">{occ.operator}</strong>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-center py-6 text-xs text-slate-400 italic">
+                                  Nenhum registro de parada apontado nesta máquina.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* DISPLAY MODE: INDIVIDUAL MACHINE SELECTED */}
+                  {recurrentMachineTab !== 'all' && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs space-y-4">
+                      {(() => {
+                        const mName = recurrentMachineTab;
+                        const recReasons = extStats.machineRecurringReasons[mName] || [];
+                        const totalStops = recReasons.reduce((acc, r) => acc + r.count, 0);
+                        const totalMinutes = recReasons.reduce((acc, r) => acc + r.totalMinutes, 0);
+                        const maxCount = recReasons.length > 0 ? Math.max(...recReasons.map(r => r.count)) : 1;
+
+                        return (
+                          <>
+                            {/* Summary strip for machine */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Máquina</span>
+                                <div className="text-sm font-black text-slate-900">{mName}</div>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total de Paradas</span>
+                                <div className="text-sm font-black text-rose-600 font-mono">{totalStops} ocorrências</div>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Tempo Acumulado</span>
+                                <div className="text-sm font-black text-amber-700 font-mono">{formatMinToHours(totalMinutes)}</div>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Principal Gargalo</span>
+                                <div className="text-sm font-black text-blue-700 truncate">
+                                  {recReasons[0] ? `${recReasons[0].keyword} (${recReasons[0].count}x)` : 'Sem Paradas'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Full detailed list of reasons in descending order */}
+                            {recReasons.length > 0 ? (
+                              <div className="space-y-3">
+                                {recReasons.map((item, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5"
+                                  >
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
+                                            idx === 0
+                                              ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                                              : idx === 1
+                                              ? 'bg-slate-300 text-slate-800'
+                                              : idx === 2
+                                              ? 'bg-amber-800/15 text-amber-900 border border-amber-300'
+                                              : 'bg-slate-200 text-slate-600'
+                                          }`}
+                                        >
+                                          {idx + 1}º
+                                        </span>
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-black text-slate-900">{item.keyword}</span>
+                                            <span
+                                              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                                item.category === 'Manutenção'
+                                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                  : item.category === 'Processo'
+                                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                                  : item.category === 'Sem Trabalho'
+                                                  ? 'bg-slate-200 text-slate-700'
+                                                  : 'bg-purple-100 text-purple-800 border border-purple-200'
+                                              }`}
+                                            >
+                                              {item.category}
+                                            </span>
+                                          </div>
+                                          <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                            {item.percentageOfMachineStops.toFixed(1)}% de todas as paradas da {mName} • {item.percentageOfTime.toFixed(1)}% do tempo total parado
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                                        <span className="bg-rose-100 text-rose-900 border border-rose-200 px-3 py-1 rounded-lg text-xs font-black font-mono">
+                                          🔥 {item.count} {item.count === 1 ? 'ocorrência' : 'ocorrências'}
+                                        </span>
+                                        <span className="bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1 rounded-lg text-xs font-bold font-mono">
+                                          ⏱️ {item.formattedHours}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${idx === 0 ? 'bg-rose-500' : 'bg-blue-600'}`}
+                                        style={{ width: `${Math.max(5, (item.count / maxCount) * 100)}%` }}
+                                      />
+                                    </div>
+
+                                    {/* Individual Logs List */}
+                                    <div className="pt-2 border-t border-slate-200/80">
+                                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                                        Apontamentos Registrados ({item.occurrences.length}):
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {item.occurrences.map((occ, oIdx) => (
+                                          <div
+                                            key={oIdx}
+                                            className="bg-white p-2.5 rounded-lg border border-slate-200 text-xs text-slate-700"
+                                          >
+                                            <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mb-1">
+                                              <span>📅 {formatDateBR(occ.date)} (Turno {occ.shift})</span>
+                                              <span className="font-mono text-amber-700 font-bold">
+                                                {occ.timeRange || formatMinToHours(occ.durationMin)}
+                                              </span>
+                                            </div>
+                                            <div className="font-medium text-slate-800 text-[11px]">
+                                              {occ.description}
+                                            </div>
+                                            {occ.operator && (
+                                              <div className="text-[9px] text-slate-400 mt-1">
+                                                Operador: <strong className="text-slate-600">{occ.operator}</strong>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 text-xs text-slate-400 italic">
+                                Nenhum apontamento de parada registrado nesta linha de produção no período.
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

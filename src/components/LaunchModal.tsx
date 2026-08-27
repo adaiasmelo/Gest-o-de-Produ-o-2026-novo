@@ -546,8 +546,10 @@ const LaunchModal: React.FC<LaunchModalProps> = ({
             id: item.id || `stop-${idx}-${Date.now()}-${Math.random()}`,
             de: item.de || '',
             ate: item.ate || '',
-            motivo: item.motivo || '',
-            explicacao: item.explicacao || item.observacao || ''
+            motivo: item.motivo || item.keyword || '',
+            keyword: item.keyword || item.motivo || '',
+            explicacao: item.explicacao || item.justification || item.observacao || item.observacoes || item.descricao || '',
+            justification: item.justification || item.explicacao || item.observacao || item.observacoes || item.descricao || ''
           }));
         }
       }
