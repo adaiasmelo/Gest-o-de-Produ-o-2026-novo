@@ -699,7 +699,7 @@ ${formState.correctiveActions.trim() || 'Sem ações pendentes registradas.'}
 • Área Produzida: ${formatM2(ribbonStats.producedM2)} (${ribbonStats.totalRolls.toLocaleString('pt-BR')} un) | Rendimento: ${ribbonStats.yieldRate.toFixed(1)}%
 
 ------------------------------------------------
-_Relatório Padronizado de Reunião Semanal • Manupackaging Brasil_
+_Relatório Padronizado de Reunião Semanal • Manupackaging Amazônia_
     `.trim();
 
     navigator.clipboard.writeText(text);
@@ -726,7 +726,7 @@ _Relatório Padronizado de Reunião Semanal • Manupackaging Brasil_
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(15, 23, 42); // slate-900
-    doc.text('MANUPACKAGING BRASIL', 14, 11);
+    doc.text('MANUPACKAGING AMAZÔNIA', 14, 11);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
@@ -959,7 +959,7 @@ _Relatório Padronizado de Reunião Semanal • Manupackaging Brasil_
                 )}
               </div>
               <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5 flex items-center gap-2">
-                <span>Manupackaging Brasil</span>
+                <span>Manupackaging Amazônia</span>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-700 font-bold">Foco em Resultados, Análise de Gaps & Antecipação</span>
               </p>
