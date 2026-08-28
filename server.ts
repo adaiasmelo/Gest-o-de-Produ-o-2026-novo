@@ -4,21 +4,27 @@ import { createServer as createViteServer } from "vite";
 import * as admin from 'firebase-admin';
 import { GoogleGenAI, Type } from "@google/genai";
 
+let aiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return aiClient;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
-
-  // Initialize Gemini AI
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
 
   // Initialize Firebase Admin if configuration exists
   try {
@@ -79,12 +85,17 @@ async function startServer() {
   }
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", time: new Date().toISOString() });
+  });
+
   app.post("/api/extract-production", async (req, res) => {
     try {
       const { base64Image } = req.body;
       if (!base64Image) return res.status(400).json({ error: "Image is required" });
 
       const base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+      const ai = getGeminiClient();
       
       const response = await ai.models.generateContent({
         model: "gemini-3.1-pro-preview",
@@ -139,6 +150,7 @@ async function startServer() {
       const { text } = req.body;
       if (!text) return res.status(400).json({ error: "Text is required" });
 
+      const ai = getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: `Melhore o seguinte texto de descrição de uma causa/problema de manutenção industrial para torná-lo altamente profissional, claro, técnico e objetivo (em português brasileiro). Corrija ortografia e gramática, mantendo exatamente o mesmo sentido original.
@@ -254,7 +266,7 @@ Texto original:
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
