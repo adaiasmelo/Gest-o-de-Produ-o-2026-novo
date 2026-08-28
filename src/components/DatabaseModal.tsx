@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search, Plus, Trash2, Database, ShieldCheck, UserPlus, HardHat, Briefcase, Factory, UserX, Edit2 } from 'lucide-react';
+import { X, Search, Plus, Trash2, Database, ShieldCheck, UserPlus, HardHat, Briefcase, Factory, UserX, Edit2, VolumeX, Volume2, RotateCcw, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { Employee, EmployeeStatus, Collaborator } from '../types';
 import { db } from '../lib/firebase';
 import { setDoc, doc } from 'firebase/firestore';
@@ -14,6 +14,7 @@ interface DatabaseModalProps {
   onDelete: (id: string, name: string) => void;
   onTerminate: (id: string, name: string) => void;
   onEditCollaborator: (collaborator: Collaborator) => void;
+  onToggleSilenceCollaborator?: (collaborator: Collaborator, shouldSilence: boolean, reason?: string) => Promise<void> | void;
   availableRoles: string[];
   availableShifts: string[];
   machines: string[];
@@ -28,15 +29,23 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
   onDelete,
   onTerminate,
   onEditCollaborator,
+  onToggleSilenceCollaborator,
   availableRoles,
   availableShifts,
   machines
 }) => {
-  const [activeTab, setActiveTab] = useState<'allocations' | 'collaborators' | 'general'>('allocations');
+  const [activeTab, setActiveTab] = useState<'allocations' | 'collaborators' | 'silenced' | 'general'>('allocations');
   const [searchTerm, setSearchTerm] = useState('');
   const [colSearchTerm, setColSearchTerm] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isColDropdownOpen, setIsColDropdownOpen] = useState(false);
+  
+  // Modals
+  const [confirmModal, setConfirmModal] = useState<{ id: string, name: string, type: 'delete' | 'terminate' } | null>(null);
+  const [silenceModal, setSilenceModal] = useState<{ collaborator: Collaborator, shouldSilence: boolean } | null>(null);
+  const [silenceReasonInput, setSilenceReasonInput] = useState('');
+  const [showExcludedSlots, setShowExcludedSlots] = useState(false);
+
   const [newEmp, setNewEmp] = useState({
     name: '',
     role: availableRoles[0] || '',
@@ -47,12 +56,22 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     collaboratorId: ''
   });
 
+  // Active (non-silenced) vs Silenced Collaborators
+  const activeCollaborators = useMemo(() => {
+    return collaborators.filter(c => !c.isSilenced);
+  }, [collaborators]);
+
+  const silencedCollaborators = useMemo(() => {
+    return collaborators.filter(c => !!c.isSilenced);
+  }, [collaborators]);
+
   const filteredCollaboratorsForSelect = useMemo(() => {
-    if (!colSearchTerm) return collaborators;
-    return collaborators.filter(c => 
-      c.name.toLowerCase().includes(colSearchTerm.toLowerCase())
+    if (!colSearchTerm) return activeCollaborators;
+    return activeCollaborators.filter(c => 
+      c.name.toLowerCase().includes(colSearchTerm.toLowerCase()) ||
+      c.registration.includes(colSearchTerm)
     );
-  }, [collaborators, colSearchTerm]);
+  }, [activeCollaborators, colSearchTerm]);
 
   const uniqueRoles = Array.from(new Set(availableRoles));
   const uniqueShifts = Array.from(new Set(availableShifts));
@@ -97,15 +116,12 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     }));
   };
 
-  const [confirmModal, setConfirmModal] = useState<{ id: string, name: string, type: 'delete' | 'terminate' } | null>(null);
-  const [showExcludedSlots, setShowExcludedSlots] = useState(false);
-
   if (!isOpen) return null;
 
   const filteredEmployees = employees.filter(e => {
     const statusNorm = (e.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
     const nameNorm = (e.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
-    const isExcluded = statusNorm.includes('excluid') || nameNorm.includes('excluid');
+    const isExcluded = statusNorm.includes('excluid') || nameNorm.includes('excluid') || statusNorm.includes('silenciad') || e.isSilenced;
     if (isExcluded && !showExcludedSlots) return false;
     return (
       e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,8 +131,15 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     );
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  const filteredCollaboratorsList = collaborators.filter(c => 
+  const filteredCollaboratorsList = activeCollaborators.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.registration.includes(searchTerm) ||
+    (c.role && c.role.toLowerCase().includes(searchTerm.toLowerCase()))
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const filteredSilencedList = silencedCollaborators.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.registration.includes(searchTerm) ||
     (c.role && c.role.toLowerCase().includes(searchTerm.toLowerCase()))
   ).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -154,6 +177,32 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     setColSearchTerm('');
   };
 
+  const handleExecuteSilence = async () => {
+    if (!silenceModal) return;
+    if (onToggleSilenceCollaborator) {
+      await onToggleSilenceCollaborator(
+        silenceModal.collaborator,
+        silenceModal.shouldSilence,
+        silenceReasonInput.trim() || undefined
+      );
+    } else {
+      // Direct Firestore fallback
+      try {
+        const colRef = doc(db, 'collaborators', silenceModal.collaborator.id);
+        await setDoc(colRef, {
+          isSilenced: silenceModal.shouldSilence,
+          silencedAt: silenceModal.shouldSilence ? new Date().toISOString() : null,
+          silenceReason: silenceModal.shouldSilence ? (silenceReasonInput.trim() || 'Silenciado via Base de Dados') : null,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.error('Error toggling silence:', err);
+      }
+    }
+    setSilenceModal(null);
+    setSilenceReasonInput('');
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white rounded-[2.5rem] w-full max-w-6xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
@@ -174,7 +223,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
               </button>
             </div>
 
-            <div className="flex bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto no-scrollbar">
+            <div className="flex bg-slate-800 p-1 rounded-xl w-full md:w-auto overflow-x-auto no-scrollbar gap-1">
               <button 
                 onClick={() => { setActiveTab('allocations'); setSearchTerm(''); }}
                 className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'allocations' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-950/40' : 'text-slate-400 hover:text-white'}`}
@@ -183,9 +232,24 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
               </button>
               <button 
                 onClick={() => { setActiveTab('collaborators'); setSearchTerm(''); }}
-                className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'collaborators' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-950/40' : 'text-slate-400 hover:text-white'}`}
+                className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'collaborators' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-950/40' : 'text-slate-400 hover:text-white'}`}
               >
                 Cadastro Global
+                <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-full ${activeTab === 'collaborators' ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-700 text-slate-300'}`}>
+                  {activeCollaborators.length}
+                </span>
+              </button>
+              <button 
+                onClick={() => { setActiveTab('silenced'); setSearchTerm(''); }}
+                className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'silenced' ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-950/40' : 'text-slate-400 hover:text-white'}`}
+              >
+                <VolumeX size={12} />
+                Silenciados
+                {silencedCollaborators.length > 0 && (
+                  <span className="text-[8px] font-black px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950">
+                    {silencedCollaborators.length}
+                  </span>
+                )}
               </button>
               <button 
                 onClick={() => { setActiveTab('general'); setSearchTerm(''); }}
@@ -226,6 +290,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </div>
         </div>
 
+        {/* Tab 1: Alocações */}
         {activeTab === 'allocations' && (
           <>
             {/* Quick Add Form */}
@@ -260,7 +325,6 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                   ...newEmp, 
                                   name: c.name, 
                                   collaboratorId: c.id, 
-                                  registration: c.registration,
                                   role: c.role || newEmp.role
                                 });
                                 setColSearchTerm(c.name);
@@ -279,7 +343,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                           ))
                         ) : (
                           <div className="px-4 py-6 text-center text-[10px] font-bold text-slate-400 italic">
-                            Colaborador não encontrado.
+                            Colaborador ativo não encontrado.
                           </div>
                         )}
                       </div>
@@ -400,6 +464,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                               emp.status === 'Férias' ? 'bg-orange-100 text-orange-700' :
                               emp.status === 'Em Contratação' ? 'bg-blue-100 text-blue-700' :
                               emp.status === 'Desligado' ? 'bg-red-100 text-red-700' : 
+                              emp.status === 'Silenciado' ? 'bg-amber-100 text-amber-800' :
                               emp.status === 'Vaga Excluída' ? 'bg-slate-100 text-slate-500 border border-dashed border-slate-200' : 'bg-purple-100 text-purple-700'}
                           `}>
                             {emp.status}
@@ -434,6 +499,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </>
         )}
 
+        {/* Tab 2: Cadastro Global (Apenas Ativos) */}
         {activeTab === 'collaborators' && (
           <>
             {/* Bulk Import Section */}
@@ -443,15 +509,15 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                   <UserPlus size={22} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Carga Rápida de Colaboradores</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Importe as matrículas e nomes extraídos da planilha de pessoal</p>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Cadastro Central de Colaboradores (Ativos)</h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Base principal de funcionários ativos. Colaboradores demitidos/afastados podem ser silenciados.</p>
                 </div>
               </div>
               
               <button
                 type="button"
                 onClick={async () => {
-                  if (window.confirm("Deseja importar todos os 75 colaboradores da planilha de pessoal do PDF? Registros com a mesma matrícula serão atualizados/preservados.")) {
+                  if (window.confirm("Deseja sincronizar todos os 75 colaboradores da planilha de pessoal do PDF? Registros com a mesma matrícula serão atualizados/preservados.")) {
                     setIsImporting(true);
                     try {
                       let count = 0;
@@ -483,7 +549,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 ) : (
                   <UserPlus size={16} />
                 )}
-                {isImporting ? 'Importando...' : 'Carregar Funcionários do PDF (75)'}
+                {isImporting ? 'Importando...' : 'Sincronizar Funcionários do PDF (75)'}
               </button>
             </div>
 
@@ -502,7 +568,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {filteredCollaboratorsList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-8 py-20 text-center text-slate-400 font-medium italic">Nenhum colaborador cadastrado na base central.</td>
+                      <td colSpan={6} className="px-8 py-20 text-center text-slate-400 font-medium italic">Nenhum colaborador ativo encontrado.</td>
                     </tr>
                   ) : (
                     filteredCollaboratorsList.map((col) => (
@@ -552,13 +618,26 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                           )}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button 
-                            onClick={() => onEditCollaborator(col)}
-                            className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm border border-blue-100 hover:border-blue-600 flex items-center gap-2 ml-auto"
-                          >
-                            <Edit2 size={14} />
-                            <span className="text-[10px] font-black uppercase">Editar</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => {
+                                setSilenceModal({ collaborator: col, shouldSilence: true });
+                                setSilenceReasonInput('');
+                              }}
+                              className="p-2.5 bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white rounded-xl transition-all shadow-sm border border-amber-200 hover:border-amber-600 flex items-center gap-1.5"
+                              title="Silenciar funcionário (Oculta das escalas sem apagar histórico de produção)"
+                            >
+                              <VolumeX size={14} />
+                              <span className="text-[10px] font-black uppercase">Silenciar</span>
+                            </button>
+                            <button 
+                              onClick={() => onEditCollaborator(col)}
+                              className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm border border-blue-100 hover:border-blue-600 flex items-center gap-1.5"
+                            >
+                              <Edit2 size={14} />
+                              <span className="text-[10px] font-black uppercase">Editar</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -569,6 +648,112 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </>
         )}
 
+        {/* Tab 3: Colaboradores Silenciados (Preservando Histórico de Produção) */}
+        {activeTab === 'silenced' && (
+          <>
+            {/* Header explicativo */}
+            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100 border-b border-amber-200 px-8 py-5 flex items-center justify-between flex-wrap gap-4 select-none shrink-0 animate-in fade-in duration-300">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-amber-300 shrink-0">
+                  <VolumeX size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-amber-950 uppercase tracking-tight">Funcionários Silenciados no Sistema</h3>
+                  <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider mt-0.5">
+                    Estes colaboradores não aparecem nas relações ativas nem nos turnos. Todo o histórico de produção e relatórios passados continuam 100% preservados.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <table className="w-full border-collapse text-left">
+                <thead className="bg-slate-100 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Matrícula</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Função Principal</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data / Motivo do Silenciamento</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Produção Histórica</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSilencedList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-8 py-20 text-center text-slate-400 font-medium italic">
+                        Nenhum colaborador está silenciado no momento.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSilencedList.map((col) => (
+                      <tr key={col.id} className="hover:bg-amber-50/40 transition-colors group">
+                        <td className="px-6 py-5 text-center">
+                          <span className="text-sm font-black text-amber-800 font-mono">#{col.registration || '----'}</span>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-black text-slate-800 flex items-center gap-2">
+                              {col.name}
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <VolumeX size={10} /> Silenciado
+                              </span>
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{col.address || 'Sem endereço'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-slate-200">
+                            {col.role || 'Não Definitivo'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700">
+                              {col.silenceReason || 'Desligado / Silenciado'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {col.silencedAt ? new Date(col.silencedAt).toLocaleDateString('pt-BR') : 'Data não informada'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-200 inline-flex items-center gap-1">
+                            ✓ Preservada
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => {
+                                setSilenceModal({ collaborator: col, shouldSilence: false });
+                                setSilenceReasonInput('');
+                              }}
+                              className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm border border-emerald-200 hover:border-emerald-600 flex items-center gap-1.5"
+                              title="Reativar colaborador na base ativa"
+                            >
+                              <Volume2 size={14} />
+                              <span className="text-[10px] font-black uppercase">Reativar</span>
+                            </button>
+                            <button 
+                              onClick={() => onEditCollaborator(col)}
+                              className="p-2.5 bg-slate-100 text-slate-700 hover:bg-slate-800 hover:text-white rounded-xl transition-all shadow-sm border border-slate-200 flex items-center gap-1.5"
+                            >
+                              <Edit2 size={14} />
+                              <span className="text-[10px] font-black uppercase">Editar</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* Tab 4: GERAL */}
         {activeTab === 'general' && (
           <>
             {/* General Database Header Info banner */}
@@ -579,7 +764,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Banco Geral de Funcionários (Lista de Referência)</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Consulte todos os 75 colaboradores homologados do PDF e cadastrado com um clique</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Consulte todos os 75 colaboradores homologados do PDF e cadastre/reative com um clique</p>
                 </div>
               </div>
             </div>
@@ -604,6 +789,8 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     filteredImportedCollaborators.map((item) => {
                       const regCol = collaborators.find(c => c.registration === item.registration);
                       const isRegistered = !!regCol;
+                      const isSilenced = regCol?.isSilenced;
+
                       return (
                         <tr key={item.registration} className="hover:bg-slate-50 transition-colors group">
                           <td className="px-6 py-5 text-center">
@@ -618,9 +805,13 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                             </span>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            {isRegistered ? (
+                            {isSilenced ? (
+                              <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-[9px] font-black uppercase tracking-widest border border-amber-200 inline-flex items-center gap-1">
+                                <VolumeX size={10} /> Silenciado
+                              </span>
+                            ) : isRegistered ? (
                               <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-200">
-                                Cadastrado
+                                Ativo no Global
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest border border-slate-200">
@@ -629,31 +820,59 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                             )}
                           </td>
                           <td className="px-8 py-5 text-right">
-                            {isRegistered ? (
-                              <button 
-                                onClick={() => regCol && onEditCollaborator(regCol)}
-                                className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm border border-blue-100 hover:border-blue-600 flex items-center gap-2 ml-auto"
-                              >
-                                <Edit2 size={12} />
-                                <span className="text-[10px] font-black uppercase">Editar Cadastro</span>
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => onEditCollaborator({
-                                  id: '',
-                                  registration: item.registration,
-                                  name: item.name,
-                                  role: item.role || '',
-                                  birthDate: '',
-                                  address: '',
-                                  contact: ''
-                                })}
-                                className="p-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all shadow-md flex items-center gap-2 ml-auto font-black uppercase text-[10px]"
-                              >
-                                <Plus size={12} />
-                                Cadastrar no Global
-                              </button>
-                            )}
+                            <div className="flex items-center justify-end gap-2">
+                              {isSilenced && regCol ? (
+                                <button 
+                                  onClick={() => {
+                                    setSilenceModal({ collaborator: regCol, shouldSilence: false });
+                                    setSilenceReasonInput('');
+                                  }}
+                                  className="p-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm border border-emerald-200 flex items-center gap-1.5 text-[10px] font-black uppercase"
+                                >
+                                  <Volume2 size={12} />
+                                  Reativar
+                                </button>
+                              ) : isRegistered && regCol ? (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      setSilenceModal({ collaborator: regCol, shouldSilence: true });
+                                      setSilenceReasonInput('');
+                                    }}
+                                    className="p-2.5 bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white rounded-xl transition-all shadow-sm border border-amber-200 flex items-center gap-1.5 text-[10px] font-black uppercase"
+                                    title="Silenciar"
+                                  >
+                                    <VolumeX size={12} />
+                                    Silenciar
+                                  </button>
+                                  <button 
+                                    onClick={() => onEditCollaborator(regCol)}
+                                    className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm border border-blue-100 hover:border-blue-600 flex items-center gap-2"
+                                  >
+                                    <Edit2 size={12} />
+                                    <span className="text-[10px] font-black uppercase">Editar</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button 
+                                  onClick={() => onEditCollaborator({
+                                    id: '',
+                                    registration: item.registration,
+                                    name: item.name,
+                                    role: item.role || '',
+                                    birthDate: '',
+                                    address: '',
+                                    contact: '',
+                                    isSilenced: false,
+                                    updatedAt: new Date().toISOString()
+                                  })}
+                                  className="p-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all shadow-md flex items-center gap-2 ml-auto font-black uppercase text-[10px]"
+                                >
+                                  <Plus size={12} />
+                                  Cadastrar no Global
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -665,9 +884,66 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </>
         )}
 
-        {/* Custom Confirmation Dialog */}
+        {/* Modal for Silencing / Unsilencing Confirmation */}
+        {silenceModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
+            <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl border border-slate-200 text-center space-y-6">
+              <div className={`w-16 h-16 ${silenceModal.shouldSilence ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} rounded-2xl flex items-center justify-center mx-auto shadow-inner`}>
+                {silenceModal.shouldSilence ? <VolumeX size={32} /> : <Volume2 size={32} />}
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
+                  {silenceModal.shouldSilence ? 'Silenciar Colaborador' : 'Reativar Colaborador'}
+                </h3>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  {silenceModal.shouldSilence ? (
+                    <>
+                      Deseja silenciar <span className="font-bold text-amber-700">{silenceModal.collaborator.name}</span> (#{silenceModal.collaborator.registration})? 
+                      <br /><br />
+                      <strong className="text-slate-800">Importante:</strong> O colaborador sairá das escalas de turno, lotação e novos cadastros, mas <span className="text-emerald-700 font-bold underline">todo o histórico de produção e relatórios passados continuarão 100% preservados</span>.
+                    </>
+                  ) : (
+                    <>
+                      Deseja reativar <span className="font-bold text-emerald-700">{silenceModal.collaborator.name}</span> no Cadastro Global e nas opções ativas?
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {silenceModal.shouldSilence && (
+                <div className="text-left space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Motivo / Observação (Opcional)</label>
+                  <input 
+                    type="text"
+                    value={silenceReasonInput}
+                    onChange={(e) => setSilenceReasonInput(e.target.value)}
+                    placeholder="Ex: Demissão, desligamento da empresa..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setSilenceModal(null)}
+                  className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleExecuteSilence}
+                  className={`flex-1 px-6 py-3 ${silenceModal.shouldSilence ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'} rounded-xl text-[11px] font-black uppercase transition-all shadow-lg font-black`}
+                >
+                  {silenceModal.shouldSilence ? 'Confirmar Silenciamento' : 'Confirmar Reativação'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Confirmation Dialog for Delete / Terminate */}
         {confirmModal && (
-          <div className="absolute inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
             <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-slate-200 text-center space-y-6">
               <div className={`w-16 h-16 ${confirmModal.type === 'delete' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'} rounded-2xl flex items-center justify-center mx-auto shadow-inner`}>
                 {confirmModal.type === 'delete' ? <Trash2 size={32} /> : <UserX size={32} />}
@@ -713,7 +989,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
         <div className="bg-slate-50 px-8 py-4 flex items-center justify-between border-t border-slate-200">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <ShieldCheck size={14} /> Sistema de Segurança Ativo • 
-            {activeTab === 'allocations' ? ` ${filteredEmployees.length} registros exibidos` : activeTab === 'collaborators' ? ` ${filteredCollaboratorsList.length} colaboradores na base` : ` ${filteredImportedCollaborators.length} funcionários no banco geral`}
+            {activeTab === 'allocations' ? ` ${filteredEmployees.length} registros exibidos` : activeTab === 'collaborators' ? ` ${filteredCollaboratorsList.length} colaboradores ativos na base` : activeTab === 'silenced' ? ` ${filteredSilencedList.length} colaboradores silenciados` : ` ${filteredImportedCollaborators.length} funcionários no banco geral`}
           </p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">

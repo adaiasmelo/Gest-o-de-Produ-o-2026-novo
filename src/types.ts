@@ -78,9 +78,12 @@ export interface Collaborator {
   contact?: string;
   updatedAt: string;
   isBrigadista?: boolean;
+  isSilenced?: boolean;
+  silencedAt?: string;
+  silenceReason?: string;
 }
 
-export type EmployeeStatus = 'Ativo' | 'Férias' | 'Atestado' | 'Desligado' | 'Em Contratação' | 'Vaga Excluída';
+export type EmployeeStatus = 'Ativo' | 'Férias' | 'Atestado' | 'Desligado' | 'Em Contratação' | 'Vaga Excluída' | 'Silenciado';
 
 export interface Employee {
   id: string;
@@ -96,6 +99,9 @@ export interface Employee {
   returnDate?: string; // Data de retorno para Férias/Atestado
   updatedAt: string;
   isBrigadista?: boolean;
+  isSilenced?: boolean;
+  silencedAt?: string;
+  silenceReason?: string;
   orderIndex?: number;
   inicioPeriodo?: string;
   vencPeriodo?: string;
@@ -125,7 +131,7 @@ export interface PersonnelLog {
   id: string;
   date: string;
   employeeName: string;
-  action: 'Contratação' | 'Alteração' | 'Férias' | 'Atestado' | 'Transferência' | 'Desligamento' | 'Retorno';
+  action: 'Contratação' | 'Alteração' | 'Férias' | 'Atestado' | 'Transferência' | 'Desligamento' | 'Retorno' | 'Silenciamento' | 'Reativação';
   details: string;
   user: string; // Quem fez a alteração
   userId: string;

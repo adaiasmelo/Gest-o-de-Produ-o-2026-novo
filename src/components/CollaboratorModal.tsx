@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, User } from 'lucide-react';
+import { X, Save, User, VolumeX, Volume2, ShieldAlert } from 'lucide-react';
 import { Collaborator } from '../types';
 import { IMPORTED_COLLABORATORS } from '../constants/importedCollaborators';
 
@@ -28,7 +28,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({
     birthDate: '',
     address: '',
     contact: '',
-    isBrigadista: false
+    isBrigadista: false,
+    isSilenced: false,
+    silenceReason: ''
   });
 
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -55,7 +57,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({
       if (initialData) {
         setFormData({
           ...initialData,
-          isBrigadista: initialData.isBrigadista || false
+          isBrigadista: initialData.isBrigadista || false,
+          isSilenced: initialData.isSilenced || false,
+          silenceReason: initialData.silenceReason || ''
         });
       } else {
         setFormData({
@@ -65,7 +69,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({
           birthDate: '',
           address: '',
           contact: '',
-          isBrigadista: false
+          isBrigadista: false,
+          isSilenced: false,
+          silenceReason: ''
         });
       }
     }
@@ -79,7 +85,11 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({
       alert('Nome e matrícula são obrigatórios');
       return;
     }
-    onSave(formData);
+    const finalData = {
+      ...formData,
+      silencedAt: formData.isSilenced ? (formData.silencedAt || new Date().toISOString()) : undefined
+    };
+    onSave(finalData);
     onClose();
   };
 
@@ -221,6 +231,41 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({
               <label htmlFor="isBrigadista" className="flex items-center gap-2 text-xs font-black text-red-800 uppercase tracking-wider cursor-pointer select-none">
                 🔥 Integrante da Brigada de Incêndio
               </label>
+            </div>
+
+            {/* Opção de Silenciamento */}
+            <div className={`p-4 rounded-2xl border transition-all ${formData.isSilenced ? 'bg-amber-50/80 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${formData.isSilenced ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                    {formData.isSilenced ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase text-slate-800 tracking-tight">Silenciar Colaborador</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Oculta das escalas, turnos e novos cadastros, mas mantém o histórico de produção 100% preservado.</p>
+                  </div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  id="isSilenced"
+                  checked={!!formData.isSilenced}
+                  onChange={e => setFormData({ ...formData, isSilenced: e.target.checked })}
+                  className="w-5 h-5 text-amber-600 border-slate-300 rounded focus:ring-amber-500 cursor-pointer"
+                />
+              </div>
+
+              {formData.isSilenced && (
+                <div className="mt-3 pt-3 border-t border-amber-200/60 space-y-1.5 animate-in fade-in">
+                  <label className="text-[9px] font-black text-amber-800 uppercase tracking-widest">Motivo do Silenciamento / Desligamento</label>
+                  <input 
+                    type="text" 
+                    value={formData.silenceReason || ''}
+                    onChange={e => setFormData({ ...formData, silenceReason: e.target.value })}
+                    placeholder="Ex: Demissão / Desligado da empresa..."
+                    className="w-full bg-white border border-amber-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              )}
             </div>
           </div>
 

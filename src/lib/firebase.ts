@@ -1,26 +1,35 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getMessaging, Messaging } from 'firebase/messaging';
+import { getMessaging, isSupported, Messaging } from 'firebase/messaging';
 import { 
-  doc, setDoc, getDoc, collection, query, where, onSnapshot, getDocs, deleteDoc,
+  doc, setDoc, getDoc, collection, query, where, onSnapshot, getDocs, deleteDoc, writeBatch,
   getFirestore, getDocFromServer
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-// Inicialização do Messaging (Client-Side) - Apenas se suportado pelo navegador
+// Inicialização do Firestore usando getFirestore com o Database ID correto conforme a Skill
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || 'ai-studio-f0309e5c-c262-4bce-92fb-80bc63dce14b');
+export const auth = getAuth(app);
+
+// Inicialização segura do Messaging (Client-Side) - Apenas se suportado pelo navegador
 export let messaging: Messaging | null = null;
-try {
-  messaging = getMessaging(app);
-} catch (e) {
-  console.warn("Firebase Messaging não é suportado neste navegador.");
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  isSupported().then((supported) => {
+    if (supported) {
+      try {
+        messaging = getMessaging(app);
+      } catch (e) {
+        console.warn('Firebase Messaging init skipped:', e);
+      }
+    }
+  }).catch(() => {
+    console.warn('Firebase Messaging não suportado neste ambiente.');
+  });
 }
 
-// Inicialização do Firestore usando getFirestore com o Database ID correto
-export const db = getFirestore(app, 'ai-studio-f0309e5c-c262-4bce-92fb-80bc63dce14b');
-
-console.log('Firebase Init: Conectando ao Banco: ai-studio-f0309e5c-c262-4bce-92fb-80bc63dce14b');
+console.log('Firebase Init: Conectando ao Banco:', firebaseConfig.firestoreDatabaseId || 'ai-studio-f0309e5c-c262-4bce-92fb-80bc63dce14b');
 
 // Validação de Conexão conforme a Skill
 async function testConnection() {
@@ -43,8 +52,6 @@ async function testConnection() {
 }
 testConnection();
 
-
-export const auth = getAuth();
 
 export enum OperationType {
   CREATE = 'create',
