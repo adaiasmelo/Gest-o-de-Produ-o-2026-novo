@@ -49,6 +49,7 @@ import { LunchSchedule } from './components/LunchSchedule';
 import { ProjectionDashboard } from './components/ProjectionDashboard';
 import { DowntimeReasonsModal } from './components/DowntimeReasonsModal';
 import { DowntimeAnalyticsModal } from './components/DowntimeAnalyticsModal';
+import { PersonnelStatModal, PersonnelStatType, VacancyDetail } from './components/PersonnelStatModal';
 
 
 const TRAINING_MODULES = [
@@ -1065,6 +1066,7 @@ export const App: React.FC = () => {
   const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  const [personnelStatModalType, setPersonnelStatModalType] = useState<PersonnelStatType | null>(null);
   const [showInstallExperience, setShowInstallExperience] = useState(false);
   const [isPreviewConciliationOpen, setIsPreviewConciliationOpen] = useState(false);
   const [vacations, setVacations] = useState<Vacation[]>([]);
@@ -7666,6 +7668,150 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     return count;
   }, [employees]);
 
+  const vacanciesDetailedList = useMemo(() => {
+    const list: VacancyDetail[] = [];
+    const isOccupying = (s: string) => {
+      const n = normalize(s);
+      return ['ativo', 'atestado'].includes(n);
+    };
+
+    // Extrusão
+    ['Cast 1', 'Cast 2'].forEach(ma => {
+      ['Diurno 1', 'Noturno 1', 'Diurno 2', 'Noturno 2'].forEach(sh => {
+        const machineEmps = employees.filter(e => 
+          normalize(e.sector) === 'extrusao' && 
+          normalize(e.machine) === normalize(ma) && 
+          normalize(e.shift) === normalize(sh) && 
+          ['ativo', 'atestado', 'em contratacao'].includes(normalize(e.status))
+        );
+        const excluded = employees.filter(e => 
+          normalize(e.sector) === 'extrusao' && 
+          normalize(e.machine) === normalize(ma) && 
+          normalize(e.shift) === normalize(sh) && 
+          normalize(e.status) === 'vaga excluida'
+        ).length;
+        const targetCapacity = Math.max(0, 3 - excluded);
+
+        const hiringEmps = machineEmps.filter(e => normalize(e.status) === 'em contratacao');
+        hiringEmps.forEach((h, idx) => {
+          list.push({
+            id: h.id || `ext-${ma}-${sh}-hire-${idx}`,
+            sector: 'Extrusão',
+            machine: ma,
+            shift: sh,
+            role: h.role || 'Auxiliar de Produção',
+            status: 'Em Contratação',
+            candidateName: h.name && h.name !== 'Em Contratação' ? h.name : undefined
+          });
+        });
+
+        const remainingVacant = Math.max(0, targetCapacity - machineEmps.length);
+        for (let i = 0; i < remainingVacant; i++) {
+          const hasOp = machineEmps.some(e => e.role?.toLowerCase().includes('operador'));
+          const isOpSlot = i === 0 && !hasOp;
+          list.push({
+            id: `ext-${ma}-${sh}-vac-${i}`,
+            sector: 'Extrusão',
+            machine: ma,
+            shift: sh,
+            role: isOpSlot ? 'Operador 1' : 'Auxiliar de Produção',
+            status: 'Em Aberto'
+          });
+        }
+      });
+    });
+
+    // Reciclagem
+    ['Diurno 1', 'Diurno 2'].forEach(sh => {
+      const machineEmps = employees.filter(e => 
+        normalize(e.sector) === 'reciclagem' && 
+        normalize(e.machine) === 'erema 1' && 
+        normalize(e.shift) === normalize(sh) && 
+        ['ativo', 'atestado', 'em contratacao'].includes(normalize(e.status))
+      );
+      const excluded = employees.filter(e => 
+        normalize(e.sector) === 'reciclagem' && 
+        normalize(e.machine) === 'erema 1' && 
+        normalize(e.shift) === normalize(sh) && 
+        normalize(e.status) === 'vaga excluida'
+      ).length;
+      const targetCapacity = Math.max(0, 1 - excluded);
+
+      const hiringEmps = machineEmps.filter(e => normalize(e.status) === 'em contratacao');
+      hiringEmps.forEach((h, idx) => {
+        list.push({
+          id: h.id || `rec-erema1-${sh}-hire-${idx}`,
+          sector: 'Reciclagem',
+          machine: 'Erema 1',
+          shift: sh,
+          role: h.role || 'Operador de Reciclagem',
+          status: 'Em Contratação',
+          candidateName: h.name && h.name !== 'Em Contratação' ? h.name : undefined
+        });
+      });
+
+      const remainingVacant = Math.max(0, targetCapacity - machineEmps.length);
+      for (let i = 0; i < remainingVacant; i++) {
+        list.push({
+          id: `rec-erema1-${sh}-vac-${i}`,
+          sector: 'Reciclagem',
+          machine: 'Erema 1',
+          shift: sh,
+          role: 'Operador / Auxiliar Reciclagem',
+          status: 'Em Aberto'
+        });
+      }
+    });
+
+    // Fita
+    ['Ghezzi', 'Lintech', 'Wutec'].forEach(ma => {
+      const isLintech = normalize(ma) === 'lintech';
+      const machineShifts = isLintech ? ['Comercial'] : ['Diurno 1', 'Diurno 2'];
+      machineShifts.forEach(sh => {
+        const machineEmps = employees.filter(e => 
+          normalize(e.sector) === 'fita' && 
+          normalize(e.machine) === normalize(ma) && 
+          normalize(e.shift) === normalize(sh) && 
+          ['ativo', 'atestado', 'em contratacao'].includes(normalize(e.status))
+        );
+        const excluded = employees.filter(e => 
+          normalize(e.sector) === 'fita' && 
+          normalize(e.machine) === normalize(ma) && 
+          normalize(e.shift) === normalize(sh) && 
+          normalize(e.status) === 'vaga excluida'
+        ).length;
+        const targetCapacity = Math.max(0, 2 - excluded);
+
+        const hiringEmps = machineEmps.filter(e => normalize(e.status) === 'em contratacao');
+        hiringEmps.forEach((h, idx) => {
+          list.push({
+            id: h.id || `fita-${ma}-${sh}-hire-${idx}`,
+            sector: 'Fita',
+            machine: ma,
+            shift: sh,
+            role: h.role || 'Auxiliar de Fita',
+            status: 'Em Contratação',
+            candidateName: h.name && h.name !== 'Em Contratação' ? h.name : undefined
+          });
+        });
+
+        const remainingVacant = Math.max(0, targetCapacity - machineEmps.length);
+        for (let i = 0; i < remainingVacant; i++) {
+          list.push({
+            id: `fita-${ma}-${sh}-vac-${i}`,
+            sector: 'Fita',
+            machine: ma,
+            shift: sh,
+            role: 'Auxiliar / Operador de Fita',
+            status: 'Em Aberto'
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [employees]);
+
   const formatDateBR = (dateStr?: string) => {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
@@ -7949,14 +8095,21 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     );
   };
 
-  const renderPersonnelStat = (label: string, value: number, sub: string, icon: React.ReactNode, color: string) => (
-    <div className="bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-[1.8rem] border border-slate-100 shadow-sm flex items-center justify-between group transition-all hover:shadow-md">
+  const renderPersonnelStat = (label: string, value: number, sub: string, icon: React.ReactNode, color: string, onClick?: () => void) => (
+    <div 
+      onClick={onClick}
+      className={`bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-[1.8rem] border border-slate-100 shadow-sm flex items-center justify-between group transition-all ${onClick ? 'cursor-pointer hover:shadow-lg hover:border-blue-300 active:scale-[0.98]' : 'hover:shadow-md'}`}
+      title={onClick ? `Clique para ver a relação de ${label}` : undefined}
+    >
       <div>
-        <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-0.5 sm:mb-1 ${color}`}>{label}</p>
+        <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+          <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${color}`}>{label}</p>
+          {onClick && <span className="text-[8px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">Ver lista</span>}
+        </div>
         <p className="text-2xl sm:text-3xl font-black text-slate-800">{value}</p>
         <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase mt-0.5 sm:mt-1">{sub}</p>
       </div>
-      <div className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12 ${color.replace('text', 'bg').replace('-400', '-50')}`}>
+      <div className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12 group-hover:scale-110 ${color.replace('text', 'bg').replace('-400', '-50')}`}>
         {icon}
       </div>
     </div>
@@ -15171,10 +15324,10 @@ Atenciosamente,
 
             <div ref={personnelRef} data-ref-personnel-root className="space-y-8 p-1">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                {renderPersonnelStat('Colaboradores', totalAtivos, 'Ativos', <Users size={20} className="sm:w-6 sm:h-6"/>, 'text-blue-400')}
-                {renderPersonnelStat('Operadores', totalOperadoresAtivos, 'Ativos', <HardHat size={20} className="sm:w-6 sm:h-6"/>, 'text-emerald-400')}
-                {renderPersonnelStat('Auxiliares', totalAuxiliaresAtivos, 'Ativos', <Briefcase size={20} className="sm:w-6 sm:h-6"/>, 'text-orange-400')}
-                {renderPersonnelStat('Vagas', totalVacancies, 'Aberto', <UserPlus size={20} className="sm:w-6 sm:h-6"/>, 'text-red-400')}
+                {renderPersonnelStat('Colaboradores', totalAtivos, 'Ativos', <Users size={20} className="sm:w-6 sm:h-6"/>, 'text-blue-400', () => setPersonnelStatModalType('colaboradores'))}
+                {renderPersonnelStat('Operadores', totalOperadoresAtivos, 'Ativos', <HardHat size={20} className="sm:w-6 sm:h-6"/>, 'text-emerald-400', () => setPersonnelStatModalType('operadores'))}
+                {renderPersonnelStat('Auxiliares', totalAuxiliaresAtivos, 'Ativos', <Briefcase size={20} className="sm:w-6 sm:h-6"/>, 'text-orange-400', () => setPersonnelStatModalType('auxiliares'))}
+                {renderPersonnelStat('Vagas', totalVacancies, 'Aberto', <UserPlus size={20} className="sm:w-6 sm:h-6"/>, 'text-red-400', () => setPersonnelStatModalType('vagas'))}
               </div>
 
             <div className="bg-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-700">
@@ -16026,6 +16179,13 @@ Atenciosamente,
           />
         </div>
       )}
+      <PersonnelStatModal
+        isOpen={!!personnelStatModalType}
+        onClose={() => setPersonnelStatModalType(null)}
+        type={personnelStatModalType}
+        employees={employees}
+        vacancies={vacanciesDetailedList}
+      />
 
       {/* Real-time Notifications Portal */}
       <div className="fixed top-6 right-6 z-[250] flex flex-col gap-3 pointer-events-none w-full max-w-sm">
