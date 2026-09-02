@@ -11,6 +11,18 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" id="favicon-link" href="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png">
     <title>Manupackaging - Controle de Produção</title>
+    <script>
+      (function() {
+        try {
+          var path = (window.location.pathname || '').toLowerCase();
+          var search = (window.location.search || '').toLowerCase();
+          var hash = (window.location.hash || '').toLowerCase();
+          if (path.indexOf('calculadora.html') !== -1 || path.indexOf('/calculadora') !== -1 || search.indexOf('calculadora') !== -1 || search.indexOf('cast1') !== -1 || hash.indexOf('calculadora') !== -1 || hash.indexOf('cast1') !== -1) {
+            window.__IS_CALCULATOR_DIRECT__ = true;
+          }
+        } catch(e) {}
+      })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
         body {
