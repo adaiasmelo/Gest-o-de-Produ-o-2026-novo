@@ -16,6 +16,7 @@ import {
   ScatterChart, Scatter, ZAxis, ReferenceLine
 } from 'recharts';
 import html2canvas from 'html2canvas';
+import { downloadChartAsImageWithLegend } from './utils/exportChartImage';
 import { db, auth, messaging, OperationType, handleFirestoreError, seedInitialData } from './lib/firebase';
 import { getToken, onMessage } from 'firebase/messaging';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
@@ -50,6 +51,7 @@ import { ProjectionDashboard } from './components/ProjectionDashboard';
 import { DowntimeReasonsModal } from './components/DowntimeReasonsModal';
 import { DowntimeAnalyticsModal } from './components/DowntimeAnalyticsModal';
 import { PersonnelStatModal, PersonnelStatType, VacancyDetail } from './components/PersonnelStatModal';
+import { Cast1CalculatorModal } from './components/Cast1CalculatorModal';
 
 
 const TRAINING_MODULES = [
@@ -767,6 +769,7 @@ export const App: React.FC = () => {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isDowntimeReasonsModalOpen, setIsDowntimeReasonsModalOpen] = useState(false);
   const [isDowntimeAnalyticsModalOpen, setIsDowntimeAnalyticsModalOpen] = useState(false);
+  const [isCast1CalculatorOpen, setIsCast1CalculatorOpen] = useState(false);
   const [downtimeReasonsVersion, setDowntimeReasonsVersion] = useState(0);
   const [stopsSearchTerm, setStopsSearchTerm] = useState<string>('');
 
@@ -2801,6 +2804,20 @@ export const App: React.FC = () => {
   const formatShareWeight = formatWeight;
   const formatMinutes = (val: number) => val >= 60 ? `${Math.floor(val / 60)}h ${val % 60}m` : `${val} min`;
 
+  const dynamicMetricsList = [
+    { id: 'prod', label: 'Produção Líquida kg/t', getValue: (e: any) => (e.netWeight || 0), formatter: formatWeight },
+    { id: 'ecoA', label: 'Envio Eco A (Sede Curitiba) (kg)', getValue: (e: any) => (e.ecoA || 0), formatter: formatWeight },
+    { id: 'ecoBP', label: 'Eco B Produção (kg)', getValue: (e: any) => (e.ecoBP || 0), formatter: formatWeight },
+    { id: 'ecoBM', label: 'Eco B Manutenção (kg)', getValue: (e: any) => (e.ecoBM || 0), formatter: formatWeight },
+    { id: 'borra', label: 'Resíduo Borra (kg)', getValue: (e: any) => (e.borraTotal || 0), formatter: formatWeight },
+    { id: 'p_manut', label: 'Tempo Manutenção (min)', getValue: (e: any) => (e.manutencaoMin || 0), formatter: formatMinutes },
+    { id: 'p_proc', label: 'Tempo Processo (min)', getValue: (e: any) => (e.processoMin || 0), formatter: formatMinutes },
+    { id: 'p_outros', label: 'Tempo Outros (min)', getValue: (e: any) => (e.outrosMin || 0), formatter: formatMinutes },
+    { id: 'wastes', label: 'Resíduos Totais (kg)', getValue: (e: any) => (e.ecoBP || 0) + (e.ecoBM || 0) + (e.borraTotal || 0), formatter: formatWeight },
+    { id: 'stops_total', label: 'Paradas Totais (min)', getValue: (e: any) => (e.manutencaoMin || 0) + (e.processoMin || 0) + (e.outrosMin || 0), formatter: formatMinutes },
+    { id: 'rejeito_coef', label: 'Coeficiente de Rejeito (%)', getValue: null, formatter: (val: any) => `${Number(val).toFixed(2)}%` }
+  ];
+
   const getDiffMinutes = (startTimeStr: string, endTimeStr: string): number => {
     if (!startTimeStr || !endTimeStr) return 0;
     const [hStart, mStart] = startTimeStr.split(':').map(Number);
@@ -4638,70 +4655,217 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
   };
 
   const downloadChartAsPNG = async (id: string, title: string) => {
-    const element = document.getElementById(id);
-    if (!element) return;
-    
-    const btns = element.querySelectorAll('.chart-download-btn');
-    btns.forEach((btn: any) => btn.style.display = 'none');
-    
-    try {
-      const canvas = await html2canvas(element, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        onclone: (clonedDoc) => {
-          // Replace all oklch color references in all style sheets to prevent html2canvas oklch crash
-          const styleElements = clonedDoc.querySelectorAll('style');
-          styleElements.forEach((style) => {
-            if (style.innerHTML) {
-              style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)');
-            }
-          });
+    // 1. Compute Extrusion Filtered Data
+    const biData = productionData.filter(e => {
+      if (!e || !e.date) return false;
+      const isExcludedMonth = e.date.substring(5, 7) === '05' || e.date.substring(5, 7) === '06';
+      const isExistingPastEntry = !e.updatedAt || e.updatedAt < '2026-06-12T17:44:00Z';
+      if (isExcludedMonth && e.machine?.toLowerCase().includes('cast 2') && isExistingPastEntry) {
+        return false;
+      }
 
-          // Also scan inline styles for any oklch colors
-          const allElements = clonedDoc.querySelectorAll('*');
-          allElements.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            if (htmlEl.style) {
-              for (let i = 0; i < htmlEl.style.length; i++) {
-                const styleName = htmlEl.style[i];
-                const value = htmlEl.style.getPropertyValue(styleName);
-                if (value && value.includes('oklch')) {
-                  htmlEl.style.setProperty(styleName, value.replace(/oklch\([^)]+\)/g, 'rgb(100, 116, 139)'));
-                }
-              }
-            }
-          });
+      const matchMachine = biMachineFilter === 'all' ? true : e.machine?.toLowerCase().includes(biMachineFilter.toLowerCase());
+      const matchOperator = biOperatorFilter === 'all' ? true : e.operator === biOperatorFilter;
+      const matchShift = biShiftFilter === 'all' ? true : e.shift === biShiftFilter;
+      
+      const hasBiDateFilter = biStartDate !== '' || biEndDate !== '';
+      const matchSubDate = hasBiDateFilter
+        ? (biStartDate ? e.date >= biStartDate : true) && (biEndDate ? e.date <= biEndDate : true)
+        : e.date.startsWith(dashboardMonth);
 
-          const clonedEl = clonedDoc.getElementById(id);
-          if (clonedEl) {
-            clonedEl.style.height = 'auto';
-            clonedEl.style.minHeight = 'auto';
-            clonedEl.style.maxHeight = 'none';
-            clonedEl.style.overflow = 'visible';
-            
-            const truncates = clonedEl.querySelectorAll('.truncate');
-            truncates.forEach((node: any) => {
-              node.style.whiteSpace = 'normal';
-              node.style.overflow = 'visible';
-              node.style.textOverflow = 'clip';
-              node.classList.remove('truncate');
-            });
+      return matchMachine && matchOperator && matchShift && matchSubDate;
+    });
+
+    // 2. Compute Ribbon Filtered Data
+    const ribbonData = ribbonEntries.filter(entry => {
+      const matchOp = ribbonBiOperatorFilter === 'all' || entry.operator === ribbonBiOperatorFilter;
+      const matchShift = ribbonBiShiftFilter === 'all' || entry.shift === ribbonBiShiftFilter;
+      const matchMachine = ribbonBiMachineFilter === 'all' || (entry.machine || 'Fita 01') === ribbonBiMachineFilter;
+      const matchMonth = entry.date.startsWith(dashboardMonth);
+      return matchOp && matchShift && matchMachine && matchMonth;
+    });
+
+    let chartType: any = 'generic';
+    let dataForLegend: any = null;
+    let extraInfo: any = {};
+
+    if (id === 'bi-chart-composed') {
+      chartType = 'bi-chart-composed';
+      const dailyTrendMap: Record<string, any> = {};
+      biData.forEach(e => {
+        const d = e.date;
+        const label = d.split('-').reverse().slice(0, 2).join('/');
+        if (!dailyTrendMap[d]) {
+          dailyTrendMap[d] = {
+            date: d,
+            label,
+            ecoBP: 0,
+            ecoBM: 0,
+            borra: 0,
+            prod: 0,
+            totalVolumes: 0,
+            volumesByShiftMachine: {}
+          };
+        }
+        dailyTrendMap[d].ecoBP += (e.ecoBP || 0);
+        dailyTrendMap[d].ecoBM += (e.ecoBM || 0);
+        dailyTrendMap[d].borra += (e.borraTotal || 0);
+        
+        const machineUpper = (e.machine || '').trim().toUpperCase();
+        const isErema = machineUpper.includes('EREMA');
+        if (!isErema) {
+          dailyTrendMap[d].prod += (e.netWeight || 0);
+          const vol = e.volumes || 0;
+          dailyTrendMap[d].totalVolumes += vol;
+          if (vol > 0) {
+            const s = (e.shift || '').trim().toUpperCase() || 'NÃO ESPECIFICADO';
+            const m = machineUpper || 'NÃO ESPECIFICADO';
+            if (!dailyTrendMap[d].volumesByShiftMachine[s]) {
+              dailyTrendMap[d].volumesByShiftMachine[s] = {};
+            }
+            dailyTrendMap[d].volumesByShiftMachine[s][m] = (dailyTrendMap[d].volumesByShiftMachine[s][m] || 0) + vol;
           }
         }
       });
-      
-      const link = document.createElement('a');
-      link.download = `Indicador_${title.replace(/\s+/g, '_')}_${dashboardMonth}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      console.error('Erro ao exportar gráfico:', error);
-      alert('Ocorreu um erro ao gerar a imagem do gráfico.');
-    } finally {
-      btns.forEach((btn: any) => btn.style.display = 'flex');
+      dataForLegend = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date));
+    } else if (id === 'bi-chart-scatter') {
+      chartType = 'bi-chart-scatter';
+      const scatterMap: Record<string, any> = {};
+      biData.forEach((e, idx) => {
+        const op = e.operator;
+        if (!scatterMap[op]) {
+          scatterMap[op] = { name: op, prod: 0, wastes: 0, stopsProcess: 0, color: COLORS[idx % COLORS.length] };
+        }
+        if (!e.machine.toLowerCase().includes('erema')) {
+          scatterMap[op].prod += (e.netWeight || 0);
+        }
+        scatterMap[op].wastes += (e.ecoBP || 0) + (e.ecoBM || 0) + (e.borraTotal || 0);
+        scatterMap[op].stopsProcess += (e.processoMin || 0);
+      });
+      dataForLegend = Object.values(scatterMap).filter(d => d.prod > 0 || d.wastes > 0);
+    } else if (id === 'bi-chart-stacked') {
+      chartType = 'bi-chart-stacked';
+      const stopsGroupMap: Record<string, any> = {};
+      biData.forEach(e => {
+        const key = stackedGroupBy === 'machine' ? e.machine : e.operator;
+        if (!stopsGroupMap[key]) {
+          stopsGroupMap[key] = { name: key, manut: 0, proc: 0, outros: 0 };
+        }
+        stopsGroupMap[key].manut += (e.manutencaoMin || 0);
+        stopsGroupMap[key].proc += (e.processoMin || 0);
+        stopsGroupMap[key].outros += (e.outrosMin || 0);
+      });
+      dataForLegend = Object.values(stopsGroupMap).map(d => {
+        const total = d.manut + d.proc + d.outros;
+        return {
+          name: d.name,
+          manutPct: total > 0 ? Number(((d.manut / total) * 100).toFixed(1)) : 0,
+          procPct: total > 0 ? Number(((d.proc / total) * 100).toFixed(1)) : 0,
+          outrosPct: total > 0 ? Number(((d.outros / total) * 100).toFixed(1)) : 0,
+          totalMin: total
+        };
+      }).filter(d => d.totalMin > 0);
+      extraInfo = { groupBy: stackedGroupBy };
+    } else if (id === 'bi-chart-donut') {
+      chartType = 'bi-chart-donut';
+      const extEcoB = biData.filter(e => !e.machine.toLowerCase().includes('erema')).reduce((acc, e) => acc + (e.ecoBP || 0) + (e.ecoBM || 0), 0);
+      const ereRec = biData.filter(e => e.machine.toLowerCase().includes('erema')).reduce((acc, e) => acc + (e.netWeight || 0), 0);
+      extraInfo = { extruderEcoB: extEcoB, eremaRecycled: ereRec };
+    } else if (id === 'bi-chart-dynamic') {
+      chartType = 'bi-chart-dynamic';
+      const dynamicGroupMap: Record<string, number> = {};
+      const selMetric = dynamicMetricsList.find(m => m.id === biDynamicMetric);
+      biData.forEach(e => {
+        let key = e.operator;
+        if (biDynamicGroup === 'machine') key = e.machine;
+        if (biDynamicGroup === 'shift') key = e.shift;
+        if (selMetric?.getValue) {
+          const val = selMetric.getValue(e);
+          dynamicGroupMap[key] = (dynamicGroupMap[key] || 0) + val;
+        }
+      });
+      dataForLegend = Object.entries(dynamicGroupMap).map(([name, value]) => ({
+        name,
+        value: selMetric?.formatter ? selMetric.formatter(value) : value
+      }));
+      extraInfo = { metricLabel: selMetric?.label || biDynamicMetric };
+    } else if (id === 'ribbon-chart-composed') {
+      chartType = 'ribbon-chart-composed';
+      const ribbonDailyMap: Record<string, any> = {};
+      ribbonData.forEach(entry => {
+        const d = entry.date;
+        const label = d.split('-').reverse().slice(0, 2).join('/');
+        if (!ribbonDailyMap[d]) {
+          ribbonDailyMap[d] = {
+            date: d,
+            label,
+            prod: 0,
+            tipo1: 0,
+            tipo2: 0,
+            residuoM2: 0,
+            residuoWeight: 0
+          };
+        }
+        ribbonDailyMap[d].prod += (entry.producedM2 || 0);
+        ribbonDailyMap[d].tipo1 += (entry.rejectedM2Type1 || 0);
+        ribbonDailyMap[d].tipo2 += (entry.rejectedM2Type2 || 0);
+        ribbonDailyMap[d].residuoM2 += (entry.wasteM2 || 0);
+        ribbonDailyMap[d].residuoWeight += (entry.wasteWeight || 0);
+      });
+      dataForLegend = Object.values(ribbonDailyMap).sort((a, b) => a.date.localeCompare(b.date));
+    } else if (id === 'ribbon-chart-scatter') {
+      chartType = 'ribbon-chart-scatter';
+      const scatterMap: Record<string, any> = {};
+      ribbonData.forEach((entry, idx) => {
+        const op = entry.operator;
+        if (!scatterMap[op]) {
+          scatterMap[op] = { name: op, prod: 0, wastes: 0, stopsProcess: 0, color: COLORS[idx % COLORS.length] };
+        }
+        scatterMap[op].prod += (entry.producedM2 || 0);
+        scatterMap[op].wastes += (entry.wasteWeight || 0);
+        scatterMap[op].stopsProcess += (entry.totalStopsMinutes || 0);
+      });
+      dataForLegend = Object.values(scatterMap).filter(d => d.prod > 0 || d.wastes > 0);
+    } else if (id === 'ribbon-chart-stacked') {
+      chartType = 'ribbon-chart-stacked';
+      const stopsMap: Record<string, any> = {};
+      ribbonData.forEach(entry => {
+        const key = ribbonStopsGroupBy === 'machine' ? (entry.machine || 'Fita 01') : entry.operator;
+        if (!stopsMap[key]) {
+          stopsMap[key] = { name: key, manut: 0, proc: 0, outros: 0 };
+        }
+        (entry.stops || []).forEach(s => {
+          if (s.type === 'Manutenção') stopsMap[key].manut += (s.minutes || 0);
+          else if (s.type === 'Processo') stopsMap[key].proc += (s.minutes || 0);
+          else stopsMap[key].outros += (s.minutes || 0);
+        });
+      });
+      dataForLegend = Object.values(stopsMap).map(d => {
+        const total = d.manut + d.proc + d.outros;
+        return {
+          name: d.name,
+          manutPct: total > 0 ? Number(((d.manut / total) * 100).toFixed(1)) : 0,
+          procPct: total > 0 ? Number(((d.proc / total) * 100).toFixed(1)) : 0,
+          outrosPct: total > 0 ? Number(((d.outros / total) * 100).toFixed(1)) : 0,
+          totalMin: total
+        };
+      });
+      extraInfo = { groupBy: ribbonStopsGroupBy };
+    } else if (id === 'stops-motifs-card') {
+      chartType = 'stops-motifs-card';
     }
+
+    await downloadChartAsImageWithLegend({
+      id,
+      title,
+      period: dashboardMonth,
+      chartType,
+      data: dataForLegend,
+      formatWeight,
+      formatM2,
+      formatMinutes,
+      extraInfo
+    });
   };
 
   const exportStockAndConciliationPDF = (stockDate: string) => {
@@ -8942,7 +9106,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
 
 
 
-             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <button 
                   onClick={() => setIsCollaboratorModalOpen(true)}
                   className="bg-blue-600 p-6 rounded-[2.5rem] text-white flex flex-col items-center gap-4 shadow-xl shadow-blue-100 active:scale-95 transition-all group"
@@ -8999,6 +9163,15 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                 >
                    <div className="w-14 h-14 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><BarChart3 size={32} /></div>
                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Análise BI de Paradas</span>
+                </button>
+
+                <button 
+                  onClick={() => setIsCast1CalculatorOpen(true)}
+                  className="bg-gradient-to-br from-indigo-900 to-blue-900 p-6 rounded-[2.5rem] text-white flex flex-col items-center gap-4 shadow-xl shadow-indigo-900/20 border border-indigo-400/30 active:scale-95 transition-all group cursor-pointer"
+                  title="Abrir Calculadora % CAST 1 - Produção Integrada"
+                >
+                   <div className="w-14 h-14 bg-indigo-500/20 text-indigo-300 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Calculator size={32} /></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-center">Calculadora CAST 1</span>
                 </button>
              </div>
 
@@ -11169,7 +11342,7 @@ Atenciosamente,
                   </div>
 
                   {/* advanced feature: dynamic dimensions & metrics explorer */}
-                  <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-150 space-y-6">
+                  <div id="bi-chart-dynamic" className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-150 space-y-6">
                     <div className="border-b border-slate-50 pb-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
@@ -11180,13 +11353,22 @@ Atenciosamente,
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Defina o eixo de agrupamento e a métrica desejada para redesenhar o gráfico</p>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => setFullscreenChart('bi-chart-dynamic')}
-                        className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all border border-slate-100"
-                        title="Visualizar em Tela Cheia"
-                      >
-                        <Maximize2 size={15} />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => downloadChartAsPNG('bi-chart-dynamic', 'Ranking e Métricas Dinâmicas')}
+                          className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all border border-slate-100"
+                          title="Baixar Imagem"
+                        >
+                          <Download size={15} />
+                        </button>
+                        <button 
+                          onClick={() => setFullscreenChart('bi-chart-dynamic')}
+                          className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all border border-slate-100"
+                          title="Visualizar em Tela Cheia"
+                        >
+                          <Maximize2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap items-end gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
@@ -16167,6 +16349,10 @@ Atenciosamente,
         onClose={() => setIsDowntimeAnalyticsModalOpen(false)}
         productionData={productionData}
         ribbonEntries={ribbonEntries}
+      />
+      <Cast1CalculatorModal
+        isOpen={isCast1CalculatorOpen}
+        onClose={() => setIsCast1CalculatorOpen(false)}
       />
       {isCollaboratorModalOpen && (
         <div className="fixed inset-0 z-[300]">
