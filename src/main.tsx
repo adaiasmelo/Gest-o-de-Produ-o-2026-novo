@@ -76,19 +76,23 @@ function replaceOklchWithRgb(str: string): string {
 
 const originalGetComputedStyle = window.getComputedStyle;
 (window as any).getComputedStyle = function (elt: Element, pseudoElt?: string | null) {
-  const style = originalGetComputedStyle.call(this, elt, pseudoElt);
+  if (!elt) return null;
+  const ownerWindow = elt?.ownerDocument?.defaultView || window;
+  const style = originalGetComputedStyle.call(ownerWindow, elt, pseudoElt);
+  if (!style) return style;
   
   return new Proxy(style, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+    get(target, prop) {
+      if (prop === 'getPropertyValue') {
+        return function(propertyName: string) {
+          const val = target.getPropertyValue(propertyName);
+          return typeof val === 'string' ? replaceOklchWithRgb(val) : val;
+        };
+      }
+      
+      const value = (target as any)[prop];
       
       if (typeof value === 'function') {
-        if (prop === 'getPropertyValue') {
-          return function(propertyName: string) {
-            const val = target.getPropertyValue(propertyName);
-            return typeof val === 'string' ? replaceOklchWithRgb(val) : val;
-          };
-        }
         return value.bind(target);
       }
       

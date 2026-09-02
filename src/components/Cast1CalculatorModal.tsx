@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calculator, RefreshCw, Layers, Gauge, Activity, Clock, Box, Cpu } from 'lucide-react';
+import { X, Calculator, RefreshCw, Layers, Gauge, Activity, Clock, Box, Cpu, Copy, Check, ExternalLink } from 'lucide-react';
 
 interface Cast1CalculatorModalProps {
   isOpen: boolean;
@@ -41,6 +41,31 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
   const [rpmB, setRpmB] = useState<number>(116);
   const [rpmC, setRpmC] = useState<number>(146);
   const [rpmD, setRpmD] = useState<number>(56);
+
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyExternalLink = async () => {
+    const link = `${window.location.origin}/calculadora-cast1`;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = link;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch (e) {
+      console.error("Erro ao copiar link:", e);
+    }
+  };
 
   // Cálculo de Metragem Automática Integrada
   const calcularMetragemAutomatica = (espessuraMicras: number) => {
@@ -206,6 +231,18 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyExternalLink}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                copiedLink 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+              }`}
+              title="Copiar link público da calculadora para acessar em qualquer aparelho sem login"
+            >
+              {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+              <span className="hidden sm:inline">{copiedLink ? 'Link Copiado!' : 'Link Externo'}</span>
+            </button>
             <button
               onClick={() => handleEspessuraChange(espessura)}
               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
@@ -485,7 +522,20 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-end">
+        <div className="px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleCopyExternalLink}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              copiedLink
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95'
+            }`}
+          >
+            {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copiedLink ? 'Link Externo Copiado!' : 'Copiar Link Externo (Sem Login)'}</span>
+          </button>
+
           <button
             onClick={onClose}
             className="px-5 py-2 bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-900 active:scale-95 transition-all shadow-sm"

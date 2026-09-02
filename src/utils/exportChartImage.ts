@@ -14,6 +14,8 @@ export interface ChartExportDetails {
     | 'ribbon-chart-composed'
     | 'ribbon-chart-scatter'
     | 'ribbon-chart-stacked'
+    | 'ribbon-chart-prod'
+    | 'ribbon-chart-waste'
     | 'generic';
   data?: any;
   formatWeight?: (val: number) => string;
@@ -355,6 +357,7 @@ function buildLegendHTML(details: ChartExportDetails): string {
               <span style="display:inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${item.color || '#3b82f6'}; border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></span>
               ${item.name}
             </td>
+            <td style="padding: 8px 10px; color: #2563eb; font-weight: 700;">${item.machine || '-'}</td>
             <td style="padding: 8px 10px; color: #059669; font-weight: 800;">${formatM2(item.prod || 0)}</td>
             <td style="padding: 8px 10px; color: #e11d48; font-weight: 700;">${formatWeight(item.wastes || 0)}</td>
             <td style="padding: 8px 10px; color: #f59e0b; font-weight: 700;">${item.stopsProcess || 0} min</td>
@@ -366,12 +369,13 @@ function buildLegendHTML(details: ChartExportDetails): string {
     return `
       <div style="margin-top: 20px; padding: 16px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
         <h4 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">
-          👥 Legenda de Operadores de Fita e Desempenho
+          👥 Legenda de Operadores de Fita por Máquina e Desempenho
         </h4>
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
             <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800;">
               <th style="padding: 8px 10px;">Operador</th>
+              <th style="padding: 8px 10px;">Máquina</th>
               <th style="padding: 8px 10px;">🏆 Produção Líquida</th>
               <th style="padding: 8px 10px;">🗑️ Lixo Total</th>
               <th style="padding: 8px 10px;">⏱️ Tempo Parado</th>
@@ -418,6 +422,126 @@ function buildLegendHTML(details: ChartExportDetails): string {
           <tbody>
             ${rowsHTML}
           </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // 9. Ribbon Daily Production by Machine
+  if (chartType === 'ribbon-chart-prod' && Array.isArray(data)) {
+    let sumGhezze = 0;
+    let sumLintech = 0;
+    let sumWutec = 0;
+    let sumTotal = 0;
+
+    const rowsHTML = data
+      .map((item) => {
+        sumGhezze += item.ghezzeProd || 0;
+        sumLintech += item.lintechProd || 0;
+        sumWutec += item.wutecProd || 0;
+        sumTotal += item.totalProd || 0;
+
+        const dateFormatted = item.date ? item.date.split('-').reverse().join('/') : item.label || '';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 8px 10px; font-weight: 700; color: #1e293b;">${dateFormatted}</td>
+            <td style="padding: 8px 10px; color: #2563eb; font-weight: 700;">${formatM2(item.ghezzeProd || 0)}</td>
+            <td style="padding: 8px 10px; color: #059669; font-weight: 700;">${formatM2(item.lintechProd || 0)}</td>
+            <td style="padding: 8px 10px; color: #7c3aed; font-weight: 700;">${formatM2(item.wutecProd || 0)}</td>
+            <td style="padding: 8px 10px; color: #0f172a; font-weight: 900;">${formatM2(item.totalProd || 0)}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    return `
+      <div style="margin-top: 20px; padding: 16px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
+        <h4 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">
+          📋 Produção Física Diária por Máquina (m²)
+        </h4>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800;">
+              <th style="padding: 8px 10px;">Data</th>
+              <th style="padding: 8px 10px; color: #2563eb;">🔵 Ghezze (m²)</th>
+              <th style="padding: 8px 10px; color: #059669;">🟢 Lintech (m²)</th>
+              <th style="padding: 8px 10px; color: #7c3aed;">🟣 Wutec (m²)</th>
+              <th style="padding: 8px 10px; color: #0f172a;">Total Produzido (m²)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f1f5f9; font-weight: 900; font-size: 11px; border-top: 2px solid #cbd5e1; color: #0f172a;">
+              <td style="padding: 10px;">TOTAL</td>
+              <td style="padding: 10px; color: #2563eb;">${formatM2(sumGhezze)}</td>
+              <td style="padding: 10px; color: #059669;">${formatM2(sumLintech)}</td>
+              <td style="padding: 10px; color: #7c3aed;">${formatM2(sumWutec)}</td>
+              <td style="padding: 10px; color: #0f172a;">${formatM2(sumTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+  }
+
+  // 10. Ribbon Daily Waste by Machine
+  if (chartType === 'ribbon-chart-waste' && Array.isArray(data)) {
+    let sumGhezze = 0;
+    let sumLintech = 0;
+    let sumWutec = 0;
+    let sumTotal = 0;
+
+    const rowsHTML = data
+      .map((item) => {
+        sumGhezze += item.ghezzeWaste || 0;
+        sumLintech += item.lintechWaste || 0;
+        sumWutec += item.wutecWaste || 0;
+        sumTotal += item.totalWaste || 0;
+
+        const dateFormatted = item.date ? item.date.split('-').reverse().join('/') : item.label || '';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 8px 10px; font-weight: 700; color: #1e293b;">${dateFormatted}</td>
+            <td style="padding: 8px 10px; color: #2563eb; font-weight: 700;">${formatWeight(item.ghezzeWaste || 0)}</td>
+            <td style="padding: 8px 10px; color: #059669; font-weight: 700;">${formatWeight(item.lintechWaste || 0)}</td>
+            <td style="padding: 8px 10px; color: #7c3aed; font-weight: 700;">${formatWeight(item.wutecWaste || 0)}</td>
+            <td style="padding: 8px 10px; color: #e11d48; font-weight: 900;">${formatWeight(item.totalWaste || 0)}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    return `
+      <div style="margin-top: 20px; padding: 16px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
+        <h4 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">
+          🗑️ Indicadores de Lixo Acumulado por Máquina (Kg)
+        </h4>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800;">
+              <th style="padding: 8px 10px;">Data</th>
+              <th style="padding: 8px 10px; color: #2563eb;">🔵 Ghezze (Kg)</th>
+              <th style="padding: 8px 10px; color: #059669;">🟢 Lintech (Kg)</th>
+              <th style="padding: 8px 10px; color: #7c3aed;">🟣 Wutec (Kg)</th>
+              <th style="padding: 8px 10px; color: #e11d48;">Total Descarte (Kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f1f5f9; font-weight: 900; font-size: 11px; border-top: 2px solid #cbd5e1; color: #0f172a;">
+              <td style="padding: 10px;">TOTAL</td>
+              <td style="padding: 10px; color: #2563eb;">${formatWeight(sumGhezze)}</td>
+              <td style="padding: 10px; color: #059669;">${formatWeight(sumLintech)}</td>
+              <td style="padding: 10px; color: #7c3aed;">${formatWeight(sumWutec)}</td>
+              <td style="padding: 10px; color: #e11d48;">${formatWeight(sumTotal)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     `;

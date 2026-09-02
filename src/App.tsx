@@ -52,6 +52,7 @@ import { DowntimeReasonsModal } from './components/DowntimeReasonsModal';
 import { DowntimeAnalyticsModal } from './components/DowntimeAnalyticsModal';
 import { PersonnelStatModal, PersonnelStatType, VacancyDetail } from './components/PersonnelStatModal';
 import { Cast1CalculatorModal } from './components/Cast1CalculatorModal';
+import { Cast1CalculatorStandalone } from './components/Cast1CalculatorStandalone';
 
 
 const TRAINING_MODULES = [
@@ -691,9 +692,60 @@ const updateDynamicFavicon = (systemLogo: string | null, hasBadge: boolean, isFl
   img.src = logoUrl;
 };
 
+// Helper para detectar acesso externo à Calculadora CAST 1 (sem necessidade de login)
+const isExternalCalculatorRoute = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const rawPath = (window.location.pathname || '').toLowerCase();
+    let decodedPath = '';
+    try {
+      decodedPath = decodeURIComponent(rawPath);
+    } catch {
+      decodedPath = rawPath;
+    }
+    const search = (window.location.search || '').toLowerCase();
+    const hash = (window.location.hash || '').toLowerCase();
+    const href = (window.location.href || '').toLowerCase();
+
+    return (
+      rawPath.includes('calculadora') ||
+      rawPath.includes('cast1') ||
+      rawPath.includes('cash1') ||
+      decodedPath.includes('calculadora') ||
+      decodedPath.includes('cast1') ||
+      decodedPath.includes('cash1') ||
+      search.includes('calculadora') ||
+      search.includes('cast1') ||
+      search.includes('cash1') ||
+      search.includes('calc') ||
+      hash.includes('calculadora') ||
+      hash.includes('cast1') ||
+      hash.includes('cash1') ||
+      href.includes('calculadora') ||
+      href.includes('cast1') ||
+      href.includes('cash1')
+    );
+  } catch (e) {
+    return false;
+  }
+};
+
 export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExternalCalculatorView, setIsExternalCalculatorView] = useState(() => isExternalCalculatorRoute());
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setIsExternalCalculatorView(isExternalCalculatorRoute());
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -853,6 +905,7 @@ export const App: React.FC = () => {
   const [showRibbonForm, setShowRibbonForm] = useState(false);
   const [ribbonFilterOperator, setRibbonFilterOperator] = useState('all');
   const [ribbonFilterShift, setRibbonFilterShift] = useState('all');
+  const [ribbonFilterMachine, setRibbonFilterMachine] = useState('all');
   const [ribbonFilterJumboType, setRibbonFilterJumboType] = useState('all');
   const [ribbonSubTab, setRibbonSubTab] = useState<'dashboard' | 'reports'>('dashboard');
   const [ribbonDashboardSubTab, setRibbonDashboardSubTab] = useState<'summary' | 'charts' | 'comparison'>('summary');
@@ -3128,15 +3181,41 @@ export const App: React.FC = () => {
   const canEditProduction = !isReadOnlyAccount;
   const canManagePersonnel = !isReadOnlyAccount;
 
+  // Helper de normalização e compatibilidade de máquinas do corte de fita
+  const matchRibbonMachine = (entryMachine: string | undefined, targetKey: string) => {
+    if (!targetKey || targetKey === 'all') return true;
+    const m = (entryMachine || '').toLowerCase().trim();
+    const k = targetKey.toLowerCase().trim();
+    if (k === 'ghezze' || k === 'ghezzi' || k === 'giese') {
+      return m.includes('ghezze') || m.includes('ghezzi') || m.includes('giese');
+    }
+    if (k === 'lintech' || k === 'lintec') {
+      return m.includes('lintech') || m.includes('lintec');
+    }
+    if (k === 'wutec' || k === 'ultec') {
+      return m.includes('wutec') || m.includes('ultec');
+    }
+    return m === k;
+  };
+
+  const getRibbonMachineKey = (entryMachine: string | undefined): 'Ghezze' | 'Lintech' | 'Wutec' | 'Outra' => {
+    const m = (entryMachine || '').toLowerCase().trim();
+    if (m.includes('ghezze') || m.includes('ghezzi') || m.includes('giese')) return 'Ghezze';
+    if (m.includes('lintech') || m.includes('lintec')) return 'Lintech';
+    if (m.includes('wutec') || m.includes('ultec')) return 'Wutec';
+    return 'Outra';
+  };
+
   // Corte de fita derived States & Memos
   const filteredRibbonEntries = useMemo(() => {
     return ribbonEntries.filter(entry => {
       const matchOp = ribbonFilterOperator === 'all' || entry.operator === ribbonFilterOperator;
       const matchShift = ribbonFilterShift === 'all' || entry.shift === ribbonFilterShift;
+      const matchMachine = matchRibbonMachine(entry.machine, ribbonFilterMachine);
       const matchJumboType = ribbonFilterJumboType === 'all' || entry.jumboType === ribbonFilterJumboType;
-      return matchOp && matchShift && matchJumboType;
+      return matchOp && matchShift && matchMachine && matchJumboType;
     });
-  }, [ribbonEntries, ribbonFilterOperator, ribbonFilterShift, ribbonFilterJumboType]);
+  }, [ribbonEntries, ribbonFilterOperator, ribbonFilterShift, ribbonFilterMachine, ribbonFilterJumboType]);
 
   const ribbonStats = useMemo(() => {
     let totProd = 0;
@@ -3169,53 +3248,249 @@ export const App: React.FC = () => {
     };
   }, [filteredRibbonEntries]);
 
+  // Operadores únicos de corte de fita
+  const ribbonOperators = useMemo(() => {
+    const ops = new Set<string>();
+    ribbonEntries.forEach(e => {
+      if (e.operator?.trim()) ops.add(e.operator.trim());
+    });
+    return Array.from(ops).sort();
+  }, [ribbonEntries]);
+
+  // Entradas ativas para os Gráficos do Corte de Fita (filtradas por mês e máquina)
+  const ribbonChartEntries = useMemo(() => {
+    return ribbonEntries.filter(entry => {
+      if (!entry || !entry.date) return false;
+      const matchMonth = entry.date.startsWith(dashboardMonth);
+      const matchOp = ribbonBiOperatorFilter === 'all' || entry.operator === ribbonBiOperatorFilter;
+      const matchShift = ribbonBiShiftFilter === 'all' || entry.shift === ribbonBiShiftFilter;
+      const matchMach = matchRibbonMachine(entry.machine, ribbonBiMachineFilter);
+      return matchMonth && matchOp && matchShift && matchMach;
+    });
+  }, [ribbonEntries, dashboardMonth, ribbonBiOperatorFilter, ribbonBiShiftFilter, ribbonBiMachineFilter]);
+
+  // Gráfico 1: Evolução de Perdas vs Produção Líquida (agrupado por dia para a máquina selecionada ou consolidado)
   const ribbonDailyTrendData = useMemo(() => {
-    return [...filteredRibbonEntries].reverse().map(e => {
+    const dailyMap: Record<string, {
+      date: string;
+      label: string;
+      tipo1: number;
+      tipo2: number;
+      residuoWeight: number;
+      residuoM2: number;
+      prod: number;
+    }> = {};
+
+    ribbonChartEntries.forEach(e => {
+      const d = e.date;
+      if (!dailyMap[d]) {
+        dailyMap[d] = {
+          date: d,
+          label: d.split('-').slice(1).reverse().join('/'),
+          tipo1: 0,
+          tipo2: 0,
+          residuoWeight: 0,
+          residuoM2: 0,
+          prod: 0
+        };
+      }
       const prodLiquida = (e.producedM2 || 0) - (e.rejectedM2 || 0);
       const t1 = e.m2Tipo1 || 0;
       const t2 = e.m2Tipo2 || 0;
-      // Trata registros legados se houver rejeição preenchida mas sem subdivisão
       const hasOldRej = (e.rejectedM2 || 0) > 0 && (t1 + t2) === 0;
-      return {
-        label: e.date.split('-').slice(1).reverse().join('/'),
-        tipo1: hasOldRej ? (e.rejectedM2 || 0) : t1,
-        tipo2: t2,
-        residuoWeight: e.wasteWeight || 0,
-        residuoM2: calculateLostM2(e.wasteWeight || 0, e.jumboType || ''),
-        prod: prodLiquida > 0 ? prodLiquida : 0,
-        date: e.date
-      };
-    });
-  }, [filteredRibbonEntries]);
 
+      dailyMap[d].tipo1 += hasOldRej ? (e.rejectedM2 || 0) : t1;
+      dailyMap[d].tipo2 += t2;
+      dailyMap[d].residuoWeight += (e.wasteWeight || 0);
+      dailyMap[d].residuoM2 += calculateLostM2(e.wasteWeight || 0, e.jumboType || '');
+      dailyMap[d].prod += Math.max(0, prodLiquida);
+    });
+
+    return Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+  }, [ribbonChartEntries]);
+
+  // Gráficos 2 e 3: Produção Diária e Lixo Diário com decomposição POR MÁQUINA (Ghezze, Lintech, Wutec)
+  const ribbonDailyByMachineData = useMemo(() => {
+    const monthEntries = ribbonEntries.filter(e => {
+      if (!e || !e.date) return false;
+      const matchMonth = e.date.startsWith(dashboardMonth);
+      const matchOp = ribbonBiOperatorFilter === 'all' || e.operator === ribbonBiOperatorFilter;
+      const matchShift = ribbonBiShiftFilter === 'all' || e.shift === ribbonBiShiftFilter;
+      return matchMonth && matchOp && matchShift;
+    });
+
+    const dayMap: Record<string, {
+      date: string;
+      label: string;
+      ghezzeProd: number;
+      lintechProd: number;
+      wutecProd: number;
+      totalProd: number;
+      ghezzeWaste: number;
+      lintechWaste: number;
+      wutecWaste: number;
+      totalWaste: number;
+      ghezzeWasteM2: number;
+      lintechWasteM2: number;
+      wutecWasteM2: number;
+      totalWasteM2: number;
+      ghezzeTipo1: number;
+      ghezzeTipo2: number;
+      lintechTipo1: number;
+      lintechTipo2: number;
+      wutecTipo1: number;
+      wutecTipo2: number;
+    }> = {};
+
+    monthEntries.forEach(e => {
+      const d = e.date;
+      if (!dayMap[d]) {
+        dayMap[d] = {
+          date: d,
+          label: d.split('-').slice(1).reverse().join('/'),
+          ghezzeProd: 0,
+          lintechProd: 0,
+          wutecProd: 0,
+          totalProd: 0,
+          ghezzeWaste: 0,
+          lintechWaste: 0,
+          wutecWaste: 0,
+          totalWaste: 0,
+          ghezzeWasteM2: 0,
+          lintechWasteM2: 0,
+          wutecWasteM2: 0,
+          totalWasteM2: 0,
+          ghezzeTipo1: 0,
+          ghezzeTipo2: 0,
+          lintechTipo1: 0,
+          lintechTipo2: 0,
+          wutecTipo1: 0,
+          wutecTipo2: 0,
+        };
+      }
+
+      const prodLiquida = Math.max(0, (e.producedM2 || 0) - (e.rejectedM2 || 0));
+      const wasteKg = e.wasteWeight || 0;
+      const wasteM2 = calculateLostM2(wasteKg, e.jumboType || '');
+      const t1 = e.m2Tipo1 || 0;
+      const t2 = e.m2Tipo2 || 0;
+      const mKey = getRibbonMachineKey(e.machine);
+
+      if (mKey === 'Ghezze') {
+        dayMap[d].ghezzeProd += prodLiquida;
+        dayMap[d].ghezzeWaste += wasteKg;
+        dayMap[d].ghezzeWasteM2 += wasteM2;
+        dayMap[d].ghezzeTipo1 += t1;
+        dayMap[d].ghezzeTipo2 += t2;
+      } else if (mKey === 'Lintech') {
+        dayMap[d].lintechProd += prodLiquida;
+        dayMap[d].lintechWaste += wasteKg;
+        dayMap[d].lintechWasteM2 += wasteM2;
+        dayMap[d].lintechTipo1 += t1;
+        dayMap[d].lintechTipo2 += t2;
+      } else if (mKey === 'Wutec') {
+        dayMap[d].wutecProd += prodLiquida;
+        dayMap[d].wutecWaste += wasteKg;
+        dayMap[d].wutecWasteM2 += wasteM2;
+        dayMap[d].wutecTipo1 += t1;
+        dayMap[d].wutecTipo2 += t2;
+      }
+
+      dayMap[d].totalProd += prodLiquida;
+      dayMap[d].totalWaste += wasteKg;
+      dayMap[d].totalWasteM2 += wasteM2;
+    });
+
+    return Object.values(dayMap).sort((a, b) => a.date.localeCompare(b.date));
+  }, [ribbonEntries, dashboardMonth, ribbonBiOperatorFilter, ribbonBiShiftFilter]);
+
+  // Gráfico 4: Dispersão Produção vs Lixo Operador (segmentado por máquina)
   const ribbonScatterData = useMemo(() => {
-    const operatorMap: Record<string, { name: string; prod: number; wastes: number; stopsProcess: number; color: string }> = {};
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#06b6d4'];
-    
-    filteredRibbonEntries.forEach(e => {
+    const operatorMap: Record<string, {
+      name: string;
+      operator: string;
+      machine: 'Ghezze' | 'Lintech' | 'Wutec' | 'Outra';
+      prod: number;
+      wastes: number;
+      stopsProcess: number;
+      color: string;
+    }> = {};
+
+    const machineColors: Record<string, string> = {
+      Ghezze: '#3b82f6',
+      Lintech: '#10b981',
+      Wutec: '#8b5cf6',
+      Outra: '#f59e0b',
+    };
+
+    ribbonChartEntries.forEach(e => {
       const op = e.operator || 'N/A';
-      if (!operatorMap[op]) {
-        operatorMap[op] = {
-          name: op,
+      const mKey = getRibbonMachineKey(e.machine);
+      const key = ribbonBiMachineFilter === 'all' ? `${op} (${mKey})` : op;
+
+      if (!operatorMap[key]) {
+        operatorMap[key] = {
+          name: key,
+          operator: op,
+          machine: mKey,
           prod: 0,
           wastes: 0,
           stopsProcess: 0,
-          color: colors[Object.keys(operatorMap).length % colors.length]
+          color: machineColors[mKey] || '#3b82f6',
         };
       }
-      operatorMap[op].prod += (e.producedM2 || 0) - (e.rejectedM2 || 0); // Produção Líquida
-      operatorMap[op].wastes += e.wasteWeight || 0;
-      const pMin = e.manutencaoMin || e.stoppedMinutes || 0; // standard process stop min or overall fallback
-      operatorMap[op].stopsProcess += pMin;
+      const prodLiquida = (e.producedM2 || 0) - (e.rejectedM2 || 0);
+      operatorMap[key].prod += Math.max(0, prodLiquida);
+      operatorMap[key].wastes += (e.wasteWeight || 0);
+      const pMin = e.manutencaoMin || e.stoppedMinutes || 0;
+      operatorMap[key].stopsProcess += pMin;
     });
 
-    return Object.values(operatorMap);
-  }, [filteredRibbonEntries]);
+    return Object.values(operatorMap).filter(d => d.prod > 0 || d.wastes > 0);
+  }, [ribbonChartEntries, ribbonBiMachineFilter]);
+
+  // Resumo de KPIs da máquina selecionada no gráfico (se filtrada)
+  const ribbonSelectedMachineStats = useMemo(() => {
+    if (ribbonBiMachineFilter === 'all') return null;
+    let totProd = 0;
+    let totRej = 0;
+    let totWaste = 0;
+    let totWasteM2 = 0;
+    let totStops = 0;
+
+    ribbonChartEntries.forEach(e => {
+      totProd += (e.producedM2 || 0);
+      totRej += (e.rejectedM2 || 0);
+      totWaste += (e.wasteWeight || 0);
+      totWasteM2 += calculateLostM2(e.wasteWeight || 0, e.jumboType || '');
+      totStops += (e.manutencaoMin || 0) + (e.processoMin || 0) + (e.outrosMin || 0) + (e.stoppedMinutes || 0);
+    });
+
+    const netProd = Math.max(0, totProd - totRej);
+    const yieldPct = totProd > 0 ? (netProd / totProd) * 100 : 100;
+    const lossPct = totProd > 0 ? (totRej / totProd) * 100 : 0;
+    const machineGoal = (ribbonGoals[dashboardMonth] || 1000000) / 3;
+    const goalPct = machineGoal > 0 ? (totProd / machineGoal) * 100 : 0;
+
+    return {
+      machine: ribbonBiMachineFilter,
+      totProd,
+      netProd,
+      totRej,
+      totWaste,
+      totWasteM2,
+      totStops,
+      yieldPct,
+      lossPct,
+      machineGoal,
+      goalPct
+    };
+  }, [ribbonChartEntries, ribbonBiMachineFilter, ribbonGoals, dashboardMonth]);
 
   const ribbonProportionalStopsData = useMemo(() => {
-    const stopsGroupMap: Record<string, { name: string, manut: number, proc: number, outros: number }> = {};
-    filteredRibbonEntries.forEach(e => {
-      const key = ribbonStopsGroupBy === 'machine' ? (e.machine || 'Sem Máquina') : (e.operator || 'Sem Operador');
+    const stopsGroupMap: Record<string, { name: string; manut: number; proc: number; outros: number }> = {};
+    ribbonChartEntries.forEach(e => {
+      const key = ribbonStopsGroupBy === 'machine' ? (getRibbonMachineKey(e.machine) || 'Outra') : (e.operator || 'Sem Operador');
       if (!stopsGroupMap[key]) {
         stopsGroupMap[key] = { name: key, manut: 0, proc: 0, outros: 0 };
       }
@@ -3233,7 +3508,7 @@ export const App: React.FC = () => {
         totalMin: total
       };
     }).filter(d => d.totalMin > 0);
-  }, [filteredRibbonEntries, ribbonStopsGroupBy]);
+  }, [ribbonChartEntries, ribbonStopsGroupBy]);
 
   const ribbonDashboardStats = useMemo(() => {
     const currentGoal = ribbonGoals[dashboardMonth] || 1000000;
@@ -3270,6 +3545,71 @@ export const App: React.FC = () => {
 
     const activePeriodEntries = ribbonEntries.filter(e => e && typeof e.date === 'string' && e.date.startsWith(dashboardMonth));
 
+    const today = new Date();
+    const [yNum, mNum] = dashboardMonth.split('-').map(Number);
+    const totalDaysInMonth = (yNum && mNum) ? new Date(yNum, mNum, 0).getDate() : 30;
+    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : totalDaysInMonth;
+
+    // Helper for matching machine names consistently (Ghezze/Ghezzi, Lintech/Lintec, Wutec/Ultec)
+    const matchMachine = (entryMachine: string | undefined, targetKey: 'ghezze' | 'lintech' | 'wutec') => {
+      const m = (entryMachine || '').toLowerCase().trim();
+      if (targetKey === 'ghezze') return m.includes('ghezze') || m.includes('ghezzi') || m.includes('giese');
+      if (targetKey === 'lintech') return m.includes('lintech') || m.includes('lintec');
+      if (targetKey === 'wutec') return m.includes('wutec') || m.includes('ultec');
+      return false;
+    };
+
+    // Machines configuration and per-machine metrics matching exact system names
+    const machineKeys: Array<{ key: 'ghezze' | 'lintech' | 'wutec'; label: string; subLabel: string }> = [
+      { key: 'ghezze', label: 'Ghezze', subLabel: 'Máquina' },
+      { key: 'lintech', label: 'Lintech', subLabel: 'Máquina' },
+      { key: 'wutec', label: 'Wutec', subLabel: 'Máquina' },
+    ];
+
+    const machines = machineKeys.map(({ key, label, subLabel }) => {
+      let monthProd = 0;
+      let prevMonthProd = 0;
+      let yesterdayProd = 0;
+
+      activePeriodEntries.filter(e => matchMachine(e.machine, key)).forEach(e => {
+        monthProd += (e.producedM2 || 0);
+      });
+
+      ribbonEntries.filter(e => e && typeof e.date === 'string' && e.date.startsWith(prevMonthStr) && matchMachine(e.machine, key)).forEach(e => {
+        prevMonthProd += (e.producedM2 || 0);
+      });
+
+      ribbonEntries.filter(e => e && typeof e.date === 'string' && e.date === yesterdayStr && matchMachine(e.machine, key)).forEach(e => {
+        yesterdayProd += (e.producedM2 || 0);
+      });
+
+      // Machine proportional goal (1/3 of total ribbon goal)
+      const machineGoal = currentGoal / 3;
+      const prevMachineGoal = (ribbonGoals[prevMonthStr] || 1000000) / 3;
+      const percent = machineGoal > 0 ? (monthProd / machineGoal) * 100 : 0;
+      const prevPercent = prevMachineGoal > 0 ? (prevMonthProd / prevMachineGoal) * 100 : 0;
+      const falta = Math.max(0, machineGoal - monthProd);
+      const remainingDays = Math.max(1, totalDaysInMonth - currentDay);
+      const avgReq = falta / remainingDays;
+      const projection = (monthProd / Math.max(1, currentDay)) * totalDaysInMonth;
+
+      return {
+        key,
+        label,
+        subLabel,
+        month: monthProd,
+        prevMonthTotal: prevMonthProd,
+        yesterday: yesterdayProd,
+        goal: machineGoal,
+        prevMonthGoal: prevMachineGoal,
+        percent,
+        prevPercent,
+        falta,
+        avgReq,
+        projection,
+      };
+    });
+
     activePeriodEntries.forEach(e => {
       res.month += (e.producedM2 || 0);
       res.totWaste += (e.wasteWeight || 0);
@@ -3295,14 +3635,13 @@ export const App: React.FC = () => {
     res.yieldPercent = res.month > 0 ? ((res.month - res.totWaste) / res.month) * 100 : 100;
     res.lossPercent = res.month > 0 ? (res.totWaste / res.month) * 100 : 0;
 
-    const today = new Date();
-    const [yNum, mNum] = dashboardMonth.split('-').map(Number);
-    const totalDaysInMonth = (yNum && mNum) ? new Date(yNum, mNum, 0).getDate() : 30;
-    const currentDay = dashboardMonth === today.toISOString().slice(0, 7) ? today.getDate() : totalDaysInMonth;
     res.projection = (res.month / Math.max(1, currentDay)) * totalDaysInMonth;
     res.avgReq = Math.max(0, (res.goal - res.month) / Math.max(1, totalDaysInMonth - currentDay));
     
-    return res;
+    return {
+      ...res,
+      machines,
+    };
   }, [ribbonEntries, dashboardMonth, ribbonGoals]);
 
   const ribbonDailyShareMetrics = useMemo(() => {
@@ -4791,65 +5130,23 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
       extraInfo = { metricLabel: selMetric?.label || biDynamicMetric };
     } else if (id === 'ribbon-chart-composed') {
       chartType = 'ribbon-chart-composed';
-      const ribbonDailyMap: Record<string, any> = {};
-      ribbonData.forEach(entry => {
-        const d = entry.date;
-        const label = d.split('-').reverse().slice(0, 2).join('/');
-        if (!ribbonDailyMap[d]) {
-          ribbonDailyMap[d] = {
-            date: d,
-            label,
-            prod: 0,
-            tipo1: 0,
-            tipo2: 0,
-            residuoM2: 0,
-            residuoWeight: 0
-          };
-        }
-        ribbonDailyMap[d].prod += (entry.producedM2 || 0);
-        ribbonDailyMap[d].tipo1 += (entry.rejectedM2Type1 || 0);
-        ribbonDailyMap[d].tipo2 += (entry.rejectedM2Type2 || 0);
-        ribbonDailyMap[d].residuoM2 += (entry.wasteM2 || 0);
-        ribbonDailyMap[d].residuoWeight += (entry.wasteWeight || 0);
-      });
-      dataForLegend = Object.values(ribbonDailyMap).sort((a, b) => a.date.localeCompare(b.date));
+      dataForLegend = ribbonDailyTrendData;
+      extraInfo = { subtitle: ribbonBiMachineFilter === 'all' ? 'Consolidado Todas as Máquinas' : `Máquina ${ribbonBiMachineFilter}` };
+    } else if (id === 'ribbon-chart-prod') {
+      chartType = 'ribbon-chart-prod';
+      dataForLegend = ribbonDailyByMachineData;
+      extraInfo = { subtitle: ribbonBiMachineFilter === 'all' ? 'Comparativo das 3 Máquinas (Ghezze, Lintech, Wutec)' : `Máquina ${ribbonBiMachineFilter}` };
+    } else if (id === 'ribbon-chart-waste') {
+      chartType = 'ribbon-chart-waste';
+      dataForLegend = ribbonDailyByMachineData;
+      extraInfo = { subtitle: ribbonBiMachineFilter === 'all' ? 'Comparativo das 3 Máquinas (Ghezze, Lintech, Wutec)' : `Máquina ${ribbonBiMachineFilter}` };
     } else if (id === 'ribbon-chart-scatter') {
       chartType = 'ribbon-chart-scatter';
-      const scatterMap: Record<string, any> = {};
-      ribbonData.forEach((entry, idx) => {
-        const op = entry.operator;
-        if (!scatterMap[op]) {
-          scatterMap[op] = { name: op, prod: 0, wastes: 0, stopsProcess: 0, color: COLORS[idx % COLORS.length] };
-        }
-        scatterMap[op].prod += (entry.producedM2 || 0);
-        scatterMap[op].wastes += (entry.wasteWeight || 0);
-        scatterMap[op].stopsProcess += (entry.totalStopsMinutes || 0);
-      });
-      dataForLegend = Object.values(scatterMap).filter(d => d.prod > 0 || d.wastes > 0);
+      dataForLegend = ribbonScatterData;
+      extraInfo = { subtitle: ribbonBiMachineFilter === 'all' ? 'Todos os Operadores por Máquina' : `Máquina ${ribbonBiMachineFilter}` };
     } else if (id === 'ribbon-chart-stacked') {
       chartType = 'ribbon-chart-stacked';
-      const stopsMap: Record<string, any> = {};
-      ribbonData.forEach(entry => {
-        const key = ribbonStopsGroupBy === 'machine' ? (entry.machine || 'Fita 01') : entry.operator;
-        if (!stopsMap[key]) {
-          stopsMap[key] = { name: key, manut: 0, proc: 0, outros: 0 };
-        }
-        (entry.stops || []).forEach(s => {
-          if (s.type === 'Manutenção') stopsMap[key].manut += (s.minutes || 0);
-          else if (s.type === 'Processo') stopsMap[key].proc += (s.minutes || 0);
-          else stopsMap[key].outros += (s.minutes || 0);
-        });
-      });
-      dataForLegend = Object.values(stopsMap).map(d => {
-        const total = d.manut + d.proc + d.outros;
-        return {
-          name: d.name,
-          manutPct: total > 0 ? Number(((d.manut / total) * 100).toFixed(1)) : 0,
-          procPct: total > 0 ? Number(((d.proc / total) * 100).toFixed(1)) : 0,
-          outrosPct: total > 0 ? Number(((d.outros / total) * 100).toFixed(1)) : 0,
-          totalMin: total
-        };
-      });
+      dataForLegend = ribbonProportionalStopsData;
       extraInfo = { groupBy: ribbonStopsGroupBy };
     } else if (id === 'stops-motifs-card') {
       chartType = 'stops-motifs-card';
@@ -8346,6 +8643,21 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     );
   }
 
+  // Acesso Externo Direto à Calculadora CAST 1 (sem login, sem dependência de autenticação)
+  if (isExternalCalculatorView) {
+    return (
+      <Cast1CalculatorStandalone
+        systemLogo={systemLogo}
+        onNavigateToApp={() => {
+          try {
+            window.history.pushState({}, '', '/');
+          } catch {}
+          setIsExternalCalculatorView(false);
+        }}
+      />
+    );
+  }
+
   if (isInitializing && !loggedUser) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
@@ -8556,12 +8868,26 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
             </div>
 
             {/* Botão de Acesso Modo Leitura */}
-            <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
+              <button 
+                type="button"
+                id="btn-login-calculadora-cast1"
+                onClick={() => {
+                  try {
+                    window.history.pushState({}, '', '/calculadora-cast1');
+                  } catch {}
+                  setIsExternalCalculatorView(true);
+                }}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 border border-blue-400/30"
+              >
+                <Calculator size={16} /> Acessar Calculadora CAST 1 (Livre / Sem Login)
+              </button>
+
               <button 
                 type="button"
                 id="btn-login-visitante"
                 onClick={handleGuestLogin}
-                className="w-full py-4.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-slate-200 active:scale-95 shadow-sm"
+                className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-slate-200 active:scale-95 shadow-sm"
               >
                 <Eye size={16} className="text-slate-500" /> Acessar Modo Leitura (Apenas Visualização)
               </button>
@@ -9165,14 +9491,34 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Análise BI de Paradas</span>
                 </button>
 
-                <button 
-                  onClick={() => setIsCast1CalculatorOpen(true)}
-                  className="bg-gradient-to-br from-indigo-900 to-blue-900 p-6 rounded-[2.5rem] text-white flex flex-col items-center gap-4 shadow-xl shadow-indigo-900/20 border border-indigo-400/30 active:scale-95 transition-all group cursor-pointer"
-                  title="Abrir Calculadora % CAST 1 - Produção Integrada"
-                >
-                   <div className="w-14 h-14 bg-indigo-500/20 text-indigo-300 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Calculator size={32} /></div>
-                   <span className="text-[10px] font-black uppercase tracking-widest text-center">Calculadora CAST 1</span>
-                </button>
+                <div className="bg-gradient-to-br from-indigo-900 to-blue-900 p-6 rounded-[2.5rem] text-white flex flex-col items-center justify-between gap-4 shadow-xl shadow-indigo-900/20 border border-indigo-400/30 group">
+                   <div 
+                     onClick={() => setIsCast1CalculatorOpen(true)}
+                     className="flex flex-col items-center gap-4 cursor-pointer active:scale-95 transition-transform w-full"
+                     title="Abrir Calculadora % CAST 1 - Produção Integrada"
+                   >
+                     <div className="w-14 h-14 bg-indigo-500/20 text-indigo-300 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><Calculator size={32} /></div>
+                     <span className="text-[10px] font-black uppercase tracking-widest text-center">Calculadora CAST 1</span>
+                   </div>
+                   <button
+                     type="button"
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       const link = `${window.location.origin}/calculadora-cast1`;
+                       if (navigator.clipboard && window.isSecureContext) {
+                         navigator.clipboard.writeText(link).then(() => {
+                           alert('Link Externo da Calculadora CAST 1 copiado com sucesso! Pode enviar pelo WhatsApp para qualquer pessoa acessar sem login.');
+                         });
+                       } else {
+                         window.prompt('Copie o link externo abaixo para enviar:', link);
+                       }
+                     }}
+                     className="w-full py-2 px-3 bg-white/10 hover:bg-white/20 text-indigo-200 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border border-white/10 active:scale-95"
+                     title="Copiar link público para enviar aos operadores"
+                   >
+                     <Copy size={12} /> Copiar Link Externo
+                   </button>
+                </div>
              </div>
 
              <div className="bg-slate-900 p-8 rounded-[3rem] text-white overflow-hidden relative group">
@@ -13707,17 +14053,7 @@ Atenciosamente,
                   </button>
                 )}
 
-                {canEditProduction && (
-                  <button
-                    type="button"
-                    disabled={isGeneratingMock}
-                    onClick={handleGenerateMockRibbonEntries}
-                    className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-black text-xs uppercase rounded-xl shadow-md transition-all active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {isGeneratingMock ? 'Gerando...' : 'Gerar 20 Lançamentos Teste'}
-                  </button>
-                )}
+
 
                 <button
                   type="button"
@@ -14575,56 +14911,151 @@ Atenciosamente,
                       <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Eficácia e Metas de Conversão</h3>
                     </div>
 
-                    {/* Blue Metric card */}
-                    <div className="bg-[#1e3a8a] text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden flex flex-col">
-                      <div className="flex justify-between items-start mb-2">
+                    {/* Blue Metric card with per-machine breakdown */}
+                    <div className="bg-[#1e3a8a] text-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden flex flex-col gap-6">
+                      {/* Top Header / Consolidated Summary */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-white/10">
                         <div>
                           <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest flex items-center gap-1">
-                            EFICÁCIA DE CONVERSÃO
+                            EFICÁCIA DE CONVERSÃO • GERAL & POR MÁQUINA
                             <span className="group relative inline-block cursor-help align-middle">
                               <span className="w-3.5 h-3.5 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white"><Info size={9} /></span>
-                              <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-48 bg-slate-900 border border-slate-700 text-white text-[9px] font-semibold py-1.5 px-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
-                                Mede o percentual de atingimento da meta física de metros quadrados produtos de fita.
+                              <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-60 bg-slate-900 border border-slate-700 text-white text-[9px] font-semibold py-2 px-2.5 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-[100] text-center normal-case tracking-normal">
+                                Mede o percentual de atingimento da meta física (m²) de conversão de fitas no consolidado e individualmente por máquina (Giese, Lintec e Ultec).
                               </span>
                             </span>
                           </p>
-                          <h2 className="text-2xl font-black uppercase tracking-tight">META MENSAL • CORTE DE FITA</h2>
+                          <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight">META MENSAL • CORTE DE FITA</h2>
                         </div>
-                        <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/20"><Activity size={24} /></div>
-                      </div>
-                      
-                      <div className="flex items-baseline gap-2 mb-1">
-                        <span className="text-4xl md:text-5xl font-black">{formatM2(ribbonDashboardStats.month)}</span>
-                        <span className="text-lg font-bold opacity-80">/ {((ribbonDashboardStats.month / Math.max(1, ribbonDashboardStats.goal)) * 100).toFixed(1)}%</span>
-                      </div>
-
-                      <div className="space-y-4 mb-4 mt-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] font-black uppercase tracking-widest opacity-60">
-                            <span>Mês Atual — {formatM2(ribbonDashboardStats.month)}</span>
-                            <span>Meta: {formatM2(ribbonDashboardStats.goal)}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="text-[10px] font-black uppercase opacity-60 block tracking-widest">Total Geral Mês</span>
+                            <div className="flex items-baseline justify-end gap-1.5">
+                              <span className="text-2xl sm:text-3xl font-black">{formatM2(ribbonDashboardStats.month)}</span>
+                              <span className="text-sm font-bold text-sky-300">/ {((ribbonDashboardStats.month / Math.max(1, ribbonDashboardStats.goal)) * 100).toFixed(1)}%</span>
+                            </div>
                           </div>
-                          <div className="w-full bg-white/20 h-2.5 rounded-full overflow-hidden">
-                            <div className="bg-white h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(255,255,255,0.5)]" style={{ width: `${Math.min((ribbonDashboardStats.month / Math.max(1, ribbonDashboardStats.goal)) * 100, 100)}%` }}></div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] font-black uppercase tracking-widest opacity-60">
-                            <span>Mês Anterior — {formatM2(ribbonDashboardStats.prevMonthTotal)}</span>
-                            <span>{((ribbonDashboardStats.prevMonthTotal / Math.max(1, ribbonDashboardStats.prevMonthGoal)) * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-400/60 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min((ribbonDashboardStats.prevMonthTotal / Math.max(1, ribbonDashboardStats.prevMonthGoal)) * 100, 100)}%` }}></div>
+                          <div className="w-11 h-11 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 shrink-0">
+                            <Activity size={22} />
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">OBJETIVO</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.goal)}</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">FALTA</p><p className="text-base font-bold">{formatM2(Math.max(0, ribbonDashboardStats.goal - ribbonDashboardStats.month))}</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">MÉDIA NEC.</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.avgReq)}/dia</p></div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-sm"><p className="text-[9px] font-black opacity-60 uppercase mb-1">PROJEÇÃO</p><p className="text-base font-bold">{formatM2(ribbonDashboardStats.projection)}</p></div>
+                      {/* 3 Conjuntos Fixos por Máquina (Ghezze, Lintech, Wutec) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        {ribbonDashboardStats.machines.map((m) => (
+                          <div 
+                            key={m.key} 
+                            className="bg-white/10 rounded-[1.75rem] p-5 border border-white/15 backdrop-blur-md flex flex-col justify-between hover:bg-white/[0.13] transition-all shadow-sm"
+                          >
+                            {/* Machine Title & Current vs % */}
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 ring-4 ring-sky-400/20"></span>
+                                  <h4 className="text-lg font-black tracking-wide uppercase text-white">
+                                    {m.label}
+                                  </h4>
+                                </div>
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-lg bg-sky-400/20 text-sky-200 border border-sky-400/30 uppercase tracking-widest">
+                                  CORTE
+                                </span>
+                              </div>
+
+                              {/* M² e Porcentagem */}
+                              <div className="flex items-baseline justify-between mb-4">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-2xl sm:text-3xl font-black text-white">{formatM2(m.month)}</span>
+                                  <span className="text-xs font-bold text-sky-300">/ {m.percent.toFixed(1)}%</span>
+                                </div>
+                                <span className="text-[9px] font-black opacity-70 uppercase tracking-wider">
+                                  Meta: {formatM2(m.goal)}
+                                </span>
+                              </div>
+
+                              {/* Barras de Tempo: Mês Atual e Mês Anterior */}
+                              <div className="space-y-3 pt-1 border-t border-white/10">
+                                {/* Barra Mês Atual com Meta */}
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-sky-100/80">
+                                    <span>Mês Atual • {formatM2(m.month)}</span>
+                                    <span>{m.percent.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full bg-black/20 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
+                                    <div 
+                                      className="bg-gradient-to-r from-sky-400 to-white h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.7)]" 
+                                      style={{ width: `${Math.min(m.percent, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+
+                                {/* Barra Mês Anterior */}
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-emerald-200/80">
+                                    <span>Mês Anterior • {formatM2(m.prevMonthTotal)}</span>
+                                    <span>{m.prevPercent.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full bg-black/20 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
+                                    <div 
+                                      className="bg-emerald-400 h-full rounded-full transition-all duration-1000 opacity-80" 
+                                      style={{ width: `${Math.min(m.prevPercent, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Sub-métricas por máquina: Objetivo, Falta, Média Nec., Projeção */}
+                            <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/10">
+                              <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <p className="text-[8px] font-black opacity-60 uppercase">OBJETIVO</p>
+                                <p className="text-xs font-black text-white">{formatM2(m.goal)}</p>
+                              </div>
+                              <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <p className="text-[8px] font-black opacity-60 uppercase">FALTA</p>
+                                <p className="text-xs font-black text-amber-200">{formatM2(m.falta)}</p>
+                              </div>
+                              <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <p className="text-[8px] font-black opacity-60 uppercase">MÉDIA NEC.</p>
+                                <p className="text-xs font-black text-sky-200">{formatM2(m.avgReq)}/dia</p>
+                              </div>
+                              <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <p className="text-[8px] font-black opacity-60 uppercase">PROJEÇÃO</p>
+                                <p className="text-xs font-black text-emerald-300">{formatM2(m.projection)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Resumo Consolidado no Rodapé do Card */}
+                      <div className="pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest opacity-70">
+                            Totalizador Geral da Linha de Conversão
+                          </span>
+                          <span className="text-[9px] font-extrabold uppercase opacity-80">
+                            Meta Global: {formatM2(ribbonDashboardStats.goal)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="bg-white/10 p-3.5 rounded-2xl border border-white/10 backdrop-blur-sm">
+                            <p className="text-[9px] font-black opacity-60 uppercase mb-0.5">OBJETIVO TOTAL</p>
+                            <p className="text-sm sm:text-base font-bold">{formatM2(ribbonDashboardStats.goal)}</p>
+                          </div>
+                          <div className="bg-white/10 p-3.5 rounded-2xl border border-white/10 backdrop-blur-sm">
+                            <p className="text-[9px] font-black opacity-60 uppercase mb-0.5">FALTA TOTAL</p>
+                            <p className="text-sm sm:text-base font-bold text-amber-200">{formatM2(Math.max(0, ribbonDashboardStats.goal - ribbonDashboardStats.month))}</p>
+                          </div>
+                          <div className="bg-white/10 p-3.5 rounded-2xl border border-white/10 backdrop-blur-sm">
+                            <p className="text-[9px] font-black opacity-60 uppercase mb-0.5">MÉDIA NEC. TOTAL</p>
+                            <p className="text-sm sm:text-base font-bold text-sky-200">{formatM2(ribbonDashboardStats.avgReq)}/dia</p>
+                          </div>
+                          <div className="bg-white/10 p-3.5 rounded-2xl border border-white/10 backdrop-blur-sm">
+                            <p className="text-[9px] font-black opacity-60 uppercase mb-0.5">PROJEÇÃO TOTAL</p>
+                            <p className="text-sm sm:text-base font-bold text-emerald-300">{formatM2(ribbonDashboardStats.projection)}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -14712,36 +15143,257 @@ Atenciosamente,
                 {ribbonDashboardSubTab === 'charts' && (
                   /* Seção 2: Evolução de Produção e Perdas */
                   <div className="space-y-6 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Evolução de Produção e Perdas</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Chart 3: Composed Loss vs Net Production */}
-                      <div id="ribbon-chart-composed" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 col-span-1 lg:col-span-2 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
+                    {/* Barra de Filtros e Seleção por Máquina */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                           <div>
-                            <h3 className="text-sm font-black uppercase text-indigo-950">Evolução de Perdas vs Produção Líquida</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Barras (Não conforme [Tipo 1 & Tipo 2] & Lixo) vs Linha de Produção (Eixo Secundário - m²)</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button 
-                              onClick={() => downloadChartAsPNG('ribbon-chart-composed', 'Evolução de Perdas vs Produção Líquida')}
-                              className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                              title="Baixar Imagem"
-                            >
-                              <Download size={15} />
-                            </button>
-                            <button 
-                              onClick={() => setFullscreenChart('ribbon-chart-composed')}
-                              className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
-                              title="Visualizar em Tela Cheia"
-                            >
-                              <Maximize2 size={15} />
-                            </button>
+                            <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-tight">
+                              Gráficos por Máquina • Corte de Fita
+                            </h3>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                              Acompanhe os dados de cada cortadeira de forma individual ou consolidada (Ghezze, Lintech, Wutec)
+                            </p>
                           </div>
                         </div>
+
+                        {/* Badges de filtro ativo */}
+                        <div className="flex items-center gap-2">
+                          {ribbonBiMachineFilter !== 'all' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className={`w-2 h-2 rounded-full ${
+                                ribbonBiMachineFilter === 'Ghezze' ? 'bg-blue-600' : ribbonBiMachineFilter === 'Lintech' ? 'bg-emerald-600' : 'bg-purple-600'
+                              }`}></span>
+                              Máquina: {ribbonBiMachineFilter}
+                              <button
+                                type="button"
+                                onClick={() => setRibbonBiMachineFilter('all')}
+                                className="text-blue-400 hover:text-red-500 ml-1"
+                                title="Ver todas as máquinas"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                              🏢 Todas as Máquinas
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botões seletores de máquina e filtros rápidos */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-black uppercase text-slate-400 mr-1 flex items-center gap-1">
+                            <Settings size={12} className="text-blue-500" />
+                            Máquina:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRibbonBiMachineFilter('all')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                              ribbonBiMachineFilter === 'all'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            🏢 Todas as Máquinas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRibbonBiMachineFilter('Ghezze')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                              ribbonBiMachineFilter === 'Ghezze'
+                                ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/60'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            Ghezze
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRibbonBiMachineFilter('Lintech')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                              ribbonBiMachineFilter === 'Lintech'
+                                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
+                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Lintech
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRibbonBiMachineFilter('Wutec')}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                              ribbonBiMachineFilter === 'Wutec'
+                                ? 'bg-purple-600 text-white shadow-sm shadow-purple-200'
+                                : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                            Wutec
+                          </button>
+                        </div>
+
+                        {/* Filtros de Turno e Operador */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={ribbonBiShiftFilter}
+                            onChange={(e) => setRibbonBiShiftFilter(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-blue-500"
+                          >
+                            <option value="all">Todos os Turnos</option>
+                            <option value="Turno A">Turno A</option>
+                            <option value="Turno B">Turno B</option>
+                            <option value="Turno C">Turno C</option>
+                          </select>
+
+                          <select
+                            value={ribbonBiOperatorFilter}
+                            onChange={(e) => setRibbonBiOperatorFilter(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-blue-500 max-w-[150px]"
+                          >
+                            <option value="all">Todos Operadores</option>
+                            {ribbonOperators.map((op) => (
+                              <option key={op} value={op}>{op}</option>
+                            ))}
+                          </select>
+
+                          {(ribbonBiMachineFilter !== 'all' || ribbonBiShiftFilter !== 'all' || ribbonBiOperatorFilter !== 'all') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRibbonBiMachineFilter('all');
+                                setRibbonBiShiftFilter('all');
+                                setRibbonBiOperatorFilter('all');
+                              }}
+                              className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Limpar Filtros
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card de Resumo Operacional da Máquina Selecionada */}
+                    {ribbonSelectedMachineStats && (
+                      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl shadow-md border border-slate-800 animate-in fade-in duration-300">
+                        <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-white/10">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-3.5 h-3.5 rounded-full shadow-sm ${
+                              ribbonBiMachineFilter === 'Ghezze' ? 'bg-blue-400' : ribbonBiMachineFilter === 'Lintech' ? 'bg-emerald-400' : 'bg-purple-400'
+                            }`}></div>
+                            <div>
+                              <h4 className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
+                                Máquina {ribbonSelectedMachineStats.machine}
+                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/15 text-slate-200">
+                                  Visão Individual
+                                </span>
+                              </h4>
+                              <p className="text-[10px] text-slate-300">
+                                Gráficos abaixo filtrados exclusivamente para a cortadeira {ribbonSelectedMachineStats.machine}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-slate-300 font-bold bg-white/10 px-3 py-1 rounded-xl">
+                            Mês: {dashboardMonth.split('-').reverse().join('/')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4">
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Produção Líquida</p>
+                            <p className="text-lg font-black text-emerald-400 mt-0.5">{formatM2(ribbonSelectedMachineStats.netProd)}</p>
+                            <p className="text-[10px] text-slate-400">Bruto: {formatM2(ribbonSelectedMachineStats.totProd)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Aproveitamento</p>
+                            <p className="text-lg font-black text-blue-400 mt-0.5">{ribbonSelectedMachineStats.yieldPct.toFixed(1)}%</p>
+                            <p className="text-[10px] text-rose-300">Refugo: {formatM2(ribbonSelectedMachineStats.totRej)} ({ribbonSelectedMachineStats.lossPct.toFixed(1)}%)</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Descarte (Lixo)</p>
+                            <p className="text-lg font-black text-amber-400 mt-0.5">{formatWeight(ribbonSelectedMachineStats.totWaste)}</p>
+                            <p className="text-[10px] text-slate-400">{formatM2(ribbonSelectedMachineStats.totWasteM2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Tempo de Paradas</p>
+                            <p className="text-lg font-black text-rose-400 mt-0.5">{ribbonSelectedMachineStats.totStops} min</p>
+                            <p className="text-[10px] text-slate-400">Meta: {formatM2(ribbonSelectedMachineStats.machineGoal)} ({ribbonSelectedMachineStats.goalPct.toFixed(1)}%)</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Gráfico 1: Evolução de Perdas vs Produção Líquida */}
+                      <div id="ribbon-chart-composed" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 col-span-1 lg:col-span-2 min-h-[420px]">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-50">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-black uppercase text-indigo-950">Evolução de Perdas vs Produção Líquida</h3>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                ribbonBiMachineFilter === 'all'
+                                  ? 'bg-slate-100 text-slate-700'
+                                  : ribbonBiMachineFilter === 'Ghezze'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : ribbonBiMachineFilter === 'Lintech'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {ribbonBiMachineFilter === 'all' ? 'Todas as Máquinas' : ribbonBiMachineFilter}
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                              {ribbonBiMachineFilter === 'all'
+                                ? 'Consolidado Geral (Corte de Fita) • Barras de perdas e linha de produção líquida (m²)'
+                                : `Exclusivo Máquina ${ribbonBiMachineFilter} • Perdas específicas do produto vs produção líquida (m²)`}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {/* Mini switcher de máquina no card */}
+                            <div className="hidden sm:flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/60">
+                              {(['all', 'Ghezze', 'Lintech', 'Wutec'] as const).map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => setRibbonBiMachineFilter(m)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                    ribbonBiMachineFilter === m
+                                      ? 'bg-white text-indigo-950 shadow-xs'
+                                      : 'text-slate-500 hover:text-slate-900'
+                                  }`}
+                                >
+                                  {m === 'all' ? 'Todas' : m}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="flex gap-1">
+                              <button 
+                                onClick={() => downloadChartAsPNG('ribbon-chart-composed', `Evolução de Perdas vs Produção Líquida - ${ribbonBiMachineFilter === 'all' ? 'Todas as Máquinas' : ribbonBiMachineFilter}`)}
+                                className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
+                                title="Baixar Imagem com Legenda Completa"
+                              >
+                                <Download size={15} />
+                              </button>
+                              <button 
+                                onClick={() => setFullscreenChart('ribbon-chart-composed')}
+                                className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
+                                title="Visualizar em Tela Cheia"
+                              >
+                                <Maximize2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="h-72">
                           {ribbonDailyTrendData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -14765,88 +15417,233 @@ Atenciosamente,
                               </ComposedChart>
                             </ResponsiveContainer>
                           ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para o período</div>
+                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">
+                              Sem dados para a máquina/período selecionado
+                            </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Chart 1: Daily Production in M² */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div>
-                          <h3 className="text-sm font-black uppercase text-indigo-950">Produção Física Diária</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Metros Quadrados Produzidos por Dia</p>
-                        </div>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={[...filteredRibbonEntries].reverse()}>
-                              <defs>
-                                <linearGradient id="prodColor" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="date" tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} tick={{ fontSize: 9 }} />
-                              <YAxis tickFormatter={(v) => formatM2(v)} tick={{ fontSize: 9 }} />
-                              <RechartsTooltip formatter={(v: any) => [formatM2(Number(v)), 'Produzido']} />
-                              <Area type="monotone" dataKey="producedM2" stroke="#3b82f6" fillOpacity={1} fill="url(#prodColor)" strokeWidth={2} />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      {/* Chart 2: Daily Waste weight (Kg) accumulators */}
-                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div>
-                          <h3 className="text-sm font-black uppercase text-indigo-950">Indicador de Lixo Acumulado</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Mapeamento de Descarte Diário em Peso</p>
-                        </div>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={[...filteredRibbonEntries].reverse()}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="date" tickFormatter={(d) => d.split('-').slice(1).reverse().join('/')} tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                              <YAxis tickFormatter={(v) => formatWeight(v)} tick={{ fontSize: 9 }} stroke="#94a3b8" />
-                              <RechartsTooltip 
-                                formatter={(v: any, name: any, props: any) => {
-                                  const entry = props?.payload;
-                                  const wt = Number(v);
-                                  const m2 = entry && entry.jumboType ? calculateLostM2(wt, entry.jumboType) : 0;
-                                  const m2Str = m2 > 0 ? ` (${m2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²)` : '';
-                                  return [`${formatWeight(wt)}${m2Str}`, 'Lixo total'];
-                                }}
-                                labelFormatter={(l: any) => l.split('-').reverse().join('/')}
-                              />
-                              <Bar dataKey="wasteWeight" name="Lixo Coletado" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={25} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      {/* Chart 4: Scatter Plot operator performance */}
-                      <div id="ribbon-chart-scatter" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
+                      {/* Gráfico 2: Produção Física Diária POR MÁQUINA */}
+                      <div id="ribbon-chart-prod" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-50">
                           <div>
-                            <h3 className="text-sm font-black uppercase text-indigo-950">Dispersão: Produção vs Lixo Operador</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">X = Produção Líquida (m²) | Y = Lixo (Kg/T) | Tamanho = Paradas de Processo (min)</p>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-black uppercase text-indigo-950">Produção Física Diária</h3>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                ribbonBiMachineFilter === 'all'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : ribbonBiMachineFilter === 'Ghezze'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : ribbonBiMachineFilter === 'Lintech'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {ribbonBiMachineFilter === 'all' ? 'Por Máquina' : ribbonBiMachineFilter}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                              {ribbonBiMachineFilter === 'all'
+                                ? 'Metros Quadrados Produzidos por Dia • Curvas Separadas por Máquina (Ghezze, Lintech, Wutec)'
+                                : `Metros Quadrados Produzidos por Dia • Cortadeira ${ribbonBiMachineFilter}`}
+                            </p>
                           </div>
-                          <div className="flex gap-1">
+
+                          <div className="flex items-center gap-1">
                             <button 
-                              onClick={() => downloadChartAsPNG('ribbon-chart-scatter', 'Dispersão Performance Operador Fita')}
-                              className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                              title="Baixar Imagem"
+                              onClick={() => downloadChartAsPNG('ribbon-chart-prod', `Produção Física Diária por Máquina - ${ribbonBiMachineFilter === 'all' ? 'Ghezze, Lintech, Wutec' : ribbonBiMachineFilter}`)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
+                              title="Baixar Imagem com Legenda"
                             >
                               <Download size={15} />
                             </button>
                             <button 
-                              onClick={() => setFullscreenChart('ribbon-chart-scatter')}
-                              className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
+                              onClick={() => setFullscreenChart('ribbon-chart-prod')}
+                              className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
                               title="Visualizar em Tela Cheia"
                             >
                               <Maximize2 size={15} />
                             </button>
                           </div>
                         </div>
+
+                        <div className="h-64">
+                          {ribbonDailyByMachineData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={ribbonDailyByMachineData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                                <defs>
+                                  <linearGradient id="ghezzeProdGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                                  </linearGradient>
+                                  <linearGradient id="lintechProdGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                                  </linearGradient>
+                                  <linearGradient id="wutecProdGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <YAxis tickFormatter={(v) => formatM2(v)} stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <RechartsTooltip 
+                                  formatter={(v: any, name: any) => [formatM2(Number(v)), name]}
+                                  labelFormatter={(label) => `Data: ${label}`}
+                                />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 8 }} />
+
+                                {ribbonBiMachineFilter === 'all' ? (
+                                  <>
+                                    <Area type="monotone" dataKey="ghezzeProd" name="🔵 Ghezze (m²)" stroke="#2563eb" strokeWidth={2} fillOpacity={1} fill="url(#ghezzeProdGrad)" />
+                                    <Area type="monotone" dataKey="lintechProd" name="🟢 Lintech (m²)" stroke="#059669" strokeWidth={2} fillOpacity={1} fill="url(#lintechProdGrad)" />
+                                    <Area type="monotone" dataKey="wutecProd" name="🟣 Wutec (m²)" stroke="#7c3aed" strokeWidth={2} fillOpacity={1} fill="url(#wutecProdGrad)" />
+                                  </>
+                                ) : ribbonBiMachineFilter === 'Ghezze' ? (
+                                  <Area type="monotone" dataKey="ghezzeProd" name="🔵 Ghezze (m²)" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#ghezzeProdGrad)" />
+                                ) : ribbonBiMachineFilter === 'Lintech' ? (
+                                  <Area type="monotone" dataKey="lintechProd" name="🟢 Lintech (m²)" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#lintechProdGrad)" />
+                                ) : (
+                                  <Area type="monotone" dataKey="wutecProd" name="🟣 Wutec (m²)" stroke="#7c3aed" strokeWidth={3} fillOpacity={1} fill="url(#wutecProdGrad)" />
+                                )}
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para exibição</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Gráfico 3: Indicador de Lixo Acumulado POR MÁQUINA */}
+                      <div id="ribbon-chart-waste" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-50">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-black uppercase text-indigo-950">Indicador de Lixo Acumulado</h3>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                ribbonBiMachineFilter === 'all'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : ribbonBiMachineFilter === 'Ghezze'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : ribbonBiMachineFilter === 'Lintech'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {ribbonBiMachineFilter === 'all' ? 'Por Máquina' : ribbonBiMachineFilter}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                              {ribbonBiMachineFilter === 'all'
+                                ? 'Mapeamento de Descarte Diário em Peso (Kg) • Decomposição por Máquina'
+                                : `Mapeamento de Descarte Diário em Peso (Kg) • Cortadeira ${ribbonBiMachineFilter}`}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => downloadChartAsPNG('ribbon-chart-waste', `Indicadores de Lixo Acumulado por Máquina - ${ribbonBiMachineFilter === 'all' ? 'Ghezze, Lintech, Wutec' : ribbonBiMachineFilter}`)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
+                              title="Baixar Imagem com Legenda"
+                            >
+                              <Download size={15} />
+                            </button>
+                            <button 
+                              onClick={() => setFullscreenChart('ribbon-chart-waste')}
+                              className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
+                              title="Visualizar em Tela Cheia"
+                            >
+                              <Maximize2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="h-64">
+                          {ribbonDailyByMachineData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={ribbonDailyByMachineData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <YAxis tickFormatter={(v) => formatWeight(v)} stroke="#475569" style={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <RechartsTooltip 
+                                  formatter={(v: any, name: any, props: any) => {
+                                    const val = Number(v);
+                                    let m2 = 0;
+                                    if (name.includes('Ghezze')) m2 = props?.payload?.ghezzeWasteM2 || 0;
+                                    else if (name.includes('Lintech')) m2 = props?.payload?.lintechWasteM2 || 0;
+                                    else if (name.includes('Wutec')) m2 = props?.payload?.wutecWasteM2 || 0;
+                                    else m2 = props?.payload?.totalWasteM2 || 0;
+                                    const m2Str = m2 > 0 ? ` (${m2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²)` : '';
+                                    return [`${formatWeight(val)}${m2Str}`, name];
+                                  }}
+                                  labelFormatter={(label) => `Data: ${label}`}
+                                />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 9, fontWeight: 'bold', paddingTop: 8 }} />
+
+                                {ribbonBiMachineFilter === 'all' ? (
+                                  <>
+                                    <Bar dataKey="ghezzeWaste" name="🔵 Ghezze (Kg)" stackId="waste" fill="#2563eb" barSize={22} />
+                                    <Bar dataKey="lintechWaste" name="🟢 Lintech (Kg)" stackId="waste" fill="#059669" barSize={22} />
+                                    <Bar dataKey="wutecWaste" name="🟣 Wutec (Kg)" stackId="waste" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
+                                  </>
+                                ) : ribbonBiMachineFilter === 'Ghezze' ? (
+                                  <Bar dataKey="ghezzeWaste" name="🔵 Ghezze (Kg)" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={24} />
+                                ) : ribbonBiMachineFilter === 'Lintech' ? (
+                                  <Bar dataKey="lintechWaste" name="🟢 Lintech (Kg)" fill="#059669" radius={[4, 4, 0, 0]} barSize={24} />
+                                ) : (
+                                  <Bar dataKey="wutecWaste" name="🟣 Wutec (Kg)" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={24} />
+                                )}
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para exibição</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Gráfico 4: Dispersão Produção vs Lixo Operador POR MÁQUINA */}
+                      <div id="ribbon-chart-scatter" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 min-h-[420px]">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-50">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-black uppercase text-indigo-950">Dispersão: Produção vs Lixo Operador</h3>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                ribbonBiMachineFilter === 'all'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : ribbonBiMachineFilter === 'Ghezze'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : ribbonBiMachineFilter === 'Lintech'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-purple-100 text-purple-700'
+                              }`}>
+                                {ribbonBiMachineFilter === 'all' ? 'Por Máquina' : ribbonBiMachineFilter}
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                              {ribbonBiMachineFilter === 'all'
+                                ? 'X = Produção Líquida (m²) | Y = Lixo (Kg) | Cores = Máquinas (Ghezze, Lintech, Wutec)'
+                                : `Performance Individual dos Operadores na Máquina ${ribbonBiMachineFilter}`}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => downloadChartAsPNG('ribbon-chart-scatter', `Dispersão Produção vs Lixo Operador por Máquina - ${ribbonBiMachineFilter === 'all' ? 'Todas as Máquinas' : ribbonBiMachineFilter}`)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
+                              title="Baixar Imagem com Legenda de Operadores"
+                            >
+                              <Download size={15} />
+                            </button>
+                            <button 
+                              onClick={() => setFullscreenChart('ribbon-chart-scatter')}
+                              className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
+                              title="Visualizar em Tela Cheia"
+                            >
+                              <Maximize2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="h-72">
                           {ribbonScatterData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -14862,9 +15659,14 @@ Atenciosamente,
                                       const item = payload[0].payload;
                                       return (
                                         <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-xl border border-slate-700 text-[10px] space-y-1 font-semibold">
-                                          <p className="font-extrabold uppercase tracking-wider text-emerald-400 border-b border-slate-800 pb-1.5 mb-1.5">{item.name}</p>
+                                          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5 mb-1.5">
+                                            <p className="font-extrabold uppercase tracking-wider text-emerald-400">{item.name}</p>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white/20 text-slate-200">
+                                              {item.machine}
+                                            </span>
+                                          </div>
                                           <p>🏆 Produção Líquida: <span className="font-black text-slate-100">{item.prod.toLocaleString('pt-BR')} m²</span></p>
-                                          <p>🗑️ Lixo: <span className="font-black text-slate-100">{formatWeight(item.wastes)}</span></p>
+                                          <p>🗑️ Lixo Total: <span className="font-black text-slate-100">{formatWeight(item.wastes)}</span></p>
                                           <p>⏱️ Tempo de Paradas: <span className="font-black text-slate-100">{item.stopsProcess} min</span></p>
                                         </div>
                                       );
@@ -14885,17 +15687,21 @@ Atenciosamente,
                               </ScatterChart>
                             </ResponsiveContainer>
                           ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem dados para análise</div>
+                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">
+                              Sem dados para análise na máquina selecionada
+                            </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Chart 5: 100% proportional stops breakdown */}
+                      {/* Gráfico 5: Breakdown Proporcional de Paradas (100%) */}
                       <div id="ribbon-chart-stacked" className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4 min-h-[420px]">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-50">
                           <div>
                             <h3 className="text-sm font-black uppercase text-indigo-950">Breakdown Proporcional de Paradas (100%)</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Exibe a distribuição interna de motivos de inatividade</p>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                              Exibe a distribuição interna de motivos de inatividade • {ribbonStopsGroupBy === 'machine' ? 'Agrupado por Máquinas' : 'Agrupado por Operador'}
+                            </p>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
@@ -14917,14 +15723,14 @@ Atenciosamente,
                             <div className="flex gap-1">
                               <button 
                                 onClick={() => downloadChartAsPNG('ribbon-chart-stacked', 'Distribuição Proporcional de Paradas Fita')}
-                                className="p-1.5 text-slate-350 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
-                                title="Baixar Imagem"
+                                className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/50 rounded-lg transition-all"
+                                title="Baixar Imagem com Legenda"
                               >
                                 <Download size={15} />
                               </button>
                               <button 
                                 onClick={() => setFullscreenChart('ribbon-chart-stacked')}
-                                className="p-1.5 text-slate-350 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
+                                className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50/50 rounded-lg transition-all"
                                 title="Visualizar em Tela Cheia"
                               >
                                 <Maximize2 size={15} />
@@ -14932,6 +15738,7 @@ Atenciosamente,
                             </div>
                           </div>
                         </div>
+
                         <div className="h-72">
                           {ribbonProportionalStopsData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -14947,11 +15754,12 @@ Atenciosamente,
                               </BarChart>
                             </ResponsiveContainer>
                           ) : (
-                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">Sem inatividades registradas</div>
+                            <div className="h-full flex items-center justify-center text-slate-300 font-bold text-[10px] uppercase">
+                              Sem inatividades registradas
+                            </div>
                           )}
                         </div>
                       </div>
-
                     </div>
                   </div>
                 )}
@@ -16481,7 +17289,7 @@ Atenciosamente,
       />
 
       <AnimatePresence>
-        {fullscreenChart && ['stops-motifs-card', 'ribbon-chart-composed', 'ribbon-chart-scatter', 'ribbon-chart-stacked'].includes(fullscreenChart) && (
+        {fullscreenChart && ['stops-motifs-card', 'ribbon-chart-composed', 'ribbon-chart-prod', 'ribbon-chart-waste', 'ribbon-chart-scatter', 'ribbon-chart-stacked'].includes(fullscreenChart) && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
@@ -16495,14 +17303,18 @@ Atenciosamente,
                 <div>
                   <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">
                     {fullscreenChart === 'stops-motifs-card' && 'Relação de Paradas e Motivos'}
-                    {fullscreenChart === 'ribbon-chart-composed' && 'Evolução de Perdas vs Produção Líquida (Corte de Fita)'}
-                    {fullscreenChart === 'ribbon-chart-scatter' && 'Dispersão Performance Operador (Corte de Fita)'}
+                    {fullscreenChart === 'ribbon-chart-composed' && `Evolução de Perdas vs Produção Líquida (Corte de Fita) • ${ribbonBiMachineFilter === 'all' ? 'Todas as Máquinas' : ribbonBiMachineFilter}`}
+                    {fullscreenChart === 'ribbon-chart-prod' && `Produção Física Diária por Máquina • ${ribbonBiMachineFilter === 'all' ? 'Ghezze, Lintech, Wutec' : ribbonBiMachineFilter}`}
+                    {fullscreenChart === 'ribbon-chart-waste' && `Indicadores de Lixo Acumulado por Máquina • ${ribbonBiMachineFilter === 'all' ? 'Ghezze, Lintech, Wutec' : ribbonBiMachineFilter}`}
+                    {fullscreenChart === 'ribbon-chart-scatter' && `Dispersão Performance Operador (Corte de Fita) • ${ribbonBiMachineFilter === 'all' ? 'Todas as Máquinas' : ribbonBiMachineFilter}`}
                     {fullscreenChart === 'ribbon-chart-stacked' && 'Distribuição Proporcional de Paradas (Corte de Fita)'}
                   </h3>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
                     {fullscreenChart === 'stops-motifs-card' && 'Detalhamento completo das paradas ocorridas por máquina'}
                     {fullscreenChart === 'ribbon-chart-composed' && 'Barras (Não conforme [Tipo 1 & Tipo 2] & Lixo) vs Linha de Produção (Eixo Secundário - m²)'}
-                    {fullscreenChart === 'ribbon-chart-scatter' && 'X = Produção Líquida (m²) | Y = Lixo (Kg/T) | Tamanho = Paradas de Processo (min)'}
+                    {fullscreenChart === 'ribbon-chart-prod' && 'Metros quadrados produzidos dia a dia por cortadeira (Ghezze, Lintech, Wutec)'}
+                    {fullscreenChart === 'ribbon-chart-waste' && 'Mapeamento de descarte diário em peso (Kg) e m² equivalente por máquina'}
+                    {fullscreenChart === 'ribbon-chart-scatter' && 'X = Produção Líquida (m²) | Y = Lixo (Kg) | Cores = Cortadeiras'}
                     {fullscreenChart === 'ribbon-chart-stacked' && 'Exibe a distribuição interna de motivos de inatividade'}
                   </p>
                 </div>
@@ -16630,13 +17442,106 @@ Atenciosamente,
                           <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
                           <YAxis stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" m²" />
                           <YAxis yAxisId="right" orientation="right" stroke="#10b981" style={{ fontSize: 11, fontWeight: 'bold' }} unit=" m²" />
-                          <RechartsTooltip formatter={(value: any) => formatM2(Number(value))} />
+                          <RechartsTooltip formatter={(value: any, name: any, props: any) => {
+                            if (name === "Lixo") {
+                              const kgVal = props?.payload?.residuoWeight ?? 0;
+                              return [`${formatWeight(kgVal)} (${Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²)`, name];
+                            }
+                            return [Number(value).toLocaleString('pt-BR') + ' m²', name];
+                          }} />
                           <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Bar dataKey="ncT1" name="Não Conforme T1" stackId="loss" fill="#ec4899" />
-                          <Bar dataKey="ncT2" name="Não Conforme T2" stackId="loss" fill="#f43f5e" />
-                          <Bar dataKey="trash" name="Lixo" stackId="loss" fill="#94a3b8" />
+                          <Bar dataKey="tipo1" name="Não Conforme T1" stackId="loss" fill="#ef4444" />
+                          <Bar dataKey="tipo2" name="Não Conforme T2" stackId="loss" fill="#f43f5e" />
+                          <Bar dataKey="residuoM2" name="Lixo" stackId="loss" fill="#f59e0b" />
                           <Line yAxisId="right" type="monotone" dataKey="prod" name="Produção Líquida" stroke="#10b981" strokeWidth={4} dot={{ r: 4 }} activeDot={{ r: 8 }} />
                         </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o período</div>
+                    )
+                  )}
+
+                  {fullscreenChart === 'ribbon-chart-prod' && (
+                    ribbonDailyByMachineData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={ribbonDailyByMachineData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+                          <defs>
+                            <linearGradient id="fsGhezzeProd" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="fsLintechProd" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="fsWutecProd" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
+                          <YAxis tickFormatter={(v) => formatM2(v)} stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
+                          <RechartsTooltip 
+                            formatter={(v: any, name: any) => [formatM2(Number(v)), name]}
+                            labelFormatter={(label) => `Data: ${label}`}
+                          />
+                          <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
+                          {ribbonBiMachineFilter === 'all' ? (
+                            <>
+                              <Area type="monotone" dataKey="ghezzeProd" name="🔵 Ghezze (m²)" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#fsGhezzeProd)" />
+                              <Area type="monotone" dataKey="lintechProd" name="🟢 Lintech (m²)" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#fsLintechProd)" />
+                              <Area type="monotone" dataKey="wutecProd" name="🟣 Wutec (m²)" stroke="#7c3aed" strokeWidth={3} fillOpacity={1} fill="url(#fsWutecProd)" />
+                            </>
+                          ) : ribbonBiMachineFilter === 'Ghezze' ? (
+                            <Area type="monotone" dataKey="ghezzeProd" name="🔵 Ghezze (m²)" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#fsGhezzeProd)" />
+                          ) : ribbonBiMachineFilter === 'Lintech' ? (
+                            <Area type="monotone" dataKey="lintechProd" name="🟢 Lintech (m²)" stroke="#059669" strokeWidth={4} fillOpacity={1} fill="url(#fsLintechProd)" />
+                          ) : (
+                            <Area type="monotone" dataKey="wutecProd" name="🟣 Wutec (m²)" stroke="#7c3aed" strokeWidth={4} fillOpacity={1} fill="url(#fsWutecProd)" />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o período</div>
+                    )
+                  )}
+
+                  {fullscreenChart === 'ribbon-chart-waste' && (
+                    ribbonDailyByMachineData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={ribbonDailyByMachineData} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="label" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
+                          <YAxis tickFormatter={(v) => formatWeight(v)} stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
+                          <RechartsTooltip 
+                            formatter={(v: any, name: any, props: any) => {
+                              const val = Number(v);
+                              let m2 = 0;
+                              if (name.includes('Ghezze')) m2 = props?.payload?.ghezzeWasteM2 || 0;
+                              else if (name.includes('Lintech')) m2 = props?.payload?.lintechWasteM2 || 0;
+                              else if (name.includes('Wutec')) m2 = props?.payload?.wutecWasteM2 || 0;
+                              else m2 = props?.payload?.totalWasteM2 || 0;
+                              const m2Str = m2 > 0 ? ` (${m2.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²)` : '';
+                              return [`${formatWeight(val)}${m2Str}`, name];
+                            }}
+                            labelFormatter={(label) => `Data: ${label}`}
+                          />
+                          <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
+                          {ribbonBiMachineFilter === 'all' ? (
+                            <>
+                              <Bar dataKey="ghezzeWaste" name="🔵 Ghezze (Kg)" stackId="waste" fill="#2563eb" barSize={32} />
+                              <Bar dataKey="lintechWaste" name="🟢 Lintech (Kg)" stackId="waste" fill="#059669" barSize={32} />
+                              <Bar dataKey="wutecWaste" name="🟣 Wutec (Kg)" stackId="waste" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={32} />
+                            </>
+                          ) : ribbonBiMachineFilter === 'Ghezze' ? (
+                            <Bar dataKey="ghezzeWaste" name="🔵 Ghezze (Kg)" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={36} />
+                          ) : ribbonBiMachineFilter === 'Lintech' ? (
+                            <Bar dataKey="lintechWaste" name="🟢 Lintech (Kg)" fill="#059669" radius={[4, 4, 0, 0]} barSize={36} />
+                          ) : (
+                            <Bar dataKey="wutecWaste" name="🟣 Wutec (Kg)" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={36} />
+                          )}
+                        </BarChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="h-full flex items-center justify-center text-slate-300 font-bold text-sm uppercase">Sem dados para o período</div>
@@ -16649,18 +17554,40 @@ Atenciosamente,
                         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: -10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                           <XAxis type="number" dataKey="prod" name="Produção Líquida" unit=" m²" stroke="#94a3b8" style={{ fontSize: 11, fontWeight: 'bold' }} />
-                          <YAxis type="number" dataKey="trash" name="Lixo Extrusão" unit=" kg" stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
+                          <YAxis type="number" dataKey="wastes" name="Lixo Total" unit=" kg" stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} tickFormatter={(val) => formatWeight(val)} />
                           <ZAxis type="number" dataKey="stopsProcess" range={[100, 1000]} name="Ajuste Processo" unit=" min" />
                           <RechartsTooltip 
                             cursor={{ strokeDasharray: '3 3' }}
-                            formatter={(value: any, name: any) => [name === 'Ajuste Processo' ? `${value} min` : name === 'Lixo Extrusão' ? formatWeight(Number(value)) : formatM2(Number(value)), name]}
+                            content={({ active, payload }: any) => {
+                              if (active && payload && payload.length) {
+                                const item = payload[0].payload;
+                                return (
+                                  <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-xl border border-slate-700 text-xs space-y-1.5 font-semibold">
+                                    <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 mb-2">
+                                      <p className="font-extrabold uppercase tracking-wider text-emerald-400">{item.name}</p>
+                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/20 text-slate-200">
+                                        {item.machine}
+                                      </span>
+                                    </div>
+                                    <p>🏆 Produção Líquida: <span className="font-black text-slate-100">{item.prod.toLocaleString('pt-BR')} m²</span></p>
+                                    <p>🗑️ Lixo Total: <span className="font-black text-slate-100">{formatWeight(item.wastes)}</span></p>
+                                    <p>⏱️ Tempo de Paradas: <span className="font-black text-slate-100">{item.stopsProcess} min</span></p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
                           />
                           <Legend iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Scatter name="Operadores Corte e Rebobinamento" data={ribbonScatterData} fill="#6366f1">
-                            {ribbonScatterData.map((_entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Scatter>
+                          {ribbonScatterData.map((entry, index) => (
+                            <Scatter 
+                              key={index} 
+                              name={entry.name} 
+                              data={[entry]} 
+                              fill={entry.color} 
+                              className="cursor-zoom-in"
+                            />
+                          ))}
                         </ScatterChart>
                       </ResponsiveContainer>
                     ) : (
@@ -16677,14 +17604,9 @@ Atenciosamente,
                           <YAxis tickFormatter={(tick) => `${tick}%`} stroke="#475569" style={{ fontSize: 11, fontWeight: 'bold' }} />
                           <RechartsTooltip formatter={(val: any) => `${Number(val).toFixed(1)}%`} />
                           <Legend wrapperStyle={{ fontSize: 12, fontWeight: 'bold', paddingTop: 15 }} />
-                          <Bar dataKey="Ajuste Processo" stackId="a" fill="#3b82f6" />
-                          <Bar dataKey="Troca de Bobina" stackId="a" fill="#10b981" />
-                          <Bar dataKey="Limpeza" stackId="a" fill="#f59e0b" />
-                          <Bar dataKey="Manutenção Elétrica" stackId="a" fill="#ef4444" />
-                          <Bar dataKey="Manutenção Mecânica" stackId="a" fill="#8b5cf6" />
-                          <Bar dataKey="Falta de Matéria-Prima" stackId="a" fill="#ec4899" />
-                          <Bar dataKey="Troca de Facas" stackId="a" fill="#14b8a6" />
-                          <Bar dataKey="Outros" stackId="a" fill="#64748b" />
+                          <Bar dataKey="manutPct" name="Parada Manutenção" stackId="stops-pct" fill="#ef4444" unit="%" />
+                          <Bar dataKey="procPct" name="Parada Processo" stackId="stops-pct" fill="#f59e0b" unit="%" />
+                          <Bar dataKey="outrosPct" name="Outras Paradas" stackId="stops-pct" fill="#64748b" unit="%" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
