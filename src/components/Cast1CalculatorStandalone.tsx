@@ -168,7 +168,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
   // Copiar link externo para a área de transferência
   const getExternalLink = () => {
     const origin = window.location.origin;
-    return `${origin}/calculadora-cast1`;
+    return `${origin}/?page=calculadora#cast1`;
   };
 
   const handleCopyLink = async () => {

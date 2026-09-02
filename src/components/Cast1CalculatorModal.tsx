@@ -45,7 +45,7 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
   const [copiedLink, setCopiedLink] = useState(false);
 
   const handleCopyExternalLink = async () => {
-    const link = `${window.location.origin}/calculadora-cast1`;
+    const link = `${window.location.origin}/?page=calculadora#cast1`;
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(link);

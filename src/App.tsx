@@ -8614,6 +8614,22 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     }
   };
 
+  // Acesso Externo Direto à Calculadora CAST 1 (sem login, sem dependência de autenticação)
+  // Verifica antes de qualquer outra tela (inclusive tela de boas-vindas/instalação ou carregamento)
+  if (isExternalCalculatorView) {
+    return (
+      <Cast1CalculatorStandalone
+        systemLogo={systemLogo}
+        onNavigateToApp={() => {
+          try {
+            window.history.pushState({}, '', '/');
+          } catch {}
+          setIsExternalCalculatorView(false);
+        }}
+      />
+    );
+  }
+
   if (showInstallExperience) {
     return (
       <InstallExperience onComplete={async () => {
@@ -8640,21 +8656,6 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
           }
         }
       }} />
-    );
-  }
-
-  // Acesso Externo Direto à Calculadora CAST 1 (sem login, sem dependência de autenticação)
-  if (isExternalCalculatorView) {
-    return (
-      <Cast1CalculatorStandalone
-        systemLogo={systemLogo}
-        onNavigateToApp={() => {
-          try {
-            window.history.pushState({}, '', '/');
-          } catch {}
-          setIsExternalCalculatorView(false);
-        }}
-      />
     );
   }
 
@@ -9504,7 +9505,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                      type="button"
                      onClick={(e) => {
                        e.stopPropagation();
-                       const link = `${window.location.origin}/calculadora-cast1`;
+                       const link = `${window.location.origin}/?page=calculadora#cast1`;
                        if (navigator.clipboard && window.isSecureContext) {
                          navigator.clipboard.writeText(link).then(() => {
                            alert('Link Externo da Calculadora CAST 1 copiado com sucesso! Pode enviar pelo WhatsApp para qualquer pessoa acessar sem login.');
