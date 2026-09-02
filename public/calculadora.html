@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Calculadora % CAST 1 - Manupackaging</title>
+  <meta name="description" content="Calculadora independente de parâmetros e vazão para Extrusora CAST 1 - Manupackaging">
+  <link rel="icon" href="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-12 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Top Header -->
+  <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-4 py-3 sm:px-6">
+    <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-lg shadow-blue-500/20 flex items-center justify-center shrink-0">
+          <img src="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png" alt="Manupackaging Logo" class="w-8 h-8 object-contain">
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-black text-sm sm:text-base text-white tracking-tight uppercase">Calculadora CAST 1</h1>
+            <span class="bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Acesso Livre</span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-medium">Manupackaging — Controle de Roscas e Vazão</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnShareWhatsApp" class="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+          <span class="hidden sm:inline">WhatsApp</span>
+        </button>
+        <button id="btnCopyLink" class="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span id="copyLinkText">Copiar Link</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+
+    <!-- Card: Material e Espessura -->
+    <section class="bg-slate-800/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-slate-700/60 shadow-xl space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/50 pb-4">
+        <div>
+          <span class="text-[10px] font-black uppercase tracking-wider text-blue-400">Configuração Inicial</span>
+          <h2 class="text-lg font-black text-white">Tipo de Filme & Espessura</h2>
+        </div>
+        
+        <!-- Seleção de Material -->
+        <div class="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-2xl border border-slate-700/50">
+          <button type="button" class="mat-btn px-4 py-1.5 rounded-xl font-black text-xs transition-all bg-blue-600 text-white shadow" data-mat="LC3">LC3</button>
+          <button type="button" class="mat-btn px-4 py-1.5 rounded-xl font-black text-xs transition-all text-slate-400 hover:text-white" data-mat="LC2">LC2</button>
+          <button type="button" class="mat-btn px-4 py-1.5 rounded-xl font-black text-xs transition-all text-slate-400 hover:text-white" data-mat="ATX">ATX</button>
+        </div>
+      </div>
+
+      <!-- Seletor de Espessura (Micras) -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-bold text-slate-300">Espessura Selecionada:</label>
+          <div class="flex items-center gap-1.5">
+            <span id="displayMicras" class="text-2xl font-black text-blue-400">30</span>
+            <span class="text-xs font-black text-slate-400 uppercase">µm</span>
+          </div>
+        </div>
+
+        <input type="range" id="rangeMicras" min="10" max="71" value="30" class="w-full h-2.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-4">
+
+        <!-- Atalhos Rápidos de Micras -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[10px] font-black text-slate-400 uppercase mr-1">Atalhos:</span>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="17">17µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="20">20µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="23">23µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="25">25µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-blue-600 text-white border-blue-500 shadow" data-val="30">30µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="35">35µ</button>
+          <button type="button" class="quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500" data-val="50">50µ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: Parâmetros da Linha -->
+    <section class="bg-slate-800/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-slate-700/60 shadow-xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-3">
+        <span class="text-[10px] font-black uppercase tracking-wider text-blue-400">Linha de Extrusão</span>
+        <span class="text-xs font-medium text-slate-400">Ajuste de Velocidade e Gramatura</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- Gramatura -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/40">
+          <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gramatura (g)</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="inputGramatura" value="48.5" step="0.1" class="w-full bg-slate-800 text-white font-black text-xl px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500">
+            <span class="text-xs font-bold text-slate-500">g</span>
+          </div>
+        </div>
+
+        <!-- Velocidade -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/40">
+          <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Velocidade da Linha</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="inputVelocidade" value="480" step="5" class="w-full bg-slate-800 text-white font-black text-xl px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500">
+            <span class="text-xs font-bold text-slate-500">m/min</span>
+          </div>
+        </div>
+
+        <!-- Metragem -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/40">
+          <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Metragem por Bobina</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="inputMetragem" value="1031" step="1" class="w-full bg-slate-800 text-white font-black text-xl px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500">
+            <span class="text-xs font-bold text-slate-500">m</span>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-1">Metragem automática calculada para 50kg</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: Balanceamento das Roscas (A, B, C, D) -->
+    <section class="bg-slate-800/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-slate-700/60 shadow-xl space-y-5">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-3">
+        <div>
+          <span class="text-[10px] font-black uppercase tracking-wider text-blue-400">Alimentação dos Extrusores</span>
+          <h2 class="text-lg font-black text-white">Balanceamento de Roscas A, B, C e D</h2>
+        </div>
+        <button id="btnResetRpm" class="text-xs text-blue-400 hover:text-blue-300 font-bold underline">Restaurar Padrão</button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Rosca A -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-amber-500"></div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-black text-sm text-white">Rosca A</span>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">Capa Sup.</span>
+          </div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rotação (RPM)</label>
+          <input type="number" id="rpmA" value="56" class="w-full bg-slate-800 text-white font-black text-lg px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-500 mb-3">
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+            <span class="text-slate-400">Vazão:</span>
+            <span id="vazaoA" class="font-black text-white">100.8 kg/h</span>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-1">
+            <span class="text-slate-400">Participação:</span>
+            <span id="pctA" class="font-black text-amber-400">7.2%</span>
+          </div>
+        </div>
+
+        <!-- Rosca B -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-blue-500"></div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-black text-sm text-white">Rosca B</span>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Alma 1</span>
+          </div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rotação (RPM)</label>
+          <input type="number" id="rpmB" value="146" class="w-full bg-slate-800 text-white font-black text-lg px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500 mb-3">
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+            <span class="text-slate-400">Vazão:</span>
+            <span id="vazaoB" class="font-black text-white">598.6 kg/h</span>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-1">
+            <span class="text-slate-400">Participação:</span>
+            <span id="pctB" class="font-black text-blue-400">42.8%</span>
+          </div>
+        </div>
+
+        <!-- Rosca C -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-indigo-500"></div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-black text-sm text-white">Rosca C</span>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">Alma 2</span>
+          </div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rotação (RPM)</label>
+          <input type="number" id="rpmC" value="146" class="w-full bg-slate-800 text-white font-black text-lg px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500 mb-3">
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+            <span class="text-slate-400">Vazão:</span>
+            <span id="vazaoC" class="font-black text-white">598.6 kg/h</span>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-1">
+            <span class="text-slate-400">Participação:</span>
+            <span id="pctC" class="font-black text-indigo-400">42.8%</span>
+          </div>
+        </div>
+
+        <!-- Rosca D -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-purple-500"></div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-black text-sm text-white">Rosca D</span>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">Capa Inf.</span>
+          </div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Rotação (RPM)</label>
+          <input type="number" id="rpmD" value="56" class="w-full bg-slate-800 text-white font-black text-lg px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-purple-500 mb-3">
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+            <span class="text-slate-400">Vazão:</span>
+            <span id="vazaoD" class="font-black text-white">100.8 kg/h</span>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-1">
+            <span class="text-slate-400">Participação:</span>
+            <span id="pctD" class="font-black text-purple-400">7.2%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra visual de distribuição percentual -->
+      <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-700/40">
+        <div class="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-2">
+          <span>Distribuição das Camadas:</span>
+          <span id="totalPct" class="text-white font-black">100.0%</span>
+        </div>
+        <div class="h-3 w-full bg-slate-800 rounded-full flex overflow-hidden">
+          <div id="barA" class="bg-amber-500 h-full transition-all" style="width: 7.2%" title="Rosca A"></div>
+          <div id="barB" class="bg-blue-500 h-full transition-all" style="width: 42.8%" title="Rosca B"></div>
+          <div id="barC" class="bg-indigo-500 h-full transition-all" style="width: 42.8%" title="Rosca C"></div>
+          <div id="barD" class="bg-purple-500 h-full transition-all" style="width: 7.2%" title="Rosca D"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: Resultados & Indicadores de Produção -->
+    <section class="bg-gradient-to-br from-blue-900/40 via-slate-800/80 to-indigo-900/40 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-blue-500/30 shadow-2xl space-y-5">
+      <div class="flex items-center justify-between border-b border-slate-700/50 pb-3">
+        <span class="text-[10px] font-black uppercase tracking-wider text-emerald-400">Resultados da Linha</span>
+        <span class="text-xs font-bold text-slate-300">Estimativas de Produção Contínua</span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <!-- Taxa Total -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Taxa Total</span>
+          <span id="resTaxaTotal" class="text-2xl sm:text-3xl font-black text-emerald-400 block">1398.8</span>
+          <span class="text-[11px] font-bold text-slate-500">kg/h</span>
+        </div>
+
+        <!-- Paletes por Turno -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Turno de 12h</span>
+          <span id="resPaletes" class="text-2xl sm:text-3xl font-black text-blue-400 block">33.6</span>
+          <span class="text-[11px] font-bold text-slate-500">Paletes / turno</span>
+        </div>
+
+        <!-- Tempo 1 Palete -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tempo Palete</span>
+          <span id="resTempoPalete" class="text-2xl sm:text-3xl font-black text-amber-400 block">21.4</span>
+          <span class="text-[11px] font-bold text-slate-500">minutos / palete</span>
+        </div>
+
+        <!-- Tempo por Queda -->
+        <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-700/60">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tempo Queda</span>
+          <span id="resTempoQueda" class="text-2xl sm:text-3xl font-black text-purple-400 block">2.15</span>
+          <span class="text-[11px] font-bold text-slate-500">minutos / queda</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Script com lógica e dados de parametrização da CAST 1 -->
+  <script>
+    const PARAMS_BY_MICRA = {
+      10: { gramatura: 16.2, velocidade: 520, rpmA: 40, rpmB: 95,  rpmC: 95,  rpmD: 40 },
+      12: { gramatura: 19.4, velocidade: 510, rpmA: 44, rpmB: 105, rpmC: 105, rpmD: 44 },
+      15: { gramatura: 24.3, velocidade: 500, rpmA: 48, rpmB: 120, rpmC: 120, rpmD: 48 },
+      17: { gramatura: 27.5, velocidade: 490, rpmA: 50, rpmB: 130, rpmC: 130, rpmD: 50 },
+      20: { gramatura: 32.4, velocidade: 485, rpmA: 52, rpmB: 138, rpmC: 138, rpmD: 52 },
+      23: { gramatura: 37.2, velocidade: 480, rpmA: 54, rpmB: 142, rpmC: 142, rpmD: 54 },
+      25: { gramatura: 40.5, velocidade: 480, rpmA: 55, rpmB: 144, rpmC: 144, rpmD: 55 },
+      30: { gramatura: 48.5, velocidade: 480, rpmA: 56, rpmB: 146, rpmC: 146, rpmD: 56 },
+      35: { gramatura: 56.6, velocidade: 460, rpmA: 58, rpmB: 152, rpmC: 152, rpmD: 58 },
+      40: { gramatura: 64.8, velocidade: 430, rpmA: 60, rpmB: 158, rpmC: 158, rpmD: 60 },
+      50: { gramatura: 81.0, velocidade: 380, rpmA: 64, rpmB: 168, rpmC: 168, rpmD: 64 },
+      71: { gramatura: 115.0, velocidade: 300, rpmA: 70, rpmB: 185, rpmC: 185, rpmD: 70 }
+    };
+
+    let selectedMaterial = 'LC3';
+    let selectedMicras = 30;
+
+    function getInterpolated(m) {
+      if (PARAMS_BY_MICRA[m]) return PARAMS_BY_MICRA[m];
+      const keys = Object.keys(PARAMS_BY_MICRA).map(Number).sort((a,b) => a - b);
+      let lower = keys[0], upper = keys[keys.length - 1];
+      for (let i = 0; i < keys.length; i++) {
+        if (keys[i] <= m) lower = keys[i];
+        if (keys[i] >= m) { upper = keys[i]; break; }
+      }
+      if (lower === upper) return PARAMS_BY_MICRA[lower];
+      const factor = (m - lower) / (upper - lower);
+      const lP = PARAMS_BY_MICRA[lower], uP = PARAMS_BY_MICRA[upper];
+      return {
+        gramatura: +(lP.gramatura + (uP.gramatura - lP.gramatura) * factor).toFixed(1),
+        velocidade: Math.round(lP.velocidade + (uP.velocidade - lP.velocidade) * factor),
+        rpmA: Math.round(lP.rpmA + (uP.rpmA - lP.rpmA) * factor),
+        rpmB: Math.round(lP.rpmB + (uP.rpmB - lP.rpmB) * factor),
+        rpmC: Math.round(lP.rpmC + (uP.rpmC - lP.rpmC) * factor),
+        rpmD: Math.round(lP.rpmD + (uP.rpmD - lP.rpmD) * factor)
+      };
+    }
+
+    function calcMetragem(micras) {
+      return Math.round((50 * 1000) / (0.00162 * micras * 1000));
+    }
+
+    function updateCalculations() {
+      const g = parseFloat(document.getElementById('inputGramatura').value) || 0;
+      const v = parseFloat(document.getElementById('inputVelocidade').value) || 0;
+      const m = parseFloat(document.getElementById('inputMetragem').value) || 0;
+
+      const rA = parseFloat(document.getElementById('rpmA').value) || 0;
+      const rB = parseFloat(document.getElementById('rpmB').value) || 0;
+      const rC = parseFloat(document.getElementById('rpmC').value) || 0;
+      const rD = parseFloat(document.getElementById('rpmD').value) || 0;
+
+      const vA = rA * 1.8;
+      const vB = rB * 4.1;
+      const vC = rC * 4.1;
+      const vD = rD * 1.8;
+      const vTotal = vA + vB + vC + vD;
+
+      const pA = vTotal > 0 ? (vA / vTotal) * 100 : 0;
+      const pB = vTotal > 0 ? (vB / vTotal) * 100 : 0;
+      const pC = vTotal > 0 ? (vC / vTotal) * 100 : 0;
+      const pD = vTotal > 0 ? (vD / vTotal) * 100 : 0;
+
+      document.getElementById('vazaoA').textContent = vA.toFixed(1) + ' kg/h';
+      document.getElementById('vazaoB').textContent = vB.toFixed(1) + ' kg/h';
+      document.getElementById('vazaoC').textContent = vC.toFixed(1) + ' kg/h';
+      document.getElementById('vazaoD').textContent = vD.toFixed(1) + ' kg/h';
+
+      document.getElementById('pctA').textContent = pA.toFixed(1) + '%';
+      document.getElementById('pctB').textContent = pB.toFixed(1) + '%';
+      document.getElementById('pctC').textContent = pC.toFixed(1) + '%';
+      document.getElementById('pctD').textContent = pD.toFixed(1) + '%';
+
+      document.getElementById('barA').style.width = pA + '%';
+      document.getElementById('barB').style.width = pB + '%';
+      document.getElementById('barC').style.width = pC + '%';
+      document.getElementById('barD').style.width = pD + '%';
+
+      const paletes = vTotal > 0 ? (vTotal * 12) / 500 : 0;
+      const tempoPalete = vTotal > 0 ? (500 / vTotal) * 60 : 0;
+      const tempoQueda = v > 0 ? m / v : 0;
+
+      document.getElementById('resTaxaTotal').textContent = vTotal.toFixed(1);
+      document.getElementById('resPaletes').textContent = paletes.toFixed(1);
+      document.getElementById('resTempoPalete').textContent = tempoPalete.toFixed(1);
+      document.getElementById('resTempoQueda').textContent = tempoQueda.toFixed(2);
+    }
+
+    function setMicras(micra) {
+      selectedMicras = micra;
+      document.getElementById('rangeMicras').value = micra;
+      document.getElementById('displayMicras').textContent = micra;
+
+      const p = getInterpolated(micra);
+      document.getElementById('inputGramatura').value = p.gramatura;
+      document.getElementById('inputVelocidade').value = p.velocidade;
+      document.getElementById('inputMetragem').value = calcMetragem(micra);
+
+      document.getElementById('rpmA').value = p.rpmA;
+      document.getElementById('rpmB').value = p.rpmB;
+      document.getElementById('rpmC').value = p.rpmC;
+      document.getElementById('rpmD').value = p.rpmD;
+
+      document.querySelectorAll('.quick-micra').forEach(b => {
+        if (Number(b.dataset.val) === micra) {
+          b.className = 'quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-blue-600 text-white border-blue-500 shadow';
+        } else {
+          b.className = 'quick-micra px-2.5 py-1 rounded-lg text-xs font-black border transition-all bg-slate-800 text-slate-300 border-slate-700 hover:border-blue-500';
+        }
+      });
+
+      updateCalculations();
+    }
+
+    // Eventos de Material
+    document.querySelectorAll('.mat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mat-btn').forEach(b => {
+          b.className = 'mat-btn px-4 py-1.5 rounded-xl font-black text-xs transition-all text-slate-400 hover:text-white';
+        });
+        btn.className = 'mat-btn px-4 py-1.5 rounded-xl font-black text-xs transition-all bg-blue-600 text-white shadow';
+        selectedMaterial = btn.dataset.mat;
+      });
+    });
+
+    // Slider de Micras
+    document.getElementById('rangeMicras').addEventListener('input', (e) => {
+      setMicras(Number(e.target.value));
+    });
+
+    // Atalhos rápidos
+    document.querySelectorAll('.quick-micra').forEach(b => {
+      b.addEventListener('click', () => {
+        setMicras(Number(b.dataset.val));
+      });
+    });
+
+    // Inputs manuais
+    ['inputGramatura', 'inputVelocidade', 'inputMetragem', 'rpmA', 'rpmB', 'rpmC', 'rpmD'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateCalculations);
+    });
+
+    // Restaurar Padrão
+    document.getElementById('btnResetRpm').addEventListener('click', () => {
+      setMicras(selectedMicras);
+    });
+
+    // Copiar Link
+    document.getElementById('btnCopyLink').addEventListener('click', () => {
+      const link = window.location.href;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => {
+          const txt = document.getElementById('copyLinkText');
+          txt.textContent = 'Copiado!';
+          setTimeout(() => { txt.textContent = 'Copiar Link'; }, 2500);
+        });
+      } else {
+        window.prompt('Copie o link abaixo:', link);
+      }
+    });
+
+    // Compartilhar no WhatsApp
+    document.getElementById('btnShareWhatsApp').addEventListener('click', () => {
+      const link = window.location.href;
+      const text = `📊 *Calculadora % CAST 1 (Manupackaging)*\nAcesse direto no celular sem login:\n${link}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    });
+
+    // Inicialização
+    setMicras(30);
+  </script>
+</body>
+</html>

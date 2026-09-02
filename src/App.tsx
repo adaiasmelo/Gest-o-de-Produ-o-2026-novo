@@ -9505,9 +9505,9 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                      type="button"
                      onClick={(e) => {
                        e.stopPropagation();
-                       let link = "https://gest-o-de-produ-o-2026.pages.dev/?page=calculadora#cast1";
+                       let link = "https://gest-o-de-produ-o-2026.pages.dev/calculadora.html";
                        if (typeof window !== "undefined" && (window.location.origin.includes("gest-o-de-produ-o-2026.pages.dev") || window.location.origin.includes("pages.dev"))) {
-                         link = `${window.location.origin}/?page=calculadora#cast1`;
+                         link = `${window.location.origin}/calculadora.html`;
                        }
                        if (navigator.clipboard && window.isSecureContext) {
                          navigator.clipboard.writeText(link).then(() => {

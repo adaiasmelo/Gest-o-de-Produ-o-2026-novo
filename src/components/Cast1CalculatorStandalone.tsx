@@ -170,10 +170,10 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       if (origin.includes('gest-o-de-produ-o-2026.pages.dev') || origin.includes('pages.dev')) {
-        return `${origin}/?page=calculadora#cast1`;
+        return `${origin}/calculadora.html`;
       }
     }
-    return `https://gest-o-de-produ-o-2026.pages.dev/?page=calculadora#cast1`;
+    return `https://gest-o-de-produ-o-2026.pages.dev/calculadora.html`;
   };
 
   const handleCopyLink = async () => {
