@@ -165,10 +165,15 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     handleEspessuraChange(30);
   }, []);
 
-  // Copiar link externo para a área de transferência
+  // Copiar link externo para a área de transferência (Livre / Sem Login)
   const getExternalLink = () => {
-    const origin = window.location.origin;
-    return `${origin}/?page=calculadora#cast1`;
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      if (origin.includes('gest-o-de-produ-o-2026.pages.dev') || origin.includes('pages.dev')) {
+        return `${origin}/?page=calculadora#cast1`;
+      }
+    }
+    return `https://gest-o-de-produ-o-2026.pages.dev/?page=calculadora#cast1`;
   };
 
   const handleCopyLink = async () => {

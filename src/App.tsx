@@ -9505,7 +9505,10 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                      type="button"
                      onClick={(e) => {
                        e.stopPropagation();
-                       const link = `${window.location.origin}/?page=calculadora#cast1`;
+                       let link = "https://gest-o-de-produ-o-2026.pages.dev/?page=calculadora#cast1";
+                       if (typeof window !== "undefined" && (window.location.origin.includes("gest-o-de-produ-o-2026.pages.dev") || window.location.origin.includes("pages.dev"))) {
+                         link = `${window.location.origin}/?page=calculadora#cast1`;
+                       }
                        if (navigator.clipboard && window.isSecureContext) {
                          navigator.clipboard.writeText(link).then(() => {
                            alert('Link Externo da Calculadora CAST 1 copiado com sucesso! Pode enviar pelo WhatsApp para qualquer pessoa acessar sem login.');

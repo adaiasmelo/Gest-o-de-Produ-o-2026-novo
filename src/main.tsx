@@ -124,6 +124,69 @@ const updateSW = registerSW({
   }
 });
 
+const isCalculatorRoute = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const href = (window.location.href || '').toLowerCase();
+    const search = (window.location.search || '').toLowerCase();
+    const hash = (window.location.hash || '').toLowerCase();
+    const pathname = (window.location.pathname || '').toLowerCase();
+
+    return (
+      search.includes('page=calculadora') ||
+      search.includes('calculadora') ||
+      search.includes('cast1') ||
+      search.includes('cash1') ||
+      search.includes('calc') ||
+      hash.includes('calculadora') ||
+      hash.includes('cast1') ||
+      hash.includes('cash1') ||
+      pathname.includes('calculadora') ||
+      pathname.includes('cast1') ||
+      pathname.includes('cash1') ||
+      href.includes('calculadora') ||
+      href.includes('cast1') ||
+      href.includes('cash1')
+    );
+  } catch (e) {
+    return false;
+  }
+};
+
+import { Cast1CalculatorStandalone } from './components/Cast1CalculatorStandalone';
+
+const RootApp: React.FC = () => {
+  const [isCalculator, setIsCalculator] = React.useState(() => isCalculatorRoute());
+
+  React.useEffect(() => {
+    const handleUrlChange = () => {
+      setIsCalculator(isCalculatorRoute());
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
+  if (isCalculator) {
+    return (
+      <Cast1CalculatorStandalone
+        systemLogo="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png"
+        onNavigateToApp={() => {
+          try {
+            window.history.pushState({}, '', '/');
+          } catch {}
+          setIsCalculator(false);
+        }}
+      />
+    );
+  }
+
+  return <App />;
+};
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -132,6 +195,6 @@ if (!rootElement) {
 const root = createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <RootApp />
   </React.StrictMode>
 );
