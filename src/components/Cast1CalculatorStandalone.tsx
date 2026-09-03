@@ -16,10 +16,15 @@ import {
   Smartphone,
   X
 } from 'lucide-react';
+import CalculatorInstallExperience from './CalculatorInstallExperience';
 
 interface Cast1CalculatorStandaloneProps {
   onNavigateToApp?: () => void;
   systemLogo?: string | null;
+  deferredPrompt?: any;
+  isInstallable?: boolean;
+  isStandalone?: boolean;
+  isIOS?: boolean;
 }
 
 // Mapeamento Espessura (µm) -> Gramatura (g) para Largura de 500 mm
@@ -48,7 +53,11 @@ const FATOR_D = 500 / 58;    // ~8.6207 kg/h por RPM
 
 export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps> = ({
   onNavigateToApp,
-  systemLogo
+  systemLogo,
+  deferredPrompt: propDeferredPrompt,
+  isInstallable: propIsInstallable,
+  isStandalone: propIsStandalone,
+  isIOS: propIsIOS
 }) => {
   const [tipoMaterial, setTipoMaterial] = useState<'LC3' | 'LC2' | 'ATX'>('LC3');
   const [espessura, setEspessura] = useState<number>(30);
@@ -64,10 +73,11 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
   const [copiedLink, setCopiedLink] = useState(false);
 
   // PWA Install State & Handlers
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isInstalling, setIsInstalling] = useState<boolean>(false);
+  const [showInstallExperience, setShowInstallExperience] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(propDeferredPrompt || null);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
+    if (propIsStandalone) return true;
     try {
       return (
         localStorage.getItem('calculadora_cast1_installed') === 'true' ||
@@ -83,6 +93,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
 
   const [showBanner, setShowBanner] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
+    if (propIsStandalone) return false;
     try {
       const already = 
         localStorage.getItem('calculadora_cast1_installed') === 'true' ||
@@ -110,6 +121,12 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
   };
 
   useEffect(() => {
+    if (propDeferredPrompt) {
+      setDeferredPrompt(propDeferredPrompt);
+    }
+  }, [propDeferredPrompt]);
+
+  useEffect(() => {
     const alreadyInstalled = checkIfInstalled();
     if (alreadyInstalled) {
       setIsInstalled(true);
@@ -122,6 +139,9 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      if (typeof window !== 'undefined') {
+        (window as any).__CALCULATOR_DEFERRED_PROMPT__ = e;
+      }
       if (!checkIfInstalled() && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
         setShowBanner(true);
       }
@@ -134,7 +154,6 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
       setIsInstalled(true);
       setDeferredPrompt(null);
       setShowBanner(false);
-      setIsInstalling(false);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -146,101 +165,15 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     };
   }, []);
 
-  const handleInstallApp = async () => {
-    if (checkIfInstalled()) {
-      setIsInstalled(true);
-      setShowBanner(false);
-      return;
-    }
+  const effectiveDeferredPrompt = 
+    deferredPrompt || 
+    propDeferredPrompt || 
+    (typeof window !== 'undefined' ? ((window as any).__CALCULATOR_DEFERRED_PROMPT__ || (window as any).__PWA_DEFERRED_PROMPT__ || (window as any).__PWA_INSTALL_PROMPT__) : null);
 
-    setIsInstalling(true);
+  const isIOS = propIsIOS ?? (typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
 
-    // 1. Se estiver rodando dentro de um iframe (como no preview do AI Studio),
-    // o navegador bloqueia instalação nativa de PWA. Abrimos na aba real.
-    if (typeof window !== 'undefined' && window.self !== window.top) {
-      const targetUrl = window.location.origin + '/calculadora.html?source=install';
-      window.open(targetUrl, '_blank');
-      setIsInstalling(false);
-      return;
-    }
-
-    // 2. Se o evento deferredPrompt já estiver pronto, dispara o prompt nativo
-    if (deferredPrompt) {
-      try {
-        await deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult && choiceResult.outcome === 'accepted') {
-          try {
-            localStorage.setItem('calculadora_cast1_installed', 'true');
-          } catch (e) {}
-          setIsInstalled(true);
-          setShowBanner(false);
-          setDeferredPrompt(null);
-        }
-      } catch (err) {
-        console.warn('Instalação direta:', err);
-      } finally {
-        setIsInstalling(false);
-      }
-      return;
-    }
-
-    // 3. Se ainda não capturou o evento, aguarda brevemente se o navegador estiver inicializando
-    try {
-      const promptEvent: any = await new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 1200);
-        const handler = (e: Event) => {
-          clearTimeout(timer);
-          window.removeEventListener('beforeinstallprompt', handler);
-          resolve(e);
-        };
-        window.addEventListener('beforeinstallprompt', handler);
-      });
-
-      if (promptEvent) {
-        setDeferredPrompt(promptEvent);
-        promptEvent.preventDefault();
-        await promptEvent.prompt();
-        const choiceResult = await promptEvent.userChoice;
-        if (choiceResult && choiceResult.outcome === 'accepted') {
-          try {
-            localStorage.setItem('calculadora_cast1_installed', 'true');
-          } catch (e) {}
-          setIsInstalled(true);
-          setShowBanner(false);
-        }
-        setIsInstalling(false);
-        return;
-      }
-    } catch (e) {}
-
-    // 4. Detecção de navegador interno (ex: link aberto dentro do WhatsApp no Android)
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isAndroid = /Android/i.test(ua);
-    const isInApp = /FBAN|FBAV|Instagram|WhatsApp|Line|wv/.test(ua);
-
-    if (isAndroid && isInApp) {
-      const fullUrl = window.location.host + (window.location.pathname || '') + '?source=install';
-      window.location.href = `intent://${fullUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-      setIsInstalling(false);
-      return;
-    }
-
-    // 5. No iOS Safari
-    const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
-    if (isIOS) {
-      alert('No iPhone/iPad: Toque no botão de Compartilhar (ícone com seta para cima ⎋) na barra do Safari e selecione "Adicionar à Tela de Início" ➕ para instalar a Calculadora.');
-      setIsInstalling(false);
-      return;
-    }
-
-    // Fallback: marca como instalado e oculta a barra
-    try {
-      localStorage.setItem('calculadora_cast1_installed', 'true');
-    } catch (e) {}
-    setIsInstalled(true);
-    setShowBanner(false);
-    setIsInstalling(false);
+  const handleInstallApp = () => {
+    setShowInstallExperience(true);
   };
 
   const handleDismissBanner = () => {
@@ -429,6 +362,35 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     return valor.toFixed(2).replace('.', ',') + "%";
   };
 
+  if (showInstallExperience) {
+    return (
+      <CalculatorInstallExperience
+        deferredPrompt={effectiveDeferredPrompt}
+        isIOS={isIOS}
+        onClose={() => setShowInstallExperience(false)}
+        onComplete={async () => {
+          setShowInstallExperience(false);
+          if (effectiveDeferredPrompt) {
+            try {
+              effectiveDeferredPrompt.prompt();
+              const { outcome } = await effectiveDeferredPrompt.userChoice;
+              if (outcome === 'accepted') {
+                setIsInstalled(true);
+                setShowBanner(false);
+                setDeferredPrompt(null);
+                try {
+                  localStorage.setItem('calculadora_cast1_installed', 'true');
+                } catch (e) {}
+              }
+            } catch (e) {
+              console.log("PWA prompt error:", e);
+            }
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-3 sm:p-6 md:p-8">
       {/* Banner Promocional de Instalação do Aplicativo (PWA) - Ocultado se já instalado */}
@@ -457,11 +419,10 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
             </button>
             <button 
               onClick={handleInstallApp}
-              disabled={isInstalling}
-              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-75"
+              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Download size={14} className="stroke-[2.5]" />
-              <span>{isInstalling ? 'Instalando...' : 'Baixar App'}</span>
+              <span>Baixar App</span>
             </button>
           </div>
         </div>

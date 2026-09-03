@@ -8620,6 +8620,10 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
     return (
       <Cast1CalculatorStandalone
         systemLogo={systemLogo}
+        deferredPrompt={deferredPrompt}
+        isInstallable={isInstallable}
+        isStandalone={isStandalone}
+        isIOS={isIOS}
         onNavigateToApp={() => {
           try {
             window.history.pushState({}, '', '/');
