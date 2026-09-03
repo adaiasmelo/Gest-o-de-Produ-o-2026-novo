@@ -18,12 +18,32 @@
 
   <title>Calculadora % CAST 1 - Manupackaging</title>
   
+  <script>
+    (function() {
+      try {
+        var isInstalled = localStorage.getItem('calculadora_cast1_installed') === 'true' ||
+          (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+          (window.navigator && window.navigator.standalone === true) ||
+          (document.referrer && document.referrer.indexOf('android-app://') !== -1) ||
+          (window.location.search && (window.location.search.indexOf('source=pwa') !== -1 || window.location.search.indexOf('source=installed') !== -1));
+        if (isInstalled) {
+          document.documentElement.classList.add('calc-installed');
+          localStorage.setItem('calculadora_cast1_installed', 'true');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <style>
+    .calc-installed #installBanner,
+    .calc-installed #btnInstallAppTop,
+    .calc-installed #btnInstallAppBottom {
+      display: none !important;
+    }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       -webkit-tap-highlight-color: transparent;
@@ -509,187 +529,110 @@
 
   </div>
 
-  <!-- Modal de Instruções de Instalação (Especialmente para iOS Safari ou navegadores sem prompt nativo) -->
-  <div id="installInstructionsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100 transform transition-all animate-fade-in">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="font-black text-base text-slate-800">Instalar no Celular</h3>
-            <p class="text-xs text-slate-400">Calculadora CAST 1</p>
-          </div>
-        </div>
-        <button id="btnCloseModal" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Conteúdo do Passo a Passo -->
-      <div id="modalInstructionsContent" class="space-y-3 text-xs text-slate-600 font-medium">
-        <!-- Injetado dinamicamente para iOS ou Android -->
-      </div>
-
-      <button
-        id="btnDismissModal"
-        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95"
-      >
-        Entendi
-      </button>
-    </div>
-  </div>
-
   <script>
     // --- SERVICE WORKER REGISTRATION (PWA) ---
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/calculadora-sw.js', { scope: '/' })
-          .then((reg) => console.log('PWA SW registrado com sucesso:', reg.scope))
-          .catch((err) => console.warn('Erro ao registrar PWA SW:', err));
-      });
+      navigator.serviceWorker.register('/calculadora-sw.js', { scope: '/' })
+        .then((reg) => console.log('PWA SW registrado com sucesso:', reg.scope))
+        .catch((err) => console.warn('Erro ao registrar PWA SW:', err));
     }
 
     // --- GERENCIAMENTO DE INSTALAÇÃO DO APP (PWA) ---
     let deferredInstallPrompt = null;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                         window.navigator.standalone === true ||
-                         document.referrer.includes('android-app://');
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    function isAppInstalled() {
+      try {
+        if (localStorage.getItem('calculadora_cast1_installed') === 'true') return true;
+        if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+        if (window.navigator && window.navigator.standalone === true) return true;
+        if (document.referrer && document.referrer.indexOf('android-app://') !== -1) return true;
+        if (window.location.search && (window.location.search.indexOf('source=pwa') !== -1 || window.location.search.indexOf('source=installed') !== -1)) return true;
+      } catch (e) {}
+      return false;
+    }
 
     const elInstallBanner = document.getElementById('installBanner');
     const elBtnBannerInstall = document.getElementById('btnBannerInstall');
     const elBtnDismissBanner = document.getElementById('btnDismissBanner');
     const elBtnInstallTop = document.getElementById('btnInstallAppTop');
-    const elBtnInstallTopText = document.getElementById('btnInstallAppTopText');
     const elBtnInstallBottom = document.getElementById('btnInstallAppBottom');
-    const elBtnInstallBottomText = document.getElementById('btnInstallAppBottomText');
-    const elModal = document.getElementById('installInstructionsModal');
-    const elModalContent = document.getElementById('modalInstructionsContent');
-    const elBtnCloseModal = document.getElementById('btnCloseModal');
-    const elBtnDismissModal = document.getElementById('btnDismissModal');
 
-    // Se já estiver rodando como aplicativo instalado na tela inicial
-    if (isStandalone) {
+    function hideAllInstallElements() {
+      document.documentElement.classList.add('calc-installed');
       if (elInstallBanner) elInstallBanner.style.display = 'none';
-      if (elBtnInstallTopText) elBtnInstallTopText.textContent = 'App Instalado';
-      if (elBtnInstallTop) {
-        elBtnInstallTop.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'animate-pulse');
-        elBtnInstallTop.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'cursor-default');
-      }
+      if (elBtnInstallTop) elBtnInstallTop.style.display = 'none';
       if (elBtnInstallBottom) elBtnInstallBottom.style.display = 'none';
+    }
+
+    if (isAppInstalled()) {
+      try {
+        localStorage.setItem('calculadora_cast1_installed', 'true');
+      } catch (e) {}
+      hideAllInstallElements();
     } else {
-      // Verifica se o usuário dispensou o banner nesta sessão
       if (sessionStorage.getItem('calc_banner_dismissed') === 'true') {
         if (elInstallBanner) elInstallBanner.style.display = 'none';
       }
     }
 
-    // Captura o evento nativo de instalação do navegador (Chrome / Edge / Android)
+    // Captura o evento nativo de instalação do navegador
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
       console.log('Evento beforeinstallprompt capturado com sucesso.');
       
-      if (!isStandalone) {
+      if (!isAppInstalled()) {
         if (elInstallBanner && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
           elInstallBanner.style.display = 'flex';
         }
+      } else {
+        hideAllInstallElements();
       }
     });
 
     window.addEventListener('appinstalled', () => {
       console.log('Calculadora CAST 1 instalada com sucesso como aplicativo!');
       deferredInstallPrompt = null;
-      if (elInstallBanner) elInstallBanner.style.display = 'none';
-      if (elBtnInstallTopText) elBtnInstallTopText.textContent = 'App Instalado';
-      if (elBtnInstallTop) {
-        elBtnInstallTop.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-        elBtnInstallTop.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
-      }
-      if (elBtnInstallBottom) elBtnInstallBottom.style.display = 'none';
-      alert('Calculadora instalada com sucesso! Você já pode abrir direto pelo ícone no seu celular.');
+      try {
+        localStorage.setItem('calculadora_cast1_installed', 'true');
+      } catch (e) {}
+      hideAllInstallElements();
     });
 
-    // Função para acionar o fluxo de instalação
+    // Função para acionar o fluxo de instalação direta
     async function triggerInstallFlow() {
-      if (isStandalone) {
-        alert('O aplicativo da Calculadora já está instalado no seu dispositivo!');
+      if (isAppInstalled()) {
+        hideAllInstallElements();
         return;
       }
 
       if (deferredInstallPrompt) {
-        deferredInstallPrompt.prompt();
-        const { outcome } = await deferredInstallPrompt.userChoice;
-        if (outcome === 'accepted') {
-          console.log('Usuário aceitou a instalação.');
-          deferredInstallPrompt = null;
-          if (elInstallBanner) elInstallBanner.style.display = 'none';
-        } else {
-          console.log('Usuário recusou a instalação.');
+        try {
+          await deferredInstallPrompt.prompt();
+          const { outcome } = await deferredInstallPrompt.userChoice;
+          if (outcome === 'accepted') {
+            try {
+              localStorage.setItem('calculadora_cast1_installed', 'true');
+            } catch (e) {}
+            deferredInstallPrompt = null;
+            hideAllInstallElements();
+          }
+        } catch (err) {
+          console.warn('Instalação direta:', err);
         }
-      } else {
-        // Se o navegador não disparou o prompt automático ou for iOS Safari
-        showInstallInstructions();
       }
     }
 
-    function showInstallInstructions() {
-      if (isIOS) {
-        elModalContent.innerHTML = `
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
-            <p class="font-bold">No iPhone ou iPad (Safari):</p>
-            <ol class="list-decimal list-inside space-y-1 text-slate-700">
-              <li>Toque no botão de <strong>Compartilhar</strong> (ícone do quadrado com seta para cima ⎋ na barra do Safari).</li>
-              <li>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong> ➕.</li>
-              <li>No canto superior direito, toque em <strong>"Adicionar"</strong>.</li>
-            </ol>
-            <p class="text-[11px] text-blue-700 font-semibold pt-1">
-              ✓ Pronto! O ícone da Calculadora ficará na sua tela e abrirá diretamente nela.
-            </p>
-          </div>
-        `;
-      } else {
-        elModalContent.innerHTML = `
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
-            <p class="font-bold">No seu navegador (Chrome / Android / Edge):</p>
-            <ol class="list-decimal list-inside space-y-1 text-slate-700">
-              <li>Toque nos <strong>três pontinhos (⋮)</strong> no canto superior direito do navegador.</li>
-              <li>Selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</li>
-              <li>Confirme a instalação.</li>
-            </ol>
-            <p class="text-[11px] text-blue-700 font-semibold pt-1">
-              ✓ O aplicativo será baixado e abrirá direto na tela da Calculadora sem precisar do link!
-            </p>
-          </div>
-        `;
-      }
-      elModal.classList.remove('hidden');
-      elModal.classList.add('flex');
-    }
-
-    function closeModal() {
-      elModal.classList.add('hidden');
-      elModal.classList.remove('flex');
-    }
-
-    elBtnBannerInstall.addEventListener('click', triggerInstallFlow);
-    elBtnInstallTop.addEventListener('click', triggerInstallFlow);
-    elBtnInstallBottom.addEventListener('click', triggerInstallFlow);
+    if (elBtnBannerInstall) elBtnBannerInstall.addEventListener('click', triggerInstallFlow);
+    if (elBtnInstallTop) elBtnInstallTop.addEventListener('click', triggerInstallFlow);
+    if (elBtnInstallBottom) elBtnInstallBottom.addEventListener('click', triggerInstallFlow);
     
-    elBtnDismissBanner.addEventListener('click', () => {
-      elInstallBanner.style.display = 'none';
-      sessionStorage.setItem('calc_banner_dismissed', 'true');
-    });
-
-    elBtnCloseModal.addEventListener('click', closeModal);
-    elBtnDismissModal.addEventListener('click', closeModal);
+    if (elBtnDismissBanner) {
+      elBtnDismissBanner.addEventListener('click', () => {
+        if (elInstallBanner) elInstallBanner.style.display = 'none';
+        sessionStorage.setItem('calc_banner_dismissed', 'true');
+      });
+    }
 
     // --- DADOS E CONSTANTES (EXATAMENTE IGUAIS AO SISTEMA) ---
     const TABELA_GRAMATURA_500 = {

@@ -3,7 +3,7 @@
   "name": "Calculadora CAST 1 - Manupackaging",
   "short_name": "Calculadora",
   "description": "Calculadora de Porcentagens e Parâmetros da Linha CAST 1 - Manupackaging",
-  "start_url": "/calculadora.html",
+  "start_url": "/calculadora.html?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

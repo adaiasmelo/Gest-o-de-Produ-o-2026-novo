@@ -65,42 +65,55 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
 
   // PWA Install State & Handlers
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState<boolean>(false);
-  const [isInstalled, setIsInstalled] = useState<boolean>(false);
-  const [showBanner, setShowBanner] = useState<boolean>(true);
-  const [showInstructionsModal, setShowInstructionsModal] = useState<boolean>(false);
-  const [isIOS, setIsIOS] = useState<boolean>(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return (
+        localStorage.getItem('calculadora_cast1_installed') === 'true' ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true ||
+        window.location.search.includes('source=pwa')
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [showBanner, setShowBanner] = useState<boolean>(false);
+
+  const checkIfInstalled = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      if (localStorage.getItem('calculadora_cast1_installed') === 'true') return true;
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+      if ((window.navigator as any)?.standalone === true) return true;
+      if (document.referrer && document.referrer.includes('android-app://')) return true;
+      if (window.location.search && (window.location.search.includes('source=pwa') || window.location.search.includes('source=installed'))) return true;
+    } catch (e) {}
+    return false;
+  };
 
   useEffect(() => {
-    // Detect standalone display mode (running as installed app)
-    const standaloneMode = 
-      (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) || 
-      (typeof window !== 'undefined' && (window.navigator as any).standalone === true) ||
-      (typeof document !== 'undefined' && document.referrer.includes('android-app://'));
-    
-    setIsStandalone(standaloneMode);
-    if (standaloneMode) {
+    const alreadyInstalled = checkIfInstalled();
+    if (alreadyInstalled) {
       setIsInstalled(true);
       setShowBanner(false);
+      try {
+        localStorage.setItem('calculadora_cast1_installed', 'true');
+      } catch (e) {}
     }
-
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('calc_banner_dismissed') === 'true') {
-      setShowBanner(false);
-    }
-
-    // Detect iOS
-    const ios = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    setIsIOS(ios);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (!standaloneMode && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
+      if (!checkIfInstalled() && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
         setShowBanner(true);
       }
     };
 
     const handleAppInstalled = () => {
+      try {
+        localStorage.setItem('calculadora_cast1_installed', 'true');
+      } catch (e) {}
       setIsInstalled(true);
       setDeferredPrompt(null);
       setShowBanner(false);
@@ -116,21 +129,27 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
   }, []);
 
   const handleInstallApp = async () => {
-    if (isStandalone || isInstalled) {
-      alert('O aplicativo da Calculadora já está instalado no seu dispositivo!');
+    if (checkIfInstalled()) {
+      setIsInstalled(true);
+      setShowBanner(false);
       return;
     }
 
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choiceResult = await deferredPrompt.userChoice;
-      if (choiceResult.outcome === 'accepted') {
-        setIsInstalled(true);
-        setShowBanner(false);
-        setDeferredPrompt(null);
+      try {
+        await deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult && choiceResult.outcome === 'accepted') {
+          try {
+            localStorage.setItem('calculadora_cast1_installed', 'true');
+          } catch (e) {}
+          setIsInstalled(true);
+          setShowBanner(false);
+          setDeferredPrompt(null);
+        }
+      } catch (err) {
+        console.warn('Instalação direta:', err);
       }
-    } else {
-      setShowInstructionsModal(true);
     }
   };
 
@@ -322,8 +341,8 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-3 sm:p-6 md:p-8">
-      {/* Banner Promocional de Instalação do Aplicativo (PWA) */}
-      {showBanner && !isStandalone && (
+      {/* Banner Promocional de Instalação do Aplicativo (PWA) - Ocultado se já instalado */}
+      {showBanner && !isInstalled && (
         <div className="w-full max-w-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-800 text-white rounded-2xl p-3.5 sm:p-4 mb-3 shadow-xl border border-blue-400/30 flex items-center justify-between gap-3 transition-all animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 text-yellow-300 border border-white/20 flex items-center justify-center flex-shrink-0 shadow-inner">
@@ -368,19 +387,17 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Botão de Instalar App */}
-          <button
-            onClick={handleInstallApp}
-            className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 border cursor-pointer ${
-              isStandalone || isInstalled
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 cursor-default'
-                : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500 shadow-blue-500/25'
-            }`}
-            title="Baixar aplicativo da calculadora no seu dispositivo"
-          >
-            {isStandalone || isInstalled ? <Check size={14} /> : <Download size={14} className="stroke-[2.5]" />}
-            <span>{isStandalone || isInstalled ? 'App Instalado' : 'Baixar App'}</span>
-          </button>
+          {/* Botão de Instalar App - Não é exibido se o app já estiver instalado */}
+          {!isInstalled && (
+            <button
+              onClick={handleInstallApp}
+              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 border cursor-pointer bg-blue-600 hover:bg-blue-700 text-white border-blue-500 shadow-blue-500/25"
+              title="Baixar aplicativo da calculadora no seu dispositivo"
+            >
+              <Download size={14} className="stroke-[2.5]" />
+              <span>Baixar App</span>
+            </button>
+          )}
 
           {onNavigateToApp && (
             <button
@@ -720,7 +737,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
               <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
             </button>
 
-            {!isStandalone && !isInstalled && (
+            {!isInstalled && (
               <button
                 type="button"
                 onClick={handleInstallApp}
@@ -743,66 +760,6 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
         </div>
 
       </div>
-
-      {/* Modal de Instruções de Instalação (Especialmente para iOS Safari ou quando prompt nativo não disparar) */}
-      {showInstructionsModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
-                  <Download size={20} className="stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-slate-800">Instalar no Celular</h3>
-                  <p className="text-xs text-slate-400">Calculadora CAST 1</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowInstructionsModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs text-slate-600 font-medium">
-              {isIOS ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
-                  <p className="font-bold">No iPhone ou iPad (Safari):</p>
-                  <ol className="list-decimal list-inside space-y-1 text-slate-700">
-                    <li>Toque no botão de <strong>Compartilhar</strong> (ícone ⎋ na barra do Safari).</li>
-                    <li>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong> ➕.</li>
-                    <li>No canto superior direito, toque em <strong>"Adicionar"</strong>.</li>
-                  </ol>
-                  <p className="text-[11px] text-blue-700 font-semibold pt-1">
-                    ✓ Pronto! O ícone da Calculadora aparecerá na sua tela inicial e abrirá diretamente nela.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
-                  <p className="font-bold">No seu navegador (Chrome / Android / Edge):</p>
-                  <ol className="list-decimal list-inside space-y-1 text-slate-700">
-                    <li>Toque nos <strong>três pontinhos (⋮)</strong> no canto superior do navegador.</li>
-                    <li>Selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</li>
-                    <li>Confirme a instalação.</li>
-                  </ol>
-                  <p className="text-[11px] text-blue-700 font-semibold pt-1">
-                    ✓ O aplicativo será adicionado ao seu dispositivo e abrirá direto na Calculadora!
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setShowInstructionsModal(false)}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              Entendi
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
