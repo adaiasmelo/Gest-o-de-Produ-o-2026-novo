@@ -65,6 +65,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
 
   // PWA Install State & Handlers
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalling, setIsInstalling] = useState<boolean>(false);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -72,13 +73,29 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
         localStorage.getItem('calculadora_cast1_installed') === 'true' ||
         window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true ||
-        window.location.search.includes('source=pwa')
+        window.location.search.includes('source=pwa') ||
+        window.location.search.includes('source=installed')
       );
     } catch {
       return false;
     }
   });
-  const [showBanner, setShowBanner] = useState<boolean>(false);
+
+  const [showBanner, setShowBanner] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const already = 
+        localStorage.getItem('calculadora_cast1_installed') === 'true' ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true ||
+        window.location.search.includes('source=pwa') ||
+        window.location.search.includes('source=installed');
+      if (already) return false;
+      return sessionStorage.getItem('calc_banner_dismissed') !== 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const checkIfInstalled = () => {
     if (typeof window === 'undefined') return false;
@@ -117,6 +134,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
       setIsInstalled(true);
       setDeferredPrompt(null);
       setShowBanner(false);
+      setIsInstalling(false);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -135,6 +153,18 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
       return;
     }
 
+    setIsInstalling(true);
+
+    // 1. Se estiver rodando dentro de um iframe (como no preview do AI Studio),
+    // o navegador bloqueia instalação nativa de PWA. Abrimos na aba real.
+    if (typeof window !== 'undefined' && window.self !== window.top) {
+      const targetUrl = window.location.origin + '/calculadora.html?source=install';
+      window.open(targetUrl, '_blank');
+      setIsInstalling(false);
+      return;
+    }
+
+    // 2. Se o evento deferredPrompt já estiver pronto, dispara o prompt nativo
     if (deferredPrompt) {
       try {
         await deferredPrompt.prompt();
@@ -149,8 +179,68 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
         }
       } catch (err) {
         console.warn('Instalação direta:', err);
+      } finally {
+        setIsInstalling(false);
       }
+      return;
     }
+
+    // 3. Se ainda não capturou o evento, aguarda brevemente se o navegador estiver inicializando
+    try {
+      const promptEvent: any = await new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), 1200);
+        const handler = (e: Event) => {
+          clearTimeout(timer);
+          window.removeEventListener('beforeinstallprompt', handler);
+          resolve(e);
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+      });
+
+      if (promptEvent) {
+        setDeferredPrompt(promptEvent);
+        promptEvent.preventDefault();
+        await promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
+        if (choiceResult && choiceResult.outcome === 'accepted') {
+          try {
+            localStorage.setItem('calculadora_cast1_installed', 'true');
+          } catch (e) {}
+          setIsInstalled(true);
+          setShowBanner(false);
+        }
+        setIsInstalling(false);
+        return;
+      }
+    } catch (e) {}
+
+    // 4. Detecção de navegador interno (ex: link aberto dentro do WhatsApp no Android)
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isAndroid = /Android/i.test(ua);
+    const isInApp = /FBAN|FBAV|Instagram|WhatsApp|Line|wv/.test(ua);
+
+    if (isAndroid && isInApp) {
+      const fullUrl = window.location.host + (window.location.pathname || '') + '?source=install';
+      window.location.href = `intent://${fullUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+      setIsInstalling(false);
+      return;
+    }
+
+    // 5. No iOS Safari
+    const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    if (isIOS) {
+      alert('No iPhone/iPad: Toque no botão de Compartilhar (ícone com seta para cima ⎋) na barra do Safari e selecione "Adicionar à Tela de Início" ➕ para instalar a Calculadora.');
+      setIsInstalling(false);
+      return;
+    }
+
+    // Fallback: marca como instalado e oculta a barra
+    try {
+      localStorage.setItem('calculadora_cast1_installed', 'true');
+    } catch (e) {}
+    setIsInstalled(true);
+    setShowBanner(false);
+    setIsInstalling(false);
   };
 
   const handleDismissBanner = () => {
@@ -367,10 +457,11 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
             </button>
             <button 
               onClick={handleInstallApp}
-              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+              disabled={isInstalling}
+              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-75"
             >
               <Download size={14} className="stroke-[2.5]" />
-              <span>Baixar App</span>
+              <span>{isInstalling ? 'Instalando...' : 'Baixar App'}</span>
             </button>
           </div>
         </div>
@@ -387,18 +478,6 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Botão de Instalar App - Não é exibido se o app já estiver instalado */}
-          {!isInstalled && (
-            <button
-              onClick={handleInstallApp}
-              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 border cursor-pointer bg-blue-600 hover:bg-blue-700 text-white border-blue-500 shadow-blue-500/25"
-              title="Baixar aplicativo da calculadora no seu dispositivo"
-            >
-              <Download size={14} className="stroke-[2.5]" />
-              <span>Baixar App</span>
-            </button>
-          )}
-
           {onNavigateToApp && (
             <button
               onClick={onNavigateToApp}
@@ -736,17 +815,6 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
               {copiedLink ? <Check size={14} /> : <Copy size={14} />}
               <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
             </button>
-
-            {!isInstalled && (
-              <button
-                type="button"
-                onClick={handleInstallApp}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer"
-              >
-                <Download size={14} className="stroke-[2.5]" />
-                <span>Baixar Aplicativo</span>
-              </button>
-            )}
           </div>
 
           <button

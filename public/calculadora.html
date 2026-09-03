@@ -107,18 +107,6 @@
       </span>
     </div>
     <div class="flex items-center gap-2">
-      <!-- Botão de Baixar Aplicativo (Top) -->
-      <button
-        id="btnInstallAppTop"
-        class="flex items-center gap-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-xl shadow-md shadow-blue-500/25 transition-all active:scale-95 border border-blue-500 cursor-pointer"
-        title="Baixar aplicativo da calculadora no seu dispositivo"
-      >
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        <span id="btnInstallAppTopText">Baixar App</span>
-      </button>
-
       <!-- Botão de Acessar Sistema -->
       <a
         href="/"
@@ -497,18 +485,6 @@
           </svg>
           <span id="copyTextBottom">Copiar Link</span>
         </button>
-
-        <!-- Botão de Instalação no Rodapé -->
-        <button
-          type="button"
-          id="btnInstallAppBottom"
-          class="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer"
-        >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          <span id="btnInstallAppBottomText">Baixar Aplicativo</span>
-        </button>
       </div>
 
       <button
@@ -539,6 +515,7 @@
 
     // --- GERENCIAMENTO DE INSTALAÇÃO DO APP (PWA) ---
     let deferredInstallPrompt = null;
+    let isInstallingApp = false;
 
     function isAppInstalled() {
       try {
@@ -554,14 +531,10 @@
     const elInstallBanner = document.getElementById('installBanner');
     const elBtnBannerInstall = document.getElementById('btnBannerInstall');
     const elBtnDismissBanner = document.getElementById('btnDismissBanner');
-    const elBtnInstallTop = document.getElementById('btnInstallAppTop');
-    const elBtnInstallBottom = document.getElementById('btnInstallAppBottom');
 
     function hideAllInstallElements() {
       document.documentElement.classList.add('calc-installed');
       if (elInstallBanner) elInstallBanner.style.display = 'none';
-      if (elBtnInstallTop) elBtnInstallTop.style.display = 'none';
-      if (elBtnInstallBottom) elBtnInstallBottom.style.display = 'none';
     }
 
     if (isAppInstalled()) {
@@ -585,6 +558,10 @@
         if (elInstallBanner && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
           elInstallBanner.style.display = 'flex';
         }
+        // Se a página foi aberta com source=install, aciona a instalação automaticamente
+        if (window.location.search.indexOf('source=install') !== -1) {
+          triggerInstallFlow();
+        }
       } else {
         hideAllInstallElements();
       }
@@ -606,6 +583,23 @@
         return;
       }
 
+      if (isInstallingApp) return;
+      isInstallingApp = true;
+
+      const btnSpan = elBtnBannerInstall ? elBtnBannerInstall.querySelector('span') : null;
+      if (btnSpan) btnSpan.textContent = 'Instalando...';
+
+      // 1. Se estiver rodando dentro de um iframe (como no preview do AI Studio),
+      // o navegador bloqueia instalação nativa de PWA. Abrimos na aba real do navegador.
+      if (window.self !== window.top) {
+        const fullUrl = window.location.origin + '/calculadora.html?source=install';
+        window.open(fullUrl, '_blank');
+        if (btnSpan) btnSpan.textContent = 'Baixar App';
+        isInstallingApp = false;
+        return;
+      }
+
+      // 2. Se o evento deferredInstallPrompt já estiver pronto, dispara o prompt nativo
       if (deferredInstallPrompt) {
         try {
           await deferredInstallPrompt.prompt();
@@ -619,13 +613,75 @@
           }
         } catch (err) {
           console.warn('Instalação direta:', err);
+        } finally {
+          if (btnSpan) btnSpan.textContent = 'Baixar App';
+          isInstallingApp = false;
         }
+        return;
       }
+
+      // 3. Se ainda não capturou o evento, aguarda brevemente se o navegador estiver inicializando
+      try {
+        const promptEvent = await new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(null), 1200);
+          const handler = (e) => {
+            clearTimeout(timer);
+            window.removeEventListener('beforeinstallprompt', handler);
+            resolve(e);
+          };
+          window.addEventListener('beforeinstallprompt', handler);
+        });
+
+        if (promptEvent) {
+          deferredInstallPrompt = promptEvent;
+          promptEvent.preventDefault();
+          await promptEvent.prompt();
+          const { outcome } = await promptEvent.userChoice;
+          if (outcome === 'accepted') {
+            try {
+              localStorage.setItem('calculadora_cast1_installed', 'true');
+            } catch (e) {}
+            deferredInstallPrompt = null;
+            hideAllInstallElements();
+          }
+          if (btnSpan) btnSpan.textContent = 'Baixar App';
+          isInstallingApp = false;
+          return;
+        }
+      } catch (e) {}
+
+      // 4. Detecção de navegador interno (ex: link aberto no WhatsApp / Instagram no Android)
+      const ua = navigator.userAgent || '';
+      const isAndroid = /Android/i.test(ua);
+      const isInApp = /FBAN|FBAV|Instagram|WhatsApp|Line|wv/.test(ua);
+
+      if (isAndroid && isInApp) {
+        const fullUrl = window.location.host + (window.location.pathname || '') + '?source=install';
+        window.location.href = `intent://${fullUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+        if (btnSpan) btnSpan.textContent = 'Baixar App';
+        isInstallingApp = false;
+        return;
+      }
+
+      // 5. No iOS Safari
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      if (isIOS) {
+        alert('No iPhone/iPad: Toque no botão de Compartilhar (ícone com seta para cima ⎋) na barra do Safari e selecione "Adicionar à Tela de Início" ➕ para instalar a Calculadora.');
+        if (btnSpan) btnSpan.textContent = 'Baixar App';
+        isInstallingApp = false;
+        return;
+      }
+
+      // 6. Fallback final: marca como instalado e oculta a barra
+      try {
+        localStorage.setItem('calculadora_cast1_installed', 'true');
+      } catch (e) {}
+      hideAllInstallElements();
+      if (btnSpan) btnSpan.textContent = 'Baixar App';
+      isInstallingApp = false;
     }
 
     if (elBtnBannerInstall) elBtnBannerInstall.addEventListener('click', triggerInstallFlow);
-    if (elBtnInstallTop) elBtnInstallTop.addEventListener('click', triggerInstallFlow);
-    if (elBtnInstallBottom) elBtnInstallBottom.addEventListener('click', triggerInstallFlow);
     
     if (elBtnDismissBanner) {
       elBtnDismissBanner.addEventListener('click', () => {
