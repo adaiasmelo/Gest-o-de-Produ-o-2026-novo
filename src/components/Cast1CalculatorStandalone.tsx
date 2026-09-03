@@ -165,10 +165,12 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     };
   }, []);
 
-  const effectiveDeferredPrompt = 
-    deferredPrompt || 
-    propDeferredPrompt || 
-    (typeof window !== 'undefined' ? ((window as any).__CALCULATOR_DEFERRED_PROMPT__ || (window as any).__PWA_DEFERRED_PROMPT__ || (window as any).__PWA_INSTALL_PROMPT__) : null);
+  const effectiveDeferredPrompt = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__CALCULATOR_DEFERRED_PROMPT__ : null);
+
+  const effectiveLogo = 
+    systemLogo || 
+    (typeof window !== 'undefined' ? localStorage.getItem('manupackaging_system_logo') : null) || 
+    "https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png";
 
   const isIOS = propIsIOS ?? (typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
 
@@ -183,43 +185,46 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
     }
   };
 
-  const getExternalLink = () => {
-    if (typeof window !== 'undefined') {
-      const origin = window.location.origin;
-      if (origin.includes('gest-o-de-produ-o-2026.pages.dev') || origin.includes('pages.dev')) {
-        return `${origin}/calculadora.html`;
-      }
-    }
-    return 'https://gest-o-de-produ-o-2026.pages.dev/calculadora.html';
-  };
-
-  const handleCopyExternalLink = async () => {
-    const link = getExternalLink();
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(link);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = link;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-      }
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 3000);
-    } catch (e) {
-      console.error("Erro ao copiar link:", e);
-    }
-  };
-
+  // Enviar os dados completos calculados pelo WhatsApp
   const handleShareWhatsApp = () => {
-    const link = getExternalLink();
-    const text = `📊 *Calculadora % CAST 1 (Manupackaging)*\nPredefinição de Roscas e Produção:\n${link}`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    const dataHora = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }) + ' às ' + new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const texto = 
+`📊 *CALCULADORA DE PORCENTAGEM - CAST 1*
+🏢 *MANUPACKAGING*
+─────────────────────────────
+⚙️ *DADOS DA LINHA*
+• *Material:* ${tipoMaterial}
+• *Espessura:* ${espessura} µm
+• *Gramatura Nominal:* ${gramatura.toFixed(2).replace('.', ',')} g/m
+• *Velocidade da Linha:* ${velocidade} m/min
+• *Metragem Automática:* ${metragem.toLocaleString('pt-BR')} m
+• *Configuração:* 6 Bobinas (500 mm)
+
+🌀 *DISTRIBUIÇÃO DAS ROSCAS (EXTRUSORAS)*
+• *Rosca A:* ${rpmA} RPM | ${vazaoA.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctA)})
+• *Rosca B:* ${rpmB} RPM | ${vazaoB.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctB)})
+• *Rosca C:* ${rpmC} RPM | ${vazaoC.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctC)})
+• *Rosca D:* ${rpmD} RPM | ${vazaoD.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctD)})
+• *Total das Camadas:* ${formatarPorcentagem(totalCamadas)}
+
+📈 *INDICADORES DE PRODUÇÃO*
+• *Taxa de Produção Total:* ${taxaProducaoQuilos.toFixed(2).replace('.', ',')} kg/h
+• *Paletes / Turno (12h):* ${resultadoPalete}
+• *Tempo para 1 Palete:* ${formatarTempo(tempoPalete)}
+• *Tempo por Queda:* ${tempoQuedaMinutos.replace('.', ',')} min
+─────────────────────────────
+📅 _Registro enviado em: ${dataHora}_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+    window.open(url, '_blank');
   };
 
   // Cálculo de Metragem Automática Integrada
@@ -392,13 +397,13 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-3 sm:p-6 md:p-8">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen bg-slate-100 flex flex-col items-center justify-between p-2 sm:p-4 lg:p-3 xl:p-4 lg:overflow-hidden">
       {/* Banner Promocional de Instalação do Aplicativo (PWA) - Ocultado se já instalado */}
       {showBanner && !isInstalled && (
-        <div className="w-full max-w-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-800 text-white rounded-2xl p-3.5 sm:p-4 mb-3 shadow-xl border border-blue-400/30 flex items-center justify-between gap-3 transition-all animate-fade-in">
+        <div className="w-full max-w-2xl lg:max-w-7xl bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-800 text-white rounded-2xl p-3 sm:p-3.5 mb-2 shadow-xl border border-blue-400/30 flex items-center justify-between gap-3 transition-all animate-fade-in flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 text-yellow-300 border border-white/20 flex items-center justify-center flex-shrink-0 shadow-inner">
-              <Download size={20} className="stroke-[2.5]" />
+            <div className="w-9 h-9 rounded-xl bg-white/10 text-yellow-300 border border-white/20 flex items-center justify-center flex-shrink-0 shadow-inner">
+              <Download size={18} className="stroke-[2.5]" />
             </div>
             <div>
               <div className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5 flex-wrap">
@@ -419,7 +424,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
             </button>
             <button 
               onClick={handleInstallApp}
-              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Download size={14} className="stroke-[2.5]" />
               <span>Baixar App</span>
@@ -428,21 +433,26 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
         </div>
       )}
 
-      {/* Top Banner Branding */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          {systemLogo && (
-            <img src={systemLogo} alt="Logo" className="h-7 w-auto object-contain" />
-          )}
-          <span className="text-xs font-black tracking-wider text-slate-500 uppercase">
-            Manupackaging &bull; Linha CAST 1
-          </span>
+      {/* Top Banner Branding - Logo do Sistema + MANUPACKAGING com Linha CAST 1 embaixo */}
+      <div className="w-full max-w-2xl lg:max-w-7xl flex items-center justify-between mb-2 sm:mb-2.5 px-1 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white p-1.5 border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+            <img src={effectiveLogo} alt="Manupackaging Logo" className="h-full w-full object-contain" />
+          </div>
+          <div className="flex flex-col justify-center">
+            <span className="text-xs sm:text-sm font-black tracking-tight text-slate-900 uppercase leading-none">
+              MANUPACKAGING
+            </span>
+            <span className="text-[10px] sm:text-[11px] font-extrabold text-blue-600 tracking-wider uppercase mt-1 leading-none">
+              Linha CAST 1
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onNavigateToApp && (
             <button
               onClick={onNavigateToApp}
-              className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm transition-all active:scale-95"
+              className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
             >
               <LogIn size={14} />
               <span>Acessar Sistema</span>
@@ -451,18 +461,18 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
         </div>
       </div>
 
-      {/* Card da Calculadora (Exato mesmo layout do sistema) */}
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl flex flex-col overflow-hidden">
+      {/* Card Principal da Calculadora (Ocupa a tela inteira no desktop sem scrollbar) */}
+      <div className="bg-white rounded-2xl lg:rounded-3xl shadow-xl border border-slate-200 w-full max-w-2xl lg:max-w-7xl flex-1 flex flex-col lg:overflow-hidden overflow-hidden">
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-blue-50/40">
+        {/* Header com Título Apenas "Calculadora Porcentagem" */}
+        <div className="px-4 sm:px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-blue-50/40 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Calculator size={22} />
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 flex-shrink-0">
+              <Calculator size={20} />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight uppercase">
-                Calculadora % CAST 1
+                Calculadora Porcentagem
               </h2>
               <p className="text-[11px] font-bold text-slate-500">
                 Produção Integrada &amp; Balanceamento de Roscas
@@ -472,27 +482,15 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
           <div className="flex items-center gap-2">
             <button
               onClick={handleShareWhatsApp}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-              title="Compartilhar no WhatsApp"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-sm bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 cursor-pointer"
+              title="Enviar dados da calculadora no WhatsApp"
             >
               <Share2 size={14} />
-              <span className="hidden sm:inline">WhatsApp</span>
-            </button>
-            <button
-              onClick={handleCopyExternalLink}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                copiedLink 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-              }`}
-              title="Copiar link público da calculadora"
-            >
-              {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-              <span className="hidden sm:inline">{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
+              <span>Enviar no WhatsApp</span>
             </button>
             <button
               onClick={() => handleEspessuraChange(espessura)}
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
               title="Resetar parâmetros da espessura atual"
             >
               <RefreshCw size={18} />
@@ -500,292 +498,382 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="p-4 sm:p-6 space-y-5 bg-slate-50/50">
-          
-          {/* Header Selects: Tipo de Material & Espessura */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
-            <div className="flex flex-col items-center w-full sm:w-auto">
-              <label htmlFor="tipoMaterial" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Layers size={13} className="text-blue-600" />
-                Tipo de Material
-              </label>
-              <select
-                id="tipoMaterial"
-                value={tipoMaterial}
-                onChange={(e) => handleTipoMaterialChange(e.target.value as 'LC3' | 'LC2' | 'ATX')}
-                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
-              >
-                <option value="LC3">LC3</option>
-                <option value="LC2">LC2</option>
-                <option value="ATX">ATX</option>
-              </select>
-            </div>
+        {/* Body da Calculadora - Grid 3 Colunas no Desktop (sem rolagem) e Fluxo Contínuo no Mobile */}
+        <div className="p-3 sm:p-5 lg:p-4 bg-slate-50/60 overflow-y-auto lg:overflow-hidden flex-1 flex flex-col justify-between">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 h-full items-stretch">
+            
+            {/* COLUNA 1: Parâmetros de Entrada & Produção da Linha (4 colunas no desktop) */}
+            <div className="lg:col-span-4 flex flex-col justify-between space-y-3">
+              {/* Header Selects: Tipo de Material & Espessura */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <label htmlFor="tipoMaterial" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <Layers size={13} className="text-blue-600" />
+                    Material
+                  </label>
+                  <select
+                    id="tipoMaterial"
+                    value={tipoMaterial}
+                    onChange={(e) => handleTipoMaterialChange(e.target.value as 'LC3' | 'LC2' | 'ATX')}
+                    className="w-full py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+                  >
+                    <option value="LC3">LC3</option>
+                    <option value="LC2">LC2</option>
+                    <option value="ATX">ATX</option>
+                  </select>
+                </div>
 
-            <div className="flex flex-col items-center w-full sm:w-auto">
-              <label htmlFor="espessura" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Gauge size={13} className="text-blue-600" />
-                Espessura (µm)
-              </label>
-              <select
-                id="espessura"
-                value={espessura}
-                onChange={(e) => handleEspessuraChange(parseFloat(e.target.value))}
-                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
-              >
-                {ESPESSURAS.map((esp) => (
-                  <option key={esp} value={esp}>{esp} µm</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Dados de Produção da Linha */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
-              <Activity size={14} className="text-blue-600" />
-              Dados de Produção da Linha
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcGramatura" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Gramatura (g):
-                </label>
-                <input
-                  type="number"
-                  id="calcGramatura"
-                  value={gramatura}
-                  step="any"
-                  onChange={(e) => handleGramaturaChange(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
+                <div className="flex-1">
+                  <label htmlFor="espessura" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <Gauge size={13} className="text-blue-600" />
+                    Espessura
+                  </label>
+                  <select
+                    id="espessura"
+                    value={espessura}
+                    onChange={(e) => handleEspessuraChange(parseFloat(e.target.value))}
+                    className="w-full py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+                  >
+                    {ESPESSURAS.map((esp) => (
+                      <option key={esp} value={esp}>{esp} µm</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcVelocidade" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Velocidade (m/min):
-                </label>
-                <input
-                  type="number"
-                  id="calcVelocidade"
-                  value={velocidade}
-                  step="any"
-                  onChange={(e) => handleVelocidadeChange(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
-              </div>
+              {/* Dados de Produção da Linha */}
+              <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex-1 flex flex-col justify-between space-y-3">
+                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider text-center flex items-center justify-center gap-1.5 pb-1 border-b border-slate-100">
+                  <Activity size={14} className="text-blue-600" />
+                  Dados de Produção da Linha
+                </h3>
+                
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="calcGramatura" className="text-xs font-bold text-slate-600">
+                      Gramatura (g):
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleGramaturaChange(Math.max(1, +(gramatura - 0.5).toFixed(2)))}
+                        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        id="calcGramatura"
+                        value={gramatura}
+                        step="any"
+                        onChange={(e) => handleGramaturaChange(parseFloat(e.target.value) || 0)}
+                        className="w-24 py-1.5 px-2 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white bg-slate-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleGramaturaChange(+(gramatura + 0.5).toFixed(2))}
+                        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcMetragem" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Metragem (m):
-                </label>
-                <input
-                  type="number"
-                  id="calcMetragem"
-                  value={metragem}
-                  step="any"
-                  onChange={(e) => setMetragem(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="calcVelocidade" className="text-xs font-bold text-slate-600">
+                      Velocidade (m/min):
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleVelocidadeChange(Math.max(10, velocidade - 10))}
+                        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        id="calcVelocidade"
+                        value={velocidade}
+                        step="any"
+                        onChange={(e) => handleVelocidadeChange(parseFloat(e.target.value) || 0)}
+                        className="w-24 py-1.5 px-2 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white bg-slate-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleVelocidadeChange(velocidade + 10)}
+                        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                    <div>
+                      <label htmlFor="calcMetragem" className="text-xs font-bold text-slate-600 block">
+                        Metragem Automática:
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-semibold">Peso 50 kg &bull; 6 Bobinas (500 mm)</span>
+                    </div>
+                    <input
+                      type="number"
+                      id="calcMetragem"
+                      value={metragem}
+                      step="any"
+                      onChange={(e) => setMetragem(parseFloat(e.target.value) || 0)}
+                      className="w-24 py-1.5 px-2 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-blue-700 focus:border-blue-600 focus:bg-white bg-blue-50/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-center">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    6 Bobinas de 500 mm &bull; Densidade 0,092
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Cards das 4 Roscas (A, B, C, D) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* Rosca A */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmA" className="block font-black text-sm text-slate-800">
-                  Rosca A
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Estrutural Grande
+            {/* COLUNA 2: Roscas A, B, C e D + Total das Camadas (5 colunas no desktop) */}
+            <div className="lg:col-span-5 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Cpu size={14} className="text-blue-600" />
+                  Distribuição das Roscas (Extrusoras)
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+                <span className="text-[11px] font-bold text-slate-400">RPM / Vazão</span>
+              </div>
+
+              {/* Rosca A */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 border-l-4 border-l-blue-600 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs sm:text-sm text-slate-800">Rosca A (Grande)</span>
+                    <span className="text-sm font-black text-blue-700">{formatarPorcentagem(pctA)}</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">
+                    Vazão: <strong className="text-slate-700">{vazaoA.toFixed(1).replace('.', ',')} kg/h</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleRpmAouDChange(Math.max(0, rpmA - 1), rpmD)}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    -
+                  </button>
                   <input
                     type="number"
                     id="rpmA"
                     value={rpmA}
                     step="any"
                     onChange={(e) => handleRpmAouDChange(parseFloat(e.target.value) || 0, rpmD)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                    className="w-16 py-1 px-1.5 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
                   />
+                  <button
+                    type="button"
+                    onClick={() => handleRpmAouDChange(rpmA + 1, rpmD)}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctA)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoA.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
 
-            {/* Rosca B */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-amber-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmB" className="block font-black text-sm text-slate-800">
-                  Rosca B
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Pega / Interna
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+              {/* Rosca B */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 border-l-4 border-l-amber-600 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs sm:text-sm text-slate-800">Rosca B (Pega / Int)</span>
+                    <span className="text-sm font-black text-amber-600">{formatarPorcentagem(pctB)}</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">
+                    Vazão: <strong className="text-slate-700">{vazaoB.toFixed(1).replace('.', ',')} kg/h</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setRpmB(Math.max(0, rpmB - 1))}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    -
+                  </button>
                   <input
                     type="number"
                     id="rpmB"
                     value={rpmB}
                     step="any"
                     onChange={(e) => setRpmB(parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-amber-600 bg-slate-50"
+                    className="w-16 py-1 px-1.5 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-amber-600 bg-slate-50"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setRpmB(rpmB + 1)}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-amber-600">{formatarPorcentagem(pctB)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoB.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
 
-            {/* Rosca C */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-emerald-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmC" className="block font-black text-sm text-slate-800">
-                  Rosca C
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Metalloceno / Externa
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+              {/* Rosca C */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 border-l-4 border-l-emerald-600 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs sm:text-sm text-slate-800">Rosca C (Metalloceno / Ext)</span>
+                    <span className="text-sm font-black text-emerald-600">{formatarPorcentagem(pctC)}</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">
+                    Vazão: <strong className="text-slate-700">{vazaoC.toFixed(1).replace('.', ',')} kg/h</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setRpmC(Math.max(0, rpmC - 1))}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    -
+                  </button>
                   <input
                     type="number"
                     id="rpmC"
                     value={rpmC}
                     step="any"
                     onChange={(e) => setRpmC(parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-emerald-600 bg-slate-50"
+                    className="w-16 py-1 px-1.5 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-emerald-600 bg-slate-50"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setRpmC(rpmC + 1)}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-emerald-600">{formatarPorcentagem(pctC)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoC.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
 
-            {/* Rosca D */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmD" className="block font-black text-sm text-slate-800">
-                  Rosca D
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Estrutural Grande
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+              {/* Rosca D */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 border-l-4 border-l-blue-600 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs sm:text-sm text-slate-800">Rosca D (Grande)</span>
+                    <span className="text-sm font-black text-blue-700">{formatarPorcentagem(pctD)}</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">
+                    Vazão: <strong className="text-slate-700">{vazaoD.toFixed(1).replace('.', ',')} kg/h</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleRpmAouDChange(rpmA, Math.max(0, rpmD - 1))}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    -
+                  </button>
                   <input
                     type="number"
                     id="rpmD"
                     value={rpmD}
                     step="any"
                     onChange={(e) => handleRpmAouDChange(rpmA, parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                    className="w-16 py-1 px-1.5 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
                   />
+                  <button
+                    type="button"
+                    onClick={() => handleRpmAouDChange(rpmA, rpmD + 1)}
+                    className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctD)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoD.toFixed(1).replace('.', ',')} kg/h</div>
+
+              {/* Total das Camadas */}
+              <div className="text-center font-black text-xs sm:text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 py-2 px-3 rounded-xl shadow-sm">
+                Total das Camadas: {formatarPorcentagem(totalCamadas)}
               </div>
             </div>
-          </div>
 
-          {/* Total das Camadas */}
-          <div className="text-center font-black text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 px-4 rounded-xl shadow-sm">
-            Total das Camadas: {formatarPorcentagem(totalCamadas)}
-          </div>
+            {/* COLUNA 3: Indicadores da Linha & Ação WhatsApp (3 colunas no desktop) */}
+            <div className="lg:col-span-3 flex flex-col justify-between space-y-3">
+              {/* Indicadores da Linha (Card Azul) */}
+              <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-950 text-white p-4 rounded-2xl shadow-lg border border-blue-500/30 flex-1 flex flex-col justify-between">
+                <h3 className="text-xs font-black uppercase tracking-wider text-center text-white/90 pb-2 border-b border-white/15 flex items-center justify-center gap-1.5">
+                  <Activity size={15} className="text-yellow-300" />
+                  Indicadores da Linha
+                </h3>
 
-          {/* Indicadores da Linha (Card Azul) */}
-          <div className="bg-gradient-to-br from-blue-700 to-indigo-900 text-white p-5 rounded-2xl shadow-lg border border-blue-500/30">
-            <h3 className="text-sm font-black uppercase tracking-wider text-center text-white/90 mb-4 pb-2 border-b border-white/15 flex items-center justify-center gap-2">
-              <Cpu size={16} className="text-yellow-300" />
-              Indicadores da Linha
-            </h3>
+                <div className="space-y-2 text-xs font-bold my-auto">
+                  <div className="py-1 border-b border-white/10">
+                    <span className="text-[11px] text-white/75 block">Taxa de Produção Total:</span>
+                    <span className="text-yellow-300 font-black text-lg sm:text-xl block tracking-tight">
+                      {taxaProducaoQuilos.toFixed(2).replace('.', ',')} Kg/h
+                    </span>
+                  </div>
 
-            <div className="space-y-2.5 text-xs font-bold">
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80">Taxa de Produção Total:</span>
-                <span className="text-yellow-300 font-black text-base sm:text-lg">
-                  {taxaProducaoQuilos.toFixed(2).replace('.', ',')} Kg/h
-                </span>
+                  <div className="flex items-center justify-between py-1 border-b border-white/10">
+                    <span className="text-white/80 flex items-center gap-1 text-[11px]">
+                      <Box size={13} className="text-blue-300" />
+                      Paletes / Turno:
+                    </span>
+                    <span className="font-black text-white text-xs sm:text-sm">
+                      {resultadoPalete}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-white/10">
+                    <span className="text-white/80 flex items-center gap-1 text-[11px]">
+                      <Clock size={13} className="text-blue-300" />
+                      Tempo 1 Palete:
+                    </span>
+                    <span className="font-black text-white text-xs sm:text-sm">
+                      {formatarTempo(tempoPalete)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-white/80 flex items-center gap-1 text-[11px]">
+                      <Gauge size={13} className="text-emerald-300" />
+                      Tempo Queda:
+                    </span>
+                    <span className="font-black text-emerald-300 text-xs sm:text-sm">
+                      {tempoQuedaMinutos.replace('.', ',')} min
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/10 text-center">
+                  <span className="text-[10px] text-white/60 font-medium">Turno Base: 12 Horas</span>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Box size={14} className="text-blue-300" />
-                  Paletes / Turno (12h):
-                </span>
-                <span className="font-black text-white text-sm">
-                  {resultadoPalete}
-                </span>
+              {/* Card de Ação WhatsApp Direto */}
+              <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md hover:shadow-emerald-600/30 active:scale-95 cursor-pointer"
+                >
+                  <Share2 size={16} />
+                  <span>Enviar no WhatsApp</span>
+                </button>
+                <p className="text-[10px] text-slate-400 text-center font-medium leading-tight">
+                  Envia o resumo técnico completo com materiais, roscas e indicadores de produção.
+                </p>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Clock size={14} className="text-blue-300" />
-                  Tempo para 1 Palete:
-                </span>
-                <span className="font-black text-white text-sm">
-                  {formatarTempo(tempoPalete)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Gauge size={14} className="text-emerald-300" />
-                  Tempo por Queda:
-                </span>
-                <span className="font-black text-emerald-300 text-sm">
-                  {tempoQuedaMinutos.replace('.', ',')} min
-                </span>
+              {/* Footer Assinatura Compacto */}
+              <div className="text-center text-[10px] font-bold text-slate-400">
+                Manupackaging Fitasa &bull; Adaias Melo
               </div>
             </div>
+
           </div>
-
-          {/* Footer Assinatura */}
-          <div className="text-center text-[11px] font-bold text-slate-400 pt-1">
-            Manupackaging Fitasa &amp; Amazonia &bull; Desenvolvido por Adaias Melo
-          </div>
-
-        </div>
-
-        {/* Modal Footer Actions */}
-        <div className="px-6 py-3.5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-            <button
-              type="button"
-              onClick={handleCopyExternalLink}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                copiedLink
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95'
-              }`}
-            >
-              {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleShareWhatsApp}
-            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
-          >
-            <Share2 size={14} />
-            <span>Enviar no WhatsApp</span>
-          </button>
         </div>
 
       </div>

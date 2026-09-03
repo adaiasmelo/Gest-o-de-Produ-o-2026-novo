@@ -17169,6 +17169,7 @@ Atenciosamente,
       <Cast1CalculatorModal
         isOpen={isCast1CalculatorOpen}
         onClose={() => setIsCast1CalculatorOpen(false)}
+        systemLogo={systemLogo}
       />
       {isCollaboratorModalOpen && (
         <div className="fixed inset-0 z-[300]">

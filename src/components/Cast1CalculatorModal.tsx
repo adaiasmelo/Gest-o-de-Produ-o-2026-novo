@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calculator, RefreshCw, Layers, Gauge, Activity, Clock, Box, Cpu, Copy, Check, ExternalLink } from 'lucide-react';
+import { X, Calculator, RefreshCw, Layers, Gauge, Activity, Clock, Box, Cpu, Share2 } from 'lucide-react';
 
 interface Cast1CalculatorModalProps {
   isOpen: boolean;
   onClose: () => void;
+  systemLogo?: string | null;
 }
 
 // Mapeamento Espessura (µm) -> Gramatura (g) para Largura de 500 mm
@@ -30,7 +31,7 @@ const FATOR_B = 63.83 / 130; // ~0.4910 kg/h por RPM
 const FATOR_C = 125 / 160;   // ~0.78125 kg/h por RPM
 const FATOR_D = 500 / 58;    // ~8.6207 kg/h por RPM
 
-export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOpen, onClose }) => {
+export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOpen, onClose, systemLogo }) => {
   const [tipoMaterial, setTipoMaterial] = useState<'LC3' | 'LC2' | 'ATX'>('LC3');
   const [espessura, setEspessura] = useState<number>(30);
   const [gramatura, setGramatura] = useState<number>(13.80);
@@ -42,32 +43,46 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
   const [rpmC, setRpmC] = useState<number>(146);
   const [rpmD, setRpmD] = useState<number>(56);
 
-  const [copiedLink, setCopiedLink] = useState(false);
+  // Enviar os dados completos calculados pelo WhatsApp
+  const handleShareWhatsApp = () => {
+    const dataHora = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }) + ' às ' + new Date().toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-  const handleCopyExternalLink = async () => {
-    let link = 'https://gest-o-de-produ-o-2026.pages.dev/calculadora.html';
-    if (typeof window !== 'undefined' && (window.location.origin.includes('gest-o-de-produ-o-2026.pages.dev') || window.location.origin.includes('pages.dev'))) {
-      link = `${window.location.origin}/calculadora.html`;
-    }
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(link);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = link;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-      }
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 3000);
-    } catch (e) {
-      console.error("Erro ao copiar link:", e);
-    }
+    const texto = 
+`📊 *CALCULADORA DE PORCENTAGEM - CAST 1*
+🏢 *MANUPACKAGING*
+─────────────────────────────
+⚙️ *DADOS DA LINHA*
+• *Material:* ${tipoMaterial}
+• *Espessura:* ${espessura} µm
+• *Gramatura Nominal:* ${gramatura.toFixed(2).replace('.', ',')} g/m
+• *Velocidade da Linha:* ${velocidade} m/min
+• *Metragem Automática:* ${metragem.toLocaleString('pt-BR')} m
+• *Configuração:* 6 Bobinas (500 mm)
+
+🌀 *DISTRIBUIÇÃO DAS ROSCAS (EXTRUSORAS)*
+• *Rosca A:* ${rpmA} RPM | ${vazaoA.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctA)})
+• *Rosca B:* ${rpmB} RPM | ${vazaoB.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctB)})
+• *Rosca C:* ${rpmC} RPM | ${vazaoC.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctC)})
+• *Rosca D:* ${rpmD} RPM | ${vazaoD.toFixed(1).replace('.', ',')} kg/h (${formatarPorcentagem(pctD)})
+• *Total das Camadas:* ${formatarPorcentagem(totalCamadas)}
+
+📈 *INDICADORES DE PRODUÇÃO*
+• *Taxa de Produção Total:* ${taxaProducaoQuilos.toFixed(2).replace('.', ',')} kg/h
+• *Paletes / Turno (12h):* ${resultadoPalete}
+• *Tempo para 1 Palete:* ${formatarTempo(tempoPalete)}
+• *Tempo por Queda:* ${tempoQuedaMinutos.replace('.', ',')} min
+─────────────────────────────
+📅 _Registro enviado em: ${dataHora}_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+    window.open(url, '_blank');
   };
 
   // Cálculo de Metragem Automática Integrada
@@ -214,48 +229,56 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
     return valor.toFixed(2).replace('.', ',') + "%";
   };
 
+  const effectiveLogo = 
+    systemLogo || 
+    (typeof window !== 'undefined' ? localStorage.getItem('manupackaging_system_logo') : null) || 
+    "https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png";
+
   return (
-    <div className="fixed inset-0 z-[330] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[330] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl lg:max-w-7xl max-h-[95vh] lg:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-blue-50/40">
+        {/* Header - Logo do Sistema + MANUPACKAGING com Linha CAST 1 embaixo + Título Calculadora Porcentagem + WhatsApp */}
+        <div className="px-4 sm:px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-blue-50/40 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Calculator size={22} />
+            <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white p-1.5 border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src={effectiveLogo} alt="Manupackaging Logo" className="h-full w-full object-contain" />
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight uppercase">
-                Calculadora % CAST 1
-              </h2>
-              <p className="text-[11px] font-bold text-slate-500">
-                Produção Integrada &amp; Balanceamento de Roscas
-              </p>
+            <div className="flex flex-col justify-center">
+              <span className="text-xs sm:text-sm font-black tracking-tight text-slate-900 uppercase leading-none">
+                MANUPACKAGING
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-extrabold text-blue-600 tracking-wider uppercase mt-1 leading-none">
+                Linha CAST 1
+              </span>
+            </div>
+            <div className="hidden sm:block h-6 w-px bg-slate-200 ml-1"></div>
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 text-blue-800 text-xs font-black uppercase tracking-tight">
+              <Calculator size={14} className="text-blue-600" />
+              <span>Calculadora Porcentagem</span>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCopyExternalLink}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                copiedLink 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-              }`}
-              title="Copiar link público da calculadora para acessar em qualquer aparelho sem login"
+              onClick={handleShareWhatsApp}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm active:scale-95 cursor-pointer"
+              title="Enviar dados calculados pelo WhatsApp"
             >
-              {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-              <span className="hidden sm:inline">{copiedLink ? 'Link Copiado!' : 'Link Externo'}</span>
+              <Share2 size={14} />
+              <span className="hidden sm:inline">Enviar no WhatsApp</span>
+              <span className="sm:hidden">WhatsApp</span>
             </button>
             <button
               onClick={() => handleEspessuraChange(espessura)}
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all cursor-pointer"
               title="Resetar parâmetros da espessura atual"
             >
-              <RefreshCw size={18} />
+              <RefreshCw size={17} />
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
               title="Fechar"
             >
               <X size={20} />
@@ -263,285 +286,315 @@ export const Cast1CalculatorModal: React.FC<Cast1CalculatorModalProps> = ({ isOp
           </div>
         </div>
 
-        {/* Modal Scroll Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/50">
-          
-          {/* Header Selects: Tipo de Material & Espessura */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
-            <div className="flex flex-col items-center w-full sm:w-auto">
-              <label htmlFor="tipoMaterial" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Layers size={13} className="text-blue-600" />
-                Tipo de Material
-              </label>
-              <select
-                id="tipoMaterial"
-                value={tipoMaterial}
-                onChange={(e) => handleTipoMaterialChange(e.target.value as 'LC3' | 'LC2' | 'ATX')}
-                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+        {/* Modal Body - Desktop 3 Columns Layout (sem rolagem obrigatória) / Mobile Scrollable */}
+        <div className="flex-1 overflow-y-auto lg:overflow-visible p-3 sm:p-5 bg-slate-50/60">
+          <div className="sm:hidden mb-2.5 text-center">
+            <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center justify-center gap-1.5">
+              <Calculator size={15} className="text-blue-600" />
+              Calculadora Porcentagem
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-stretch">
+            
+            {/* COLUNA 1: Parâmetros e Produção da Linha */}
+            <div className="lg:col-span-4 flex flex-col gap-3">
+              {/* Material e Espessura */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <label htmlFor="modalTipoMaterial" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Layers size={13} className="text-blue-600" />
+                      Material
+                    </label>
+                    <select
+                      id="modalTipoMaterial"
+                      value={tipoMaterial}
+                      onChange={(e) => handleTipoMaterialChange(e.target.value as 'LC3' | 'LC2' | 'ATX')}
+                      className="w-full py-2 px-3 text-xs sm:text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+                    >
+                      <option value="LC3">LC3</option>
+                      <option value="LC2">LC2</option>
+                      <option value="ATX">ATX</option>
+                    </select>
+                  </div>
+
+                  <div className="flex-1">
+                    <label htmlFor="modalEspessura" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Gauge size={13} className="text-blue-600" />
+                      Espessura
+                    </label>
+                    <select
+                      id="modalEspessura"
+                      value={espessura}
+                      onChange={(e) => handleEspessuraChange(parseFloat(e.target.value))}
+                      className="w-full py-2 px-3 text-xs sm:text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+                    >
+                      {ESPESSURAS.map((esp) => (
+                        <option key={esp} value={esp}>{esp} µm</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dados de Produção da Linha */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                    <Activity size={14} className="text-blue-600" />
+                    Dados de Produção da Linha
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label htmlFor="modalCalcGramatura" className="text-[11px] font-bold text-slate-600 mb-0.5 block">
+                        Gramatura Nominal (g):
+                      </label>
+                      <input
+                        type="number"
+                        id="modalCalcGramatura"
+                        value={gramatura}
+                        step="any"
+                        onChange={(e) => handleGramaturaChange(parseFloat(e.target.value) || 0)}
+                        className="w-full py-1.5 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="modalCalcVelocidade" className="text-[11px] font-bold text-slate-600 mb-0.5 block">
+                        Velocidade da Linha (m/min):
+                      </label>
+                      <input
+                        type="number"
+                        id="modalCalcVelocidade"
+                        value={velocidade}
+                        step="any"
+                        onChange={(e) => handleVelocidadeChange(parseFloat(e.target.value) || 0)}
+                        className="w-full py-1.5 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="modalCalcMetragem" className="text-[11px] font-bold text-slate-600 mb-0.5 block">
+                        Metragem Automática (m):
+                      </label>
+                      <input
+                        type="number"
+                        id="modalCalcMetragem"
+                        value={metragem}
+                        step="any"
+                        onChange={(e) => setMetragem(parseFloat(e.target.value) || 0)}
+                        className="w-full py-1.5 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400 font-semibold mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span>Padrão 6 Bobinas</span>
+                  <span>Largura 500 mm</span>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUNA 2: As 4 Roscas (A, B, C, D) + Total das Camadas */}
+            <div className="lg:col-span-5 flex flex-col justify-between gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Rosca A */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label htmlFor="modalRpmA" className="block font-black text-xs sm:text-sm text-slate-800">
+                      Rosca A
+                    </label>
+                    <span className="block text-[10px] font-semibold text-slate-400 mb-1.5">
+                      Estrutural Grande
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-500">RPM:</span>
+                      <input
+                        type="number"
+                        id="modalRpmA"
+                        value={rpmA}
+                        step="any"
+                        onChange={(e) => handleRpmAouDChange(parseFloat(e.target.value) || 0, rpmD)}
+                        className="w-full py-1 px-2 text-sm sm:text-base font-black border-2 border-slate-200 rounded-lg outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-dashed border-slate-200 text-center">
+                    <div className="text-base sm:text-lg font-black text-blue-700">{formatarPorcentagem(pctA)}</div>
+                    <div className="text-[11px] font-bold text-slate-500">{vazaoA.toFixed(1).replace('.', ',')} kg/h</div>
+                  </div>
+                </div>
+
+                {/* Rosca B */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 border-t-4 border-t-amber-600 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label htmlFor="modalRpmB" className="block font-black text-xs sm:text-sm text-slate-800">
+                      Rosca B
+                    </label>
+                    <span className="block text-[10px] font-semibold text-slate-400 mb-1.5">
+                      Pega / Interna
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-500">RPM:</span>
+                      <input
+                        type="number"
+                        id="modalRpmB"
+                        value={rpmB}
+                        step="any"
+                        onChange={(e) => setRpmB(parseFloat(e.target.value) || 0)}
+                        className="w-full py-1 px-2 text-sm sm:text-base font-black border-2 border-slate-200 rounded-lg outline-none text-center text-slate-800 focus:border-amber-600 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-dashed border-slate-200 text-center">
+                    <div className="text-base sm:text-lg font-black text-amber-600">{formatarPorcentagem(pctB)}</div>
+                    <div className="text-[11px] font-bold text-slate-500">{vazaoB.toFixed(1).replace('.', ',')} kg/h</div>
+                  </div>
+                </div>
+
+                {/* Rosca C */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 border-t-4 border-t-emerald-600 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label htmlFor="modalRpmC" className="block font-black text-xs sm:text-sm text-slate-800">
+                      Rosca C
+                    </label>
+                    <span className="block text-[10px] font-semibold text-slate-400 mb-1.5">
+                      Metalloceno / Externa
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-500">RPM:</span>
+                      <input
+                        type="number"
+                        id="modalRpmC"
+                        value={rpmC}
+                        step="any"
+                        onChange={(e) => setRpmC(parseFloat(e.target.value) || 0)}
+                        className="w-full py-1 px-2 text-sm sm:text-base font-black border-2 border-slate-200 rounded-lg outline-none text-center text-slate-800 focus:border-emerald-600 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-dashed border-slate-200 text-center">
+                    <div className="text-base sm:text-lg font-black text-emerald-600">{formatarPorcentagem(pctC)}</div>
+                    <div className="text-[11px] font-bold text-slate-500">{vazaoC.toFixed(1).replace('.', ',')} kg/h</div>
+                  </div>
+                </div>
+
+                {/* Rosca D */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label htmlFor="modalRpmD" className="block font-black text-xs sm:text-sm text-slate-800">
+                      Rosca D
+                    </label>
+                    <span className="block text-[10px] font-semibold text-slate-400 mb-1.5">
+                      Estrutural Grande
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-500">RPM:</span>
+                      <input
+                        type="number"
+                        id="modalRpmD"
+                        value={rpmD}
+                        step="any"
+                        onChange={(e) => handleRpmAouDChange(rpmA, parseFloat(e.target.value) || 0)}
+                        className="w-full py-1 px-2 text-sm sm:text-base font-black border-2 border-slate-200 rounded-lg outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-dashed border-slate-200 text-center">
+                    <div className="text-base sm:text-lg font-black text-blue-700">{formatarPorcentagem(pctD)}</div>
+                    <div className="text-[11px] font-bold text-slate-500">{vazaoD.toFixed(1).replace('.', ',')} kg/h</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total das Camadas */}
+              <div className="text-center font-black text-xs sm:text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 py-2 px-3 rounded-xl shadow-sm">
+                Total das Camadas: {formatarPorcentagem(totalCamadas)}
+              </div>
+            </div>
+
+            {/* COLUNA 3: Indicadores de Produção + WhatsApp */}
+            <div className="lg:col-span-3 flex flex-col justify-between gap-3">
+              <div className="bg-gradient-to-br from-blue-700 to-indigo-900 text-white p-4 rounded-2xl shadow-md border border-blue-500/30 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-center text-white/90 mb-3 pb-1.5 border-b border-white/15 flex items-center justify-center gap-1.5">
+                    <Cpu size={14} className="text-yellow-300" />
+                    Indicadores da Linha
+                  </h3>
+
+                  <div className="space-y-2 text-xs font-bold">
+                    <div className="flex items-center justify-between py-1 border-b border-white/10">
+                      <span className="text-white/80 text-[11px]">Taxa Total:</span>
+                      <span className="text-yellow-300 font-black text-sm sm:text-base">
+                        {taxaProducaoQuilos.toFixed(2).replace('.', ',')} Kg/h
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 border-b border-white/10">
+                      <span className="text-white/80 text-[11px] flex items-center gap-1">
+                        <Box size={13} className="text-blue-300" />
+                        Paletes / Turno:
+                      </span>
+                      <span className="font-black text-white text-xs sm:text-sm">
+                        {resultadoPalete} (12h)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 border-b border-white/10">
+                      <span className="text-white/80 text-[11px] flex items-center gap-1">
+                        <Clock size={13} className="text-blue-300" />
+                        Tempo 1 Palete:
+                      </span>
+                      <span className="font-black text-white text-xs sm:text-sm">
+                        {formatarTempo(tempoPalete)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-white/80 text-[11px] flex items-center gap-1">
+                        <Gauge size={13} className="text-emerald-300" />
+                        Tempo Queda:
+                      </span>
+                      <span className="font-black text-emerald-300 text-xs sm:text-sm">
+                        {tempoQuedaMinutos.replace('.', ',')} min
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                  <span className="text-[10px] text-blue-200">
+                    Cálculo baseado em 50 kg / bobina
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão de WhatsApp em destaque */}
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
               >
-                <option value="LC3">LC3</option>
-                <option value="LC2">LC2</option>
-                <option value="ATX">ATX</option>
-              </select>
+                <Share2 size={15} />
+                <span>Enviar no WhatsApp</span>
+              </button>
             </div>
 
-            <div className="flex flex-col items-center w-full sm:w-auto">
-              <label htmlFor="espessura" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Gauge size={13} className="text-blue-600" />
-                Espessura (µm)
-              </label>
-              <select
-                id="espessura"
-                value={espessura}
-                onChange={(e) => handleEspessuraChange(parseFloat(e.target.value))}
-                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
-              >
-                {ESPESSURAS.map((esp) => (
-                  <option key={esp} value={esp}>{esp} µm</option>
-                ))}
-              </select>
-            </div>
           </div>
 
-          {/* Dados de Produção da Linha */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
-              <Activity size={14} className="text-blue-600" />
-              Dados de Produção da Linha
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcGramatura" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Gramatura (g):
-                </label>
-                <input
-                  type="number"
-                  id="calcGramatura"
-                  value={gramatura}
-                  step="any"
-                  onChange={(e) => handleGramaturaChange(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
-              </div>
-
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcVelocidade" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Velocidade (m/min):
-                </label>
-                <input
-                  type="number"
-                  id="calcVelocidade"
-                  value={velocidade}
-                  step="any"
-                  onChange={(e) => handleVelocidadeChange(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
-              </div>
-
-              <div className="flex flex-col items-center">
-                <label htmlFor="calcMetragem" className="text-[11px] font-bold text-slate-600 mb-1">
-                  Metragem (m):
-                </label>
-                <input
-                  type="number"
-                  id="calcMetragem"
-                  value={metragem}
-                  step="any"
-                  onChange={(e) => setMetragem(parseFloat(e.target.value) || 0)}
-                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Cards das 4 Roscas (A, B, C, D) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* Rosca A */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmA" className="block font-black text-sm text-slate-800">
-                  Rosca A
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Estrutural Grande
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
-                  <input
-                    type="number"
-                    id="rpmA"
-                    value={rpmA}
-                    step="any"
-                    onChange={(e) => handleRpmAouDChange(parseFloat(e.target.value) || 0, rpmD)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctA)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoA.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
-
-            {/* Rosca B */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-amber-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmB" className="block font-black text-sm text-slate-800">
-                  Rosca B
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Pega / Interna
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
-                  <input
-                    type="number"
-                    id="rpmB"
-                    value={rpmB}
-                    step="any"
-                    onChange={(e) => setRpmB(parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-amber-600 bg-slate-50"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-amber-600">{formatarPorcentagem(pctB)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoB.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
-
-            {/* Rosca C */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-emerald-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmC" className="block font-black text-sm text-slate-800">
-                  Rosca C
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Metalloceno / Externa
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
-                  <input
-                    type="number"
-                    id="rpmC"
-                    value={rpmC}
-                    step="any"
-                    onChange={(e) => setRpmC(parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-emerald-600 bg-slate-50"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-emerald-600">{formatarPorcentagem(pctC)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoC.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
-
-            {/* Rosca D */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
-              <div>
-                <label htmlFor="rpmD" className="block font-black text-sm text-slate-800">
-                  Rosca D
-                </label>
-                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                  Estrutural Grande
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">RPM:</span>
-                  <input
-                    type="number"
-                    id="rpmD"
-                    value={rpmD}
-                    step="any"
-                    onChange={(e) => handleRpmAouDChange(rpmA, parseFloat(e.target.value) || 0)}
-                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
-                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctD)}</div>
-                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoD.toFixed(1).replace('.', ',')} kg/h</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Total das Camadas */}
-          <div className="text-center font-black text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 px-4 rounded-xl shadow-sm">
-            Total das Camadas: {formatarPorcentagem(totalCamadas)}
-          </div>
-
-          {/* Indicadores da Linha (Card Azul) */}
-          <div className="bg-gradient-to-br from-blue-700 to-indigo-900 text-white p-5 rounded-2xl shadow-lg border border-blue-500/30">
-            <h3 className="text-sm font-black uppercase tracking-wider text-center text-white/90 mb-4 pb-2 border-b border-white/15 flex items-center justify-center gap-2">
-              <Cpu size={16} className="text-yellow-300" />
-              Indicadores da Linha
-            </h3>
-
-            <div className="space-y-2.5 text-xs font-bold">
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80">Taxa de Produção Total:</span>
-                <span className="text-yellow-300 font-black text-base sm:text-lg">
-                  {taxaProducaoQuilos.toFixed(2).replace('.', ',')} Kg/h
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Box size={14} className="text-blue-300" />
-                  Paletes / Turno (12h):
-                </span>
-                <span className="font-black text-white text-sm">
-                  {resultadoPalete}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Clock size={14} className="text-blue-300" />
-                  Tempo para 1 Palete:
-                </span>
-                <span className="font-black text-white text-sm">
-                  {formatarTempo(tempoPalete)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-white/80 flex items-center gap-1.5">
-                  <Gauge size={14} className="text-emerald-300" />
-                  Tempo por Queda:
-                </span>
-                <span className="font-black text-emerald-300 text-sm">
-                  {tempoQuedaMinutos.replace('.', ',')} min
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Assinatura */}
-          <div className="text-center text-[11px] font-bold text-slate-400 pt-1">
+          {/* Assinatura */}
+          <div className="text-center text-[10px] font-bold text-slate-400 pt-2 sm:pt-3">
             Manupackaging Fitasa &amp; Amazonia &bull; Desenvolvido por Adaias Melo
           </div>
-
         </div>
 
-        {/* Modal Footer Actions */}
-        <div className="px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={handleCopyExternalLink}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              copiedLink
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95'
-            }`}
-          >
-            {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-            <span>{copiedLink ? 'Link Externo Copiado!' : 'Copiar Link Externo (Sem Login)'}</span>
-          </button>
-
+        {/* Modal Footer */}
+        <div className="px-4 sm:px-6 py-2.5 border-t border-slate-100 bg-white flex items-center justify-end flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-900 active:scale-95 transition-all shadow-sm"
+            className="px-6 py-2 bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-900 active:scale-95 transition-all shadow-sm cursor-pointer"
           >
             Fechar
           </button>
