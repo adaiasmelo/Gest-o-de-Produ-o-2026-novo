@@ -4,10 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Calculadora CAST 1">
-  <link rel="icon" href="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png">
+  <meta name="description" content="Calculadora de Porcentagens e Balanceamento de Roscas da Linha CAST 1 - Manupackaging">
+
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="/calculadora-manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="/calculadora-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon-calculadora.png">
+  <link rel="shortcut icon" href="/calculadora-192.png">
+
   <title>Calculadora % CAST 1 - Manupackaging</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -28,11 +36,49 @@
     input[type=number] {
       -moz-appearance: textfield;
     }
+    @keyframes pulseSoft {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .animate-pulse-soft {
+      animation: pulseSoft 2.5s infinite ease-in-out;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-3 sm:p-6 md:p-8">
 
-  <!-- Top Banner Branding -->
+  <!-- Banner Promocional de Instalação do Aplicativo (PWA) -->
+  <div id="installBanner" class="w-full max-w-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-800 text-white rounded-2xl p-3.5 sm:p-4 mb-3 shadow-xl border border-blue-400/30 flex items-center justify-between gap-3 transition-all">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-white/10 text-yellow-300 border border-white/20 flex items-center justify-center flex-shrink-0 shadow-inner">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-xs sm:text-sm font-black text-white flex items-center gap-1.5 flex-wrap">
+          <span>Instalar Aplicativo da Calculadora</span>
+          <span class="bg-emerald-500 text-[10px] font-black uppercase px-1.5 py-0.5 rounded text-white tracking-wider">PWA</span>
+        </div>
+        <p class="text-[11px] text-blue-200 line-clamp-1 sm:line-clamp-none">
+          Baixe no seu celular e abra direto na Calculadora, mesmo sem internet!
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <button id="btnDismissBanner" class="text-xs text-blue-200 hover:text-white px-2 py-1.5 rounded-lg transition-all">
+        Depois
+      </button>
+      <button id="btnBannerInstall" class="flex items-center gap-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer animate-pulse-soft">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span>Baixar App</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Top Banner Branding & Ações -->
   <div class="w-full max-w-2xl flex items-center justify-between mb-3 px-1">
     <div class="flex items-center gap-2">
       <img src="https://static.wixstatic.com/media/765089_472b535780514937a09c07be49495392~mv2.png" alt="Manupackaging" class="h-7 w-auto object-contain" />
@@ -40,15 +86,30 @@
         Manupackaging &bull; Linha CAST 1
       </span>
     </div>
-    <a
-      href="/"
-      class="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm transition-all active:scale-95"
-    >
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-      </svg>
-      <span>Acessar Sistema</span>
-    </a>
+    <div class="flex items-center gap-2">
+      <!-- Botão de Baixar Aplicativo (Top) -->
+      <button
+        id="btnInstallAppTop"
+        class="flex items-center gap-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-xl shadow-md shadow-blue-500/25 transition-all active:scale-95 border border-blue-500 cursor-pointer"
+        title="Baixar aplicativo da calculadora no seu dispositivo"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span id="btnInstallAppTopText">Baixar App</span>
+      </button>
+
+      <!-- Botão de Acessar Sistema -->
+      <a
+        href="/"
+        class="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm transition-all active:scale-95"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+        </svg>
+        <span>Acessar Sistema</span>
+      </a>
+    </div>
   </div>
 
   <!-- Card da Calculadora (Exato mesmo layout do sistema) -->
@@ -403,23 +464,37 @@
     </div>
 
     <!-- Modal Footer Actions -->
-    <div class="px-6 py-3.5 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
-      <button
-        type="button"
-        id="btnCopyLinkBottom"
-        class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95"
-      >
-        <svg id="copyIconBottom" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-        <span id="copyTextBottom">Copiar Link Externo</span>
-      </button>
+    <div class="px-6 py-3.5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+        <button
+          type="button"
+          id="btnCopyLinkBottom"
+          class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95"
+        >
+          <svg id="copyIconBottom" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span id="copyTextBottom">Copiar Link</span>
+        </button>
+
+        <!-- Botão de Instalação no Rodapé -->
+        <button
+          type="button"
+          id="btnInstallAppBottom"
+          class="flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span id="btnInstallAppBottomText">Baixar Aplicativo</span>
+        </button>
+      </div>
 
       <button
         type="button"
         id="btnShareWhatsAppBottom"
-        class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95"
+        class="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="18" cy="5" r="3"/>
@@ -434,7 +509,188 @@
 
   </div>
 
+  <!-- Modal de Instruções de Instalação (Especialmente para iOS Safari ou navegadores sem prompt nativo) -->
+  <div id="installInstructionsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100 transform transition-all animate-fade-in">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-black text-base text-slate-800">Instalar no Celular</h3>
+            <p class="text-xs text-slate-400">Calculadora CAST 1</p>
+          </div>
+        </div>
+        <button id="btnCloseModal" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Conteúdo do Passo a Passo -->
+      <div id="modalInstructionsContent" class="space-y-3 text-xs text-slate-600 font-medium">
+        <!-- Injetado dinamicamente para iOS ou Android -->
+      </div>
+
+      <button
+        id="btnDismissModal"
+        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95"
+      >
+        Entendi
+      </button>
+    </div>
+  </div>
+
   <script>
+    // --- SERVICE WORKER REGISTRATION (PWA) ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/calculadora-sw.js', { scope: '/' })
+          .then((reg) => console.log('PWA SW registrado com sucesso:', reg.scope))
+          .catch((err) => console.warn('Erro ao registrar PWA SW:', err));
+      });
+    }
+
+    // --- GERENCIAMENTO DE INSTALAÇÃO DO APP (PWA) ---
+    let deferredInstallPrompt = null;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.navigator.standalone === true ||
+                         document.referrer.includes('android-app://');
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    const elInstallBanner = document.getElementById('installBanner');
+    const elBtnBannerInstall = document.getElementById('btnBannerInstall');
+    const elBtnDismissBanner = document.getElementById('btnDismissBanner');
+    const elBtnInstallTop = document.getElementById('btnInstallAppTop');
+    const elBtnInstallTopText = document.getElementById('btnInstallAppTopText');
+    const elBtnInstallBottom = document.getElementById('btnInstallAppBottom');
+    const elBtnInstallBottomText = document.getElementById('btnInstallAppBottomText');
+    const elModal = document.getElementById('installInstructionsModal');
+    const elModalContent = document.getElementById('modalInstructionsContent');
+    const elBtnCloseModal = document.getElementById('btnCloseModal');
+    const elBtnDismissModal = document.getElementById('btnDismissModal');
+
+    // Se já estiver rodando como aplicativo instalado na tela inicial
+    if (isStandalone) {
+      if (elInstallBanner) elInstallBanner.style.display = 'none';
+      if (elBtnInstallTopText) elBtnInstallTopText.textContent = 'App Instalado';
+      if (elBtnInstallTop) {
+        elBtnInstallTop.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'animate-pulse');
+        elBtnInstallTop.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'cursor-default');
+      }
+      if (elBtnInstallBottom) elBtnInstallBottom.style.display = 'none';
+    } else {
+      // Verifica se o usuário dispensou o banner nesta sessão
+      if (sessionStorage.getItem('calc_banner_dismissed') === 'true') {
+        if (elInstallBanner) elInstallBanner.style.display = 'none';
+      }
+    }
+
+    // Captura o evento nativo de instalação do navegador (Chrome / Edge / Android)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      console.log('Evento beforeinstallprompt capturado com sucesso.');
+      
+      if (!isStandalone) {
+        if (elInstallBanner && sessionStorage.getItem('calc_banner_dismissed') !== 'true') {
+          elInstallBanner.style.display = 'flex';
+        }
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('Calculadora CAST 1 instalada com sucesso como aplicativo!');
+      deferredInstallPrompt = null;
+      if (elInstallBanner) elInstallBanner.style.display = 'none';
+      if (elBtnInstallTopText) elBtnInstallTopText.textContent = 'App Instalado';
+      if (elBtnInstallTop) {
+        elBtnInstallTop.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        elBtnInstallTop.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+      }
+      if (elBtnInstallBottom) elBtnInstallBottom.style.display = 'none';
+      alert('Calculadora instalada com sucesso! Você já pode abrir direto pelo ícone no seu celular.');
+    });
+
+    // Função para acionar o fluxo de instalação
+    async function triggerInstallFlow() {
+      if (isStandalone) {
+        alert('O aplicativo da Calculadora já está instalado no seu dispositivo!');
+        return;
+      }
+
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('Usuário aceitou a instalação.');
+          deferredInstallPrompt = null;
+          if (elInstallBanner) elInstallBanner.style.display = 'none';
+        } else {
+          console.log('Usuário recusou a instalação.');
+        }
+      } else {
+        // Se o navegador não disparou o prompt automático ou for iOS Safari
+        showInstallInstructions();
+      }
+    }
+
+    function showInstallInstructions() {
+      if (isIOS) {
+        elModalContent.innerHTML = `
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
+            <p class="font-bold">No iPhone ou iPad (Safari):</p>
+            <ol class="list-decimal list-inside space-y-1 text-slate-700">
+              <li>Toque no botão de <strong>Compartilhar</strong> (ícone do quadrado com seta para cima ⎋ na barra do Safari).</li>
+              <li>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong> ➕.</li>
+              <li>No canto superior direito, toque em <strong>"Adicionar"</strong>.</li>
+            </ol>
+            <p class="text-[11px] text-blue-700 font-semibold pt-1">
+              ✓ Pronto! O ícone da Calculadora ficará na sua tela e abrirá diretamente nela.
+            </p>
+          </div>
+        `;
+      } else {
+        elModalContent.innerHTML = `
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-900 space-y-2">
+            <p class="font-bold">No seu navegador (Chrome / Android / Edge):</p>
+            <ol class="list-decimal list-inside space-y-1 text-slate-700">
+              <li>Toque nos <strong>três pontinhos (⋮)</strong> no canto superior direito do navegador.</li>
+              <li>Selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</li>
+              <li>Confirme a instalação.</li>
+            </ol>
+            <p class="text-[11px] text-blue-700 font-semibold pt-1">
+              ✓ O aplicativo será baixado e abrirá direto na tela da Calculadora sem precisar do link!
+            </p>
+          </div>
+        `;
+      }
+      elModal.classList.remove('hidden');
+      elModal.classList.add('flex');
+    }
+
+    function closeModal() {
+      elModal.classList.add('hidden');
+      elModal.classList.remove('flex');
+    }
+
+    elBtnBannerInstall.addEventListener('click', triggerInstallFlow);
+    elBtnInstallTop.addEventListener('click', triggerInstallFlow);
+    elBtnInstallBottom.addEventListener('click', triggerInstallFlow);
+    
+    elBtnDismissBanner.addEventListener('click', () => {
+      elInstallBanner.style.display = 'none';
+      sessionStorage.setItem('calc_banner_dismissed', 'true');
+    });
+
+    elBtnCloseModal.addEventListener('click', closeModal);
+    elBtnDismissModal.addEventListener('click', closeModal);
+
     // --- DADOS E CONSTANTES (EXATAMENTE IGUAIS AO SISTEMA) ---
     const TABELA_GRAMATURA_500 = {
       10: 4.60, 11: 5.06, 12: 5.52, 13: 5.98, 14: 6.44, 15: 6.90,
@@ -724,7 +980,7 @@
       if (copyTextBottom) copyTextBottom.textContent = 'Link Copiado!';
       setTimeout(() => {
         if (copyTextTop) copyTextTop.textContent = 'Copiar Link';
-        if (copyTextBottom) copyTextBottom.textContent = 'Copiar Link Externo';
+        if (copyTextBottom) copyTextBottom.textContent = 'Copiar Link';
       }, 3000);
     }
 
