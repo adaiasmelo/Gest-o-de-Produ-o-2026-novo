@@ -498,12 +498,281 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
           </div>
         </div>
 
-        {/* Body da Calculadora - Grid 3 Colunas no Desktop (sem rolagem) e Fluxo Contínuo no Mobile */}
-        <div className="p-3 sm:p-5 lg:p-4 bg-slate-50/60 overflow-y-auto lg:overflow-hidden flex-1 flex flex-col justify-between">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 h-full items-stretch">
+        {/* Mobile View: Layout tradicional fluido para celular */}
+        <div className="block lg:hidden p-3.5 sm:p-5 overflow-y-auto space-y-4 bg-slate-50/60">
+          {/* Header Selects: Tipo de Material & Espessura */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
+            <div className="flex flex-col items-center w-full sm:w-auto">
+              <label htmlFor="tipoMaterialMobile" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <Layers size={13} className="text-blue-600" />
+                Tipo de Material
+              </label>
+              <select
+                id="tipoMaterialMobile"
+                value={tipoMaterial}
+                onChange={(e) => handleTipoMaterialChange(e.target.value as 'LC3' | 'LC2' | 'ATX')}
+                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+              >
+                <option value="LC3">LC3</option>
+                <option value="LC2">LC2</option>
+                <option value="ATX">ATX</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col items-center w-full sm:w-auto">
+              <label htmlFor="espessuraMobile" className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <Gauge size={13} className="text-blue-600" />
+                Espessura (µm)
+              </label>
+              <select
+                id="espessuraMobile"
+                value={espessura}
+                onChange={(e) => handleEspessuraChange(parseFloat(e.target.value))}
+                className="w-full sm:w-40 py-2 px-3 text-sm font-black border border-slate-300 rounded-xl bg-slate-50 text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all text-center"
+              >
+                {ESPESSURAS.map((esp) => (
+                  <option key={esp} value={esp}>{esp} µm</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Dados de Produção da Linha */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
+              <Activity size={14} className="text-blue-600" />
+              Dados de Produção da Linha
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col items-center">
+                <label htmlFor="calcGramaturaMobile" className="text-[11px] font-bold text-slate-600 mb-1">
+                  Gramatura (g):
+                </label>
+                <input
+                  type="number"
+                  id="calcGramaturaMobile"
+                  value={gramatura}
+                  step="any"
+                  onChange={(e) => handleGramaturaChange(parseFloat(e.target.value) || 0)}
+                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                />
+              </div>
+
+              <div className="flex flex-col items-center">
+                <label htmlFor="calcVelocidadeMobile" className="text-[11px] font-bold text-slate-600 mb-1">
+                  Velocidade (m/min):
+                </label>
+                <input
+                  type="number"
+                  id="calcVelocidadeMobile"
+                  value={velocidade}
+                  step="any"
+                  onChange={(e) => handleVelocidadeChange(parseFloat(e.target.value) || 0)}
+                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                />
+              </div>
+
+              <div className="flex flex-col items-center">
+                <label htmlFor="calcMetragemMobile" className="text-[11px] font-bold text-slate-600 mb-1">
+                  Metragem (m):
+                </label>
+                <input
+                  type="number"
+                  id="calcMetragemMobile"
+                  value={metragem}
+                  step="any"
+                  onChange={(e) => setMetragem(parseFloat(e.target.value) || 0)}
+                  className="w-full py-2 px-3 text-sm font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 focus:bg-white transition-all bg-slate-50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Cards das 4 Roscas (A, B, C, D) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Rosca A */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
+              <div>
+                <label htmlFor="rpmAMobile" className="block font-black text-sm text-slate-800">
+                  Rosca A
+                </label>
+                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
+                  Estrutural Grande
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+                  <input
+                    type="number"
+                    id="rpmAMobile"
+                    value={rpmA}
+                    step="any"
+                    onChange={(e) => handleRpmAouDChange(parseFloat(e.target.value) || 0, rpmD)}
+                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
+                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctA)}</div>
+                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoA.toFixed(1).replace('.', ',')} kg/h</div>
+              </div>
+            </div>
+
+            {/* Rosca B */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-amber-600 shadow-sm flex flex-col justify-between">
+              <div>
+                <label htmlFor="rpmBMobile" className="block font-black text-sm text-slate-800">
+                  Rosca B
+                </label>
+                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
+                  Pega / Interna
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+                  <input
+                    type="number"
+                    id="rpmBMobile"
+                    value={rpmB}
+                    step="any"
+                    onChange={(e) => setRpmB(parseFloat(e.target.value) || 0)}
+                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-amber-600 bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
+                <div className="text-xl font-black text-amber-600">{formatarPorcentagem(pctB)}</div>
+                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoB.toFixed(1).replace('.', ',')} kg/h</div>
+              </div>
+            </div>
+
+            {/* Rosca C */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-emerald-600 shadow-sm flex flex-col justify-between">
+              <div>
+                <label htmlFor="rpmCMobile" className="block font-black text-sm text-slate-800">
+                  Rosca C
+                </label>
+                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
+                  Metalloceno / Externa
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+                  <input
+                    type="number"
+                    id="rpmCMobile"
+                    value={rpmC}
+                    step="any"
+                    onChange={(e) => setRpmC(parseFloat(e.target.value) || 0)}
+                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-emerald-600 bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
+                <div className="text-xl font-black text-emerald-600">{formatarPorcentagem(pctC)}</div>
+                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoC.toFixed(1).replace('.', ',')} kg/h</div>
+              </div>
+            </div>
+
+            {/* Rosca D */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 border-t-4 border-t-blue-600 shadow-sm flex flex-col justify-between">
+              <div>
+                <label htmlFor="rpmDMobile" className="block font-black text-sm text-slate-800">
+                  Rosca D
+                </label>
+                <span className="block text-[11px] font-semibold text-slate-400 mb-2">
+                  Estrutural Grande
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">RPM:</span>
+                  <input
+                    type="number"
+                    id="rpmDMobile"
+                    value={rpmD}
+                    step="any"
+                    onChange={(e) => handleRpmAouDChange(rpmA, parseFloat(e.target.value) || 0)}
+                    className="w-full py-2 px-3 text-base font-black border-2 border-slate-200 rounded-xl outline-none text-center text-slate-800 focus:border-blue-600 bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 text-center">
+                <div className="text-xl font-black text-blue-700">{formatarPorcentagem(pctD)}</div>
+                <div className="text-xs font-bold text-slate-500 mt-0.5">{vazaoD.toFixed(1).replace('.', ',')} kg/h</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Total das Camadas */}
+          <div className="text-center font-black text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 py-2.5 px-4 rounded-xl shadow-sm">
+            Total das Camadas: {formatarPorcentagem(totalCamadas)}
+          </div>
+
+          {/* Indicadores da Linha (Card Azul) */}
+          <div className="bg-gradient-to-br from-blue-700 to-indigo-900 text-white p-5 rounded-2xl shadow-lg border border-blue-500/30">
+            <h3 className="text-sm font-black uppercase tracking-wider text-center text-white/90 mb-4 pb-2 border-b border-white/15 flex items-center justify-center gap-2">
+              <Cpu size={16} className="text-yellow-300" />
+              Indicadores da Linha
+            </h3>
+
+            <div className="space-y-2.5 text-xs font-bold">
+              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
+                <span className="text-white/80">Taxa de Produção Total:</span>
+                <span className="text-yellow-300 font-black text-base sm:text-lg">
+                  {taxaProducaoQuilos.toFixed(2).replace('.', ',')} Kg/h
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
+                <span className="text-white/80 flex items-center gap-1.5">
+                  <Box size={14} className="text-blue-300" />
+                  Paletes / Turno (12h):
+                </span>
+                <span className="font-black text-white text-sm">
+                  {resultadoPalete}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/10">
+                <span className="text-white/80 flex items-center gap-1.5">
+                  <Clock size={14} className="text-blue-300" />
+                  Tempo para 1 Palete:
+                </span>
+                <span className="font-black text-white text-sm">
+                  {formatarTempo(tempoPalete)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5">
+                <span className="text-white/80 flex items-center gap-1.5">
+                  <Gauge size={14} className="text-emerald-300" />
+                  Tempo por Queda:
+                </span>
+                <span className="font-black text-emerald-300 text-sm">
+                  {tempoQuedaMinutos.replace('.', ',')} min
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Botão de Enviar WhatsApp Mobile */}
+          <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider rounded-2xl transition-all shadow-md cursor-pointer"
+          >
+            <Share2 size={18} />
+            <span>Enviar no WhatsApp</span>
+          </button>
+
+          {/* Footer Assinatura */}
+          <div className="text-center text-[11px] font-bold text-slate-400 pt-1 pb-2">
+            Manupackaging Fitasa &bull; Desenvolvido por Adaias Melo
+          </div>
+        </div>
+
+        {/* Desktop View: Grid 3 Colunas em Tela Cheia (sem rolagem obrigatória) */}
+        <div className="hidden lg:flex flex-col justify-between p-4 bg-slate-50/60 overflow-hidden flex-1">
+          <div className="grid grid-cols-12 gap-4 h-full items-stretch">
             
             {/* COLUNA 1: Parâmetros de Entrada & Produção da Linha (4 colunas no desktop) */}
-            <div className="lg:col-span-4 flex flex-col justify-between space-y-3">
+            <div className="col-span-4 flex flex-col justify-between space-y-3">
               {/* Header Selects: Tipo de Material & Espessura */}
               <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3">
                 <div className="flex-1">
@@ -636,7 +905,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
             </div>
 
             {/* COLUNA 2: Roscas A, B, C e D + Total das Camadas (5 colunas no desktop) */}
-            <div className="lg:col-span-5 flex flex-col justify-between space-y-2">
+            <div className="col-span-5 flex flex-col justify-between space-y-2">
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                   <Cpu size={14} className="text-blue-600" />
@@ -800,7 +1069,7 @@ export const Cast1CalculatorStandalone: React.FC<Cast1CalculatorStandaloneProps>
             </div>
 
             {/* COLUNA 3: Indicadores da Linha & Ação WhatsApp (3 colunas no desktop) */}
-            <div className="lg:col-span-3 flex flex-col justify-between space-y-3">
+            <div className="col-span-3 flex flex-col justify-between space-y-3">
               {/* Indicadores da Linha (Card Azul) */}
               <div className="bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-950 text-white p-4 rounded-2xl shadow-lg border border-blue-500/30 flex-1 flex flex-col justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wider text-center text-white/90 pb-2 border-b border-white/15 flex items-center justify-center gap-1.5">
