@@ -8885,7 +8885,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                 }}
                 className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 border border-blue-400/30"
               >
-                <Calculator size={16} /> Acessar Calculadora CAST 1 (Livre / Sem Login)
+                <Calculator size={16} /> Calculadora Cast 1
               </button>
 
               <button 
@@ -8894,7 +8894,7 @@ Gerado automaticamente pelo Sistema de Gestão Manupackaging.`;
                 onClick={handleGuestLogin}
                 className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-slate-200 active:scale-95 shadow-sm"
               >
-                <Eye size={16} className="text-slate-500" /> Acessar Modo Leitura (Apenas Visualização)
+                <Eye size={16} className="text-slate-500" /> Modo de Leitura
               </button>
             </div>
 
